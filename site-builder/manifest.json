@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "version": "0.5.0",
+  "name": "site-builder",
+  "files": {
+    "agents/openai.yaml": "4f55a439961d7ed582746bd6e7c1059f19c8b4375ecb7261aa1dbe62572528cd",
+    "assets/templates/static/web/index.html": "0233c93b96a16cbc290fe1f313ef3da0dd6266d3cde23622d849f6ac64f9bb43",
+    "assets/templates/static/web/style.css": "634154fb9f896e61d0183057026ffb100ae73256030fe6d1d8746b6fec6f9a38",
+    "assets/templates/tool/web/app.js": "ce30524082bb3aac737e4bb7e6b2aea3d20a1d8d2b3a8683d0eee395bc97790a",
+    "assets/templates/tool/web/index.html": "83c845de525423999ff8e710b5db76e8c9b5f8450be718897054673737d8e7cd",
+    "assets/templates/tool/web/style.css": "602af2abb7114a5833ebcebbf88d718f562c8d09bbe67d59a2d652bb901c46fb",
+    "references/components.md": "e59e870f7bfcd6dc578012a5567dff2f5df06715bd707d50a3962bb0b3bd83b8",
+    "references/implementation.md": "6592bcf2dc8834f8d5db4e674ccb895c67f510e5c65d7ccfa9466df33632746a",
+    "references/publish.md": "c1d44f4365f3de3e506c9105e8ddedcca426d0192fac19654e70f7bbf07e5474",
+    "references/runtime.md": "f0946b125325c55b622f4a7df9cce3d11820e13294f86bc83425a98d220ab89d",
+    "scripts/preview.py": "a01f5b2b15dab1747feae6f0eb3cb831d84e7c79624bdd29047ce8f4301bb300",
+    "scripts/site.py": "3a53797e9a6390fdb42ebf3b92f233a5902ea4e8d866fe0821373da87a5e801c",
+    "SKILL.md": "5705ce3c370bfc0ec139c41a2d2632f3b50e36ac3b46b643740494c93813180f"
+  }
+}

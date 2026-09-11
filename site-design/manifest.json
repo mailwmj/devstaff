@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "version": "0.5.0",
+  "name": "site-design",
+  "files": {
+    "agents/openai.yaml": "ffc89619339654d7e8a92ef03414297001c8e25d1b6578330def40bb1efc55a3",
+    "assets/design/gallery.html": "585b9b8f63c3a44330d53a39de58e299940e7067a985534877ae5b83a4951daa",
+    "assets/design/primitives.css": "266411c2866d26fedcd8bf1bf812f8b5c24b9bfec0bf0d56ade73e84a4d6fb81",
+    "assets/design/tokens.json": "d08a5114663cdf8563a45f7c02ec9a91dbdd4ee4c0eba2bd06c97480bb4e82bc",
+    "references/design-quality.md": "03b662730e83ff4d6ded3055474f099302a04129c4d103f5ba61b2ca7332cd56",
+    "references/design-tokens.md": "c243bd17d1620ab0ba9e674a64267614fc9a946cff2c8f40544db57c5a054977",
+    "references/design-intent.md": "9b6e399ec6d8e77368d9de04ea2895066e95ad6061ab27502bad839ae6cbe29c",
+    "references/surface-brief.md": "cdaff9a7495e7d63c529773c50fcbec19af43798a3d56a37f568ef5f17d83c8e",
+    "references/design-context.md": "e6741cd7967df544a33d44657c982a96fc64d0bbd40dfe0dc27fbff4dbe3aef2",
+    "references/prototype.md": "ead976e4516e36a7e14a215f2558f46f6582f786642ac2da9eb1f9d2fabf5461",
+    "references/reference-input.md": "2a2f34c7156f93b62fcf0899ea97111bb69c4320cb8e3d4cc0d23c11451ae333",
+    "references/review-protocol.md": "eda373be7645f5e50e7cb69493a226b6b0fe9dd5f31a49ee00c1a5359c34b77a",
+    "scripts/design.py": "8a294d6830f3f0aecd7c78e0121c155838e1f4d47ebc73d98615b0806fa67ad3",
+    "SKILL.md": "28b25fa74353cc25f904df2f814ea189f3cea89a841df6c458b5ecf0cab65a84"
+  }
+}

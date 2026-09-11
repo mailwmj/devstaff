@@ -1,0 +1,4 @@
+interface:
+  display_name: "网站设计实验"
+  short_description: "制作视觉或流程体验稿，也可只读审查页面设计"
+  default_prompt: "使用 $site-design 根据我的业务和参考制作可见体验稿，或审查现有页面的设计质量。"

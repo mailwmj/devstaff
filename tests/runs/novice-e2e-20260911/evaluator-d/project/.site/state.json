@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "project_id": "novice-e2e-20260911-evaluator-d",
+  "revision": 2,
+  "stage": "visual_drafting",
+  "concept_confirmed": true,
+  "visual_confirmed": false,
+  "development_authorized": false,
+  "delegated": false,
+  "runtime": null,
+  "next_action": "制作并展示单页课程介绍视觉体验稿，等待创作者明确确认视觉方向"
+}

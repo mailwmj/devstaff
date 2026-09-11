@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "version": "0.5.0",
+  "name": "site-brief",
+  "files": {
+    "agents/openai.yaml": "438b5bb158643f5fc9ee6da63ff127d83ee290692e3650d2802cbc9fe805daab",
+    "references/brief.md": "640dae70c02568c883de919694ae7d8a411dff747a1cc1cdb94fa5068c578420",
+    "references/discovery.md": "017b6eddcdc6e490fd961faf78f8aa049315ac13bfe6212993c6c502cae25b57",
+    "references/research.md": "e5ffb0b3ce9298a7a384d1547c708d4959344833cd5bd3e1d2ad2d7464c45378",
+    "references/state.md": "2441eaaaed8ba1b589e61b619779c9629fd73df475b92867ed6fe87d2bfb1083",
+    "SKILL.md": "b64c58b12945ea5f0385de11880ff8d936a19ae59b49910741f22fc22a1e1c11"
+  }
+}
