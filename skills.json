@@ -1,27 +1,35 @@
 {
   "schema_version": 1,
   "bundle": "collaborative-site-skills",
-  "version": "0.5.0",
+  "version": "0.8.0",
   "skills": {
     "site-builder": {
-      "version": "0.5.0",
+      "version": "0.8.0",
       "role": "default entry, all production changes, orchestration and implementation",
-      "dependencies": ["site-brief", "site-design", "site-check"]
+      "dependencies": [
+        "site-brief",
+        "site-design",
+        "site-check"
+      ]
     },
     "site-brief": {
-      "version": "0.5.0",
+      "version": "0.8.0",
       "role": "fact finding, first-version brief and coordinated project records",
       "dependencies": []
     },
     "site-design": {
-      "version": "0.5.0",
+      "version": "0.8.0",
       "role": "visual and flow prototypes plus read-only visual review",
-      "dependencies": ["site-brief"]
+      "dependencies": [
+        "site-brief"
+      ]
     },
     "site-check": {
-      "version": "0.5.0",
+      "version": "0.8.0",
       "role": "independent acceptance across build, behavior, visual and reopening",
-      "dependencies": ["site-design"]
+      "dependencies": [
+        "site-design"
+      ]
     }
   }
 }

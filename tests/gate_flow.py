@@ -1,0 +1,481 @@
+#!/usr/bin/env python3
+"""Regression for the site collaboration state gate. Python 3.10+, standard library only.
+
+Run from anywhere:
+
+    python3 tests/gate_flow.py
+
+It exercises the transition rules that the 2026-09-11 end-to-end report found
+violated: evidence-free gate jumps, a Checker started while the Writer's services
+still ran, and delivery recorded on top of a blocking failure or changed source.
+
+It then exercises the two mechanisms added afterwards, which is where the same
+report's vetoes actually live:
+
+* a gate records the creator's verbatim quote and refuses an empty basis or one
+  quote recycled across two gates, compared by content so that copying a file does
+  not defeat it.  An ``--anchor`` is an upgrade only: an unreadable host format
+  downgrades the label instead of failing, because no gate may depend on host
+  internals;
+* a blocking matrix item needs ``artifact`` or ``command`` evidence whose files
+  still hash the same at delivery time, so a hand-written matrix, a missing
+  screenshot or an edited evidence file cannot reach ``delivered``.
+
+What it deliberately does not test: whether the creator truly meant the quote.  No
+local script can decide that.  Delivery replays the quotes for the creator instead
+(``consent_replay``), and that hand-back is asserted here.
+"""
+import hashlib
+import json
+import socket
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+PY = sys.executable
+STATE_TOOL = REPO / 'site-brief' / 'scripts' / 'state.py'
+CHECK_TOOL = REPO / 'site-check' / 'scripts' / 'check.py'
+SITE_TOOL = REPO / 'site-builder' / 'scripts' / 'site.py'
+
+PASSED = 0
+CONCEPT_LINE = '这个第一版可以，就先做这些。'
+VISUAL_LINE = '第二个挺好看，颜色也不错。'
+AUTHORIZE_LINE = '就按第二个和刚才说的第一版做吧，开始做。'
+# Only ever spoken by the agent, never by the creator.
+AGENT_ONLY_LINE = '我建议用第二个方向，你看行不行。'
+
+
+def call(script, *args):
+    return subprocess.run(
+        [PY, str(script), *[str(item) for item in args]],
+        text=True,
+        capture_output=True,
+    )
+
+
+def ok(script, *args):
+    global PASSED
+    result = call(script, *args)
+    if result.returncode != 0:
+        raise AssertionError(f"{script.name} {' '.join(map(str, args))} failed: {result.stderr.strip()}")
+    PASSED += 1
+    return json.loads(result.stdout)
+
+
+def refused(script, *args):
+    global PASSED
+    result = call(script, *args)
+    if result.returncode != 2:
+        raise AssertionError(
+            f"{script.name} {' '.join(map(str, args))} should have been refused, exit={result.returncode}"
+        )
+    PASSED += 1
+    try:
+        return json.loads(result.stderr)['error']
+    except (json.JSONDecodeError, KeyError):
+        raise AssertionError(
+            f"{script.name} {' '.join(map(str, args))} refused with a non-gate error: {result.stderr.strip()}"
+        ) from None
+
+
+def free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
+def listening_socket(port=0):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('127.0.0.1', port))
+    sock.listen(1)
+    return sock
+
+
+def dead_pid():
+    child = subprocess.Popen([PY, '-c', 'import time; time.sleep(60)'])
+    child.kill()
+    child.wait()
+    return child.pid
+
+
+def matrix_file(folder, items):
+    path = Path(folder) / 'matrix.json'
+    path.write_text(json.dumps({'items': items}), encoding='utf-8')
+    return path
+
+
+def check_artifact(root, check_id):
+    return root / '.site' / 'checks' / f'{check_id}.json'
+
+
+def stage_of(root):
+    return json.loads((root / '.site' / 'state.json').read_text(encoding='utf-8'))['stage']
+
+
+def transcript(folder, name='session.jsonl'):
+    """A host-shaped transcript, used only to *upgrade* a consent label.
+
+    Roles matter: a quote found only in an agent message must not upgrade anything.
+    """
+    path = Path(folder) / name
+    records = [
+        {'type': 'session', 'version': 3, 'id': 'regression'},
+        {'type': 'message', 'id': 'concept', 'message': {
+            'role': 'user', 'content': [{'type': 'text', 'text': CONCEPT_LINE}]}},
+        {'type': 'message', 'id': 'agent', 'message': {
+            'role': 'assistant', 'content': [{'type': 'text', 'text': AGENT_ONLY_LINE}]}},
+        {'type': 'message', 'id': 'visual', 'message': {
+            'role': 'user', 'content': [{'type': 'text', 'text': VISUAL_LINE}]}},
+        {'type': 'message', 'id': 'authorize', 'message': {
+            'role': 'user', 'content': [{'type': 'text', 'text': AUTHORIZE_LINE}]}},
+    ]
+    path.write_text('\n'.join(json.dumps(item, ensure_ascii=False) for item in records) + '\n', encoding='utf-8')
+    return path
+
+
+def unreadable_transcript(folder, name='session.v3.jsonl.zstd'):
+    """A host record this tool cannot read: the shape that used to kill every gate.
+
+    Zstd magic bytes followed by content that is not valid zstd, so decompression
+    fails whether or not a zstd module happens to be installed.
+    """
+    path = Path(folder) / name
+    path.write_bytes(b'\x28\xb5\x2f\xfd' + b'\x00' * 8 + b'not-really-zstd')
+    return path
+
+
+def artifact_evidence(paths, summary='实测产物'):
+    return {'kind': 'artifact', 'summary': summary, 'paths': [str(item) for item in paths]}
+
+
+def main():
+    global PASSED
+    temp = Path(tempfile.mkdtemp(prefix='site-gate-'))
+    root = temp / 'project'
+    session = transcript(temp)
+    ok(SITE_TOOL, 'init', root, '--template', 'static', '--title', '门禁回归')
+    (root / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+
+    # 1. Every component computes the same content fingerprint.
+    inspected = ok(SITE_TOOL, 'inspect', root)
+    shown = ok(STATE_TOOL, 'show', root)
+    static = ok(CHECK_TOOL, 'static', root)
+    assert inspected['fingerprint'] == shown['fingerprint'] == static['fingerprint'], 'fingerprint mismatch'
+
+    # 2. Gates refuse transitions without the required basis.
+    refused(STATE_TOOL, 'authorize-build', root, '--quote', AUTHORIZE_LINE)
+    refused(STATE_TOOL, 'confirm-visual', root, '--quote', VISUAL_LINE,
+            '--prototype', root / 'prototype.html')
+    refused(STATE_TOOL, 'start-build', root)
+    ok(STATE_TOOL, 'claim', root, '--owner', 'builder-a')
+    refused(STATE_TOOL, 'start-build', root)
+    refused(STATE_TOOL, 'claim', root, '--owner', 'builder-a', '--force')
+    refused(STATE_TOOL, 'handoff', root)
+    refused(STATE_TOOL, 'deliver', root, '--check', 'missing')
+
+    # 2b. The basis is the creator's words. The tool records them; it cannot verify them.
+    no_quote = call(STATE_TOOL, 'confirm-concept', root)
+    assert no_quote.returncode == 2, 'confirm-concept without --quote must be refused'
+    PASSED += 1
+    refused(STATE_TOOL, 'confirm-concept', root, '--quote', '   ')
+    refused(STATE_TOOL, 'confirm-concept', root, '--quote', CONCEPT_LINE,
+            '--anchor', f'{temp}/missing.jsonl')
+    # An anchor that resolves but does not carry the quote is a false claim, not a downgrade.
+    refused(STATE_TOOL, 'confirm-concept', root, '--quote', '我从来没说过这句',
+            '--anchor', session)
+
+    # 3. An unreadable host format downgrades the label instead of killing the gate.
+    unreadable = unreadable_transcript(temp)
+    concept = ok(STATE_TOOL, 'confirm-concept', root, '--quote', CONCEPT_LINE, '--anchor', unreadable)
+    assert concept['consent']['basis'] == 'agent-reported', 'an unreadable host record must not upgrade'
+    assert concept['consent']['anchor_note'], 'the downgrade must be explained, not silent'
+    assert concept['consent']['quote'] == CONCEPT_LINE
+
+    # 3b. Two visual directions chosen is not development authorization.
+    refused(STATE_TOOL, 'authorize-build', root, '--quote', AUTHORIZE_LINE)
+    # A readable host record upgrades the label only when a *user* message carries the quote.
+    visual = ok(STATE_TOOL, 'confirm-visual', root, '--quote', VISUAL_LINE,
+                '--prototype', root / 'prototype.html', '--anchor', session)
+    assert visual['consent']['basis'] == 'quote-matched'
+    # One quote may not be replayed for a second gate, and copying the file must not help.
+    copied = Path(temp) / 'copy-of-session.jsonl'
+    copied.write_text(Path(session).read_text(encoding='utf-8'), encoding='utf-8')
+    assert 'already confirms' in refused(
+        STATE_TOOL, 'confirm-visual', root, '--quote', CONCEPT_LINE,
+        '--prototype', root / 'prototype.html', '--anchor', copied)
+    assert 'already confirms' in refused(
+        STATE_TOOL, 'authorize-build', root, '--quote', VISUAL_LINE)
+    refused(STATE_TOOL, 'start-build', root)
+    authorized = ok(STATE_TOOL, 'authorize-build', root, '--quote', AUTHORIZE_LINE, '--anchor', session)
+    assert authorized['consent']['basis'] == 'quote-matched'
+    # An agent's own sentence is never a basis, and an anchor cannot rescue it.
+    refused(STATE_TOOL, 'authorize-build', root, '--quote', AGENT_ONLY_LINE, '--anchor', session)
+
+    # 4. Writer and Checker cannot hold the project at the same time.
+    ok(STATE_TOOL, 'start-build', root)
+    assert stage_of(root) == 'building'
+    refused(STATE_TOOL, 'claim', root, '--owner', 'builder-b', '--force')  # --force without --reason stays auditable
+
+    # 5. Handoff verifies stopped PIDs and freed ports instead of trusting prose.
+    alive = subprocess.Popen([PY, '-c', 'import time; time.sleep(60)'])
+    try:
+        refused(STATE_TOOL, 'handoff', root, '--stopped-pid', alive.pid, '--freed-port', free_port())
+    finally:
+        alive.kill()
+        alive.wait()
+    occupied = listening_socket()
+    occupied_port = occupied.getsockname()[1]
+    try:
+        refused(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', occupied_port)
+        refused(
+            STATE_TOOL, 'handoff', root,
+            '--service-json', json.dumps({'owner': 'formal', 'port': occupied_port, 'root': str(temp)}),
+        )
+        # A registered service may stay up, but only inside the project root.
+        ok(
+            STATE_TOOL, 'handoff', root,
+            '--stopped-pid', dead_pid(),
+            '--freed-port', free_port(),
+            '--service-json', json.dumps({'owner': 'formal', 'port': occupied_port, 'root': str(root)}),
+        )
+    finally:
+        occupied.close()
+
+    release = json.loads((root / '.site' / 'state.json').read_text(encoding='utf-8'))['writer_release']
+    assert release['services'][0]['port'] == occupied_port and release['freed_ports']
+
+    # 6. Source changing after handoff voids the freeze.
+    (root / 'web' / 'index.html').write_text(
+        (root / 'web' / 'index.html').read_text(encoding='utf-8') + '\n<!-- late write -->\n', encoding='utf-8'
+    )
+    refused(STATE_TOOL, 'start-verify', root)
+    ok(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', free_port())
+
+    # 7. Delivery needs a fingerprint-bound matrix with every blocking item passed.
+    ok(STATE_TOOL, 'start-verify', root)
+    assert stage_of(root) == 'verifying'
+    (root / 'evidence').mkdir()
+    (root / 'evidence' / 'desktop.png').write_bytes(b'\x89PNG\r\n\x1a\nscreenshot')
+    (root / 'evidence' / 'clipboard.json').write_text('{"copied": "linlaoshi_nature_test"}', encoding='utf-8')
+
+    def passing_items():
+        """Command evidence must belong to the source the matrix fingerprints."""
+        command = ok(CHECK_TOOL, 'run', root, '--', PY, '-c', 'print("build ok")')
+        return [
+            {'id': 'static', 'title': '静态引用', 'status': 'passed', 'blocking': True,
+             'evidence': {'kind': 'command', 'summary': 'check.py run 退出 0', 'commands': [command['check_id']]}},
+            {'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png', 'evidence/clipboard.json'])},
+            {'id': 'favicon', 'title': 'favicon', 'status': 'failed', 'blocking': False,
+             'evidence': {'kind': 'declared', 'summary': '冷启动 404'}},
+        ]
+
+    # Command evidence from an earlier round is stale once the source changed.
+    stale_command = ok(CHECK_TOOL, 'run', root, '--', PY, '-c', 'print("stale build")')
+    (root / 'evidence' / 'note.txt').write_text('source moved on after that command', encoding='utf-8')
+    stale = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
+        {'id': 'static', 'status': 'passed', 'blocking': True,
+         'evidence': {'kind': 'command', 'summary': '旧命令', 'commands': [stale_command['check_id']]}},
+    ]))
+    assert stale.returncode == 1
+    assert 'different source' in json.loads(stale.stdout)['evidence_failures'][0]['reason']
+    PASSED += 1
+
+    # 7a. A blocking item declared with prose is not evidence.
+    prose = [{'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+              'evidence': '我实际操作过，成功了'}]
+    prose_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, prose))
+    assert prose_matrix.returncode == 1, 'prose evidence must not satisfy a blocking item'
+    prose_result = json.loads(prose_matrix.stdout)
+    assert prose_result['status'] == 'failed' and prose_result['evidence_failures']
+    assert any('declared' in row['reason'] for row in prose_result['evidence_failures'])
+    refused(STATE_TOOL, 'deliver', root, '--check', prose_result['check_id'])
+    PASSED += 3
+
+    # 7b. Naming a screenshot that does not exist fails instead of passing.
+    ghost = [{'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+              'evidence': artifact_evidence(['evidence/missing.png'])}]
+    ghost_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, ghost))
+    assert ghost_matrix.returncode == 1, 'a missing artifact must not pass'
+    ghost_result = json.loads(ghost_matrix.stdout)
+    assert 'does not exist' in ghost_result['evidence_failures'][0]['reason']
+    refused(STATE_TOOL, 'deliver', root, '--check', ghost_result['check_id'])
+    # Evidence may not point outside the project either.
+    outside = temp / 'outside.png'
+    outside.write_bytes(b'x')
+    escaped = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
+        {'id': 'core-task', 'status': 'passed', 'blocking': True, 'evidence': artifact_evidence([outside])},
+    ]))
+    assert escaped.returncode == 1 and 'outside the project' in json.loads(escaped.stdout)['evidence_failures'][0]['reason']
+    PASSED += 3
+
+    passing = passing_items()
+    first = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing), '--save-evidence')
+    assert first['status'] == 'passed' and first['artifact'] == f".site/checks/{first['check_id']}.json"
+    assert check_artifact(root, first['check_id']).is_file()
+    assert first['evidence_failures'] == []
+    assert all(row['evidence']['verified'] for row in first['items'] if row['blocking'])
+    archived = root / '.site' / 'checks' / 'evidence' / 'desktop.png'
+    assert archived.is_file(), 'save-evidence must archive the screenshot delivery re-checks'
+
+    # A blocking failure keeps the project in verifying.
+    failing = passing + [
+        {'id': 'contrast', 'title': '对比度', 'status': 'failed', 'blocking': True,
+         'evidence': {'kind': 'artifact', 'summary': '4.17:1 < 4.5:1', 'paths': ['evidence/contrast.txt']}},
+    ]
+    (root / 'evidence' / 'contrast.txt').write_text('#627b78 on #f2f6f4 = 4.17:1', encoding='utf-8')
+    second = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, failing))
+    assert second.returncode == 1, 'a blocked matrix must exit non-zero'
+    second = json.loads(second.stdout)
+    assert second['status'] == 'failed' and second['blocking_not_passed'] == ['contrast']
+    refused(STATE_TOOL, 'deliver', root, '--check', second['check_id'])
+    assert stage_of(root) == 'verifying', 'a blocking failure must not reach delivered'
+    PASSED += 2
+
+    # A matrix item with no evidence at all fails instead of passing quietly.
+    missing_evidence = call(
+        CHECK_TOOL, 'matrix', root,
+        '--input', matrix_file(temp, [{'id': 'x', 'status': 'passed', 'blocking': True}]),
+    )
+    assert missing_evidence.returncode == 1
+    missing_result = json.loads(missing_evidence.stdout)
+    assert missing_result['status'] == 'failed' and 'needs evidence' in missing_result['evidence_failures'][0]['reason']
+    PASSED += 1
+    # An unknown evidence kind fails instead of being treated as a claim.
+    unknown_kind = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
+        {'id': 'x', 'status': 'passed', 'blocking': True, 'evidence': {'kind': 'guessed', 'summary': 'x'}},
+    ]))
+    assert unknown_kind.returncode == 1
+    assert 'kind must be one of' in json.loads(unknown_kind.stdout)['evidence_failures'][0]['reason']
+    PASSED += 1
+
+    # A source edit after the check voids the acceptance result.
+    third = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()))
+    (root / 'web' / 'style.css').write_text(
+        (root / 'web' / 'style.css').read_text(encoding='utf-8') + '\n/* late */\n', encoding='utf-8'
+    )
+    error = refused(STATE_TOOL, 'deliver', root, '--check', third['check_id'])
+    assert 'Source changed' in error
+    assert stage_of(root) == 'verifying'
+
+    # 7c. Overwriting the archived evidence after the check voids delivery.
+    fourth = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()), '--save-evidence')
+    tampered = root / '.site' / 'checks' / 'evidence' / 'desktop.png'
+    original = tampered.read_bytes()
+    tampered.write_bytes(b'\x89PNG\r\n\x1a\nedited later')
+    error = refused(STATE_TOOL, 'deliver', root, '--check', fourth['check_id'])
+    assert 'evidence changed after the check' in error, error
+    tampered.write_bytes(original)
+    assert ok(STATE_TOOL, 'deliver', root, '--check', fourth['check_id'])['stage'] == 'delivered'
+
+    # 7d. A hand-written matrix that reuses a real fingerprint is not acceptance.
+    ok(STATE_TOOL, 'reopen', root, '--reason', '下一轮修复')
+    ok(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', free_port())
+    ok(STATE_TOOL, 'start-verify', root)
+    forged = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()))
+    forged_path = check_artifact(root, forged['check_id'])
+    (forged_path).write_text(json.dumps({
+        'schema_version': 1, 'kind': 'matrix', 'check_id': forged['check_id'], 'status': 'passed',
+        'fingerprint': forged['fingerprint'],
+        'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True, 'evidence': '我说通过了'}],
+    }, ensure_ascii=False), encoding='utf-8')
+    error = refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
+    assert 'verified evidence' in error, error
+    # An emptied artifact map is equally refused instead of passing on nothing.
+    (forged_path).write_text(json.dumps({
+        'schema_version': 1, 'kind': 'matrix', 'check_id': forged['check_id'], 'status': 'passed',
+        'fingerprint': forged['fingerprint'], 'artifacts': {},
+        'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True,
+                   'evidence': {'kind': 'artifact', 'summary': 'x', 'items': [], 'verified': True}}],
+    }, ensure_ascii=False), encoding='utf-8')
+    assert 'missing' in refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
+
+    # 8. Delivery through the frozen matrix, then reopen for the next round.
+    ok(STATE_TOOL, 'reopen', root, '--reason', '修复对比度并重新验收')
+    ok(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', free_port())
+    ok(STATE_TOOL, 'start-verify', root)
+    final = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()), '--save-evidence')
+    delivered = ok(STATE_TOOL, 'deliver', root, '--check', final['check_id'])
+    assert delivered['stage'] == 'delivered' and delivered['delivery']['check_id'] == final['check_id']
+    # Delivery hands the creator their own words back: the only real check on consent.
+    assert [entry['quote'] for entry in delivered['consent_replay']] == [
+        CONCEPT_LINE, VISUAL_LINE, AUTHORIZE_LINE], 'delivery must replay all three quotes verbatim'
+    assert [entry['label'] for entry in delivered['consent_replay']] == ['首版方案确认', '视觉方向确认', '开发授权']
+    refused(STATE_TOOL, 'claim', root, '--owner', 'builder-b')
+    ok(STATE_TOOL, 'reopen', root, '--reason', '用户要求改首屏文案')
+    assert stage_of(root) == 'building'
+    # The issued consent trail stays readable for the audit.
+    audit = json.loads((root / '.site' / 'state.json').read_text(encoding='utf-8'))
+    for field in ('concept_consent', 'visual_consent', 'authorization_consent'):
+        record = audit[field]
+        assert record['basis'] in ('agent-reported', 'quote-matched')
+        assert record['quote_sha256'] == hashlib.sha256(record['quote'].encode('utf-8')).hexdigest()
+        assert record['basis_note'], 'every consent record must state that it is not a proof'
+    PASSED += 1
+
+    # 9. A project without .site is never initialized or rewritten by the checker.
+    third_party = temp / 'third-party'
+    third_party.mkdir()
+    (third_party / 'index.html').write_text('<!doctype html><title>x</title>', encoding='utf-8')
+    bare = ok(CHECK_TOOL, 'static', third_party)
+    assert bare['artifact'] is None and not (third_party / '.site').exists()
+
+    # 10. A legacy schema v1 record is upgraded on first write and never implies a gate.
+    legacy = temp / 'legacy'
+    (legacy / '.site').mkdir(parents=True)
+    (legacy / '.site' / 'state.json').write_text(json.dumps({
+        'schema_version': 1,
+        'project_id': 'legacy-id',
+        'status': 'ready',
+        'next_action': '旧记录',
+        'runtime': {'kind': 'local_server', 'port': 8765},
+        'custom_legacy_field': 'keep me',
+    }), encoding='utf-8')
+    ok(STATE_TOOL, 'confirm-concept', legacy, '--quote', CONCEPT_LINE, '--no-visual')
+    migrated = json.loads((legacy / '.site' / 'state.json').read_text(encoding='utf-8'))
+    assert migrated['schema_version'] == 2 and migrated['stage'] == 'concept_review'
+    assert migrated['concept_confirmed'] is True and migrated['runtime']['port'] == 8765
+    assert migrated['custom_legacy_field'] == 'keep me'
+    assert migrated['development_authorized'] is False and migrated['visual_confirmed'] is False
+    refused(STATE_TOOL, 'start-build', legacy)
+    refused(STATE_TOOL, 'claim', legacy, '--owner', 'builder-c', '--force')
+    PASSED += 3
+
+    # 11. The three independent fingerprint() implementations must agree on a hard tree.
+    # They claim to be byte-identical; nothing else forces that, and a silent drift here
+    # would void every frozen acceptance fingerprint while every other test stayed green.
+    hard = temp / 'hard-tree'
+    (hard / '.site' / 'checks').mkdir(parents=True)
+    (hard / 'assets' / 'deep').mkdir(parents=True)
+    (hard / '.hidden-dir').mkdir(parents=True)
+    (hard / 'index.html').write_text('<!doctype html><title>hard</title>', encoding='utf-8')
+    (hard / 'assets' / 'deep' / 'app.js').write_text('console.log(1)', encoding='utf-8')
+    (hard / '.site' / 'brief.md').write_text('# 目标', encoding='utf-8')
+    (hard / '.site' / 'implementation-plan.md').write_text('# 计划', encoding='utf-8')
+    (hard / '.site' / 'state.json').write_text(json.dumps({'schema_version': 2, 'project_id': 'hard'}))
+    (hard / '.site' / 'lease.json').write_text('{}', encoding='utf-8')
+    (hard / '.site' / 'checks' / 'c.json').write_text('{}', encoding='utf-8')
+    (hard / '.hidden-dir' / 'ignored.txt').write_text('hidden', encoding='utf-8')
+    (hard / '.DS_Store').write_text('junk', encoding='utf-8')
+    # Symlinks are ignored by the walk: as a directory and as a file, including one that
+    # points outside the tree, which must not be followed or hashed.
+    outside = temp / 'outside.txt'
+    outside.write_text('outside', encoding='utf-8')
+    (hard / 'linked-dir').symlink_to(hard / 'assets')
+    (hard / 'linked-file.js').symlink_to(outside)
+    gates = ok(STATE_TOOL, 'show', hard)['fingerprint']
+    statics = ok(CHECK_TOOL, 'static', hard)['fingerprint']
+    inspected_hard = ok(SITE_TOOL, 'inspect', hard)['fingerprint']
+    assert gates == statics == inspected_hard, (
+        f'fingerprint implementations disagree: state={gates[:12]} check={statics[:12]} site={inspected_hard[:12]}'
+    )
+    PASSED += 1
+
+    print(f'OK: {PASSED} gate assertions passed')
+
+
+if __name__ == '__main__':
+    main()

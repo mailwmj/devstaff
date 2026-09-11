@@ -23,6 +23,8 @@ python3 /absolute/site-check/scripts/check.py static /absolute/PROJECT [--offlin
 
 Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 ID、ID 引用、片段和部分离线依赖；它不执行 JavaScript，不是完整 CSS、安全或视觉检查。
 
+项目存在 `.site` 时，静态与命令检查会把结果连同 `check_id` 和源码指纹写入 `.site/checks/`。这是本 Skill 唯一的写入位置：不编辑正式源码，也不写 `.site/state.json`；没有 `.site` 的第三方项目保持只读，不初始化也不补写。
+
 ### 核心业务
 
 用浏览器或等价运行环境完成已确认核心任务，以及最可能破坏结果的反例。根据真实范围选择首次空白、典型数据、无结果、校验错误、保存失败、重复操作、超长内容、权限或离线等状态；不为无关小工具伪造登录和网络错误。
@@ -43,7 +45,49 @@ Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 
 - 声称持久化的数据重新打开后仍存在；
 - 数据位置、备份方式和限制与说明一致。
 
-## 2. 命令记录
+## 2. 产出矩阵凭据
+
+四条轴完成后，把本轮每一项写成机器可读矩阵并交给检查工具落盘：
+
+```text
+python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /absolute/matrix.json --save-evidence
+```
+
+`matrix.json` 的每项包含 `id`、`title`、`status`（`passed | failed | not_run | not_applicable`）、`blocking`（布尔）和 `evidence`。证据不是一句描述，而是说明它从哪里来：
+
+```json
+{"items": [
+  {"id": "core-task", "title": "了解课程并复制微信号", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "桌面 1440x1000 实际操作并复制成功",
+                "paths": ["evidence/desktop-1440.png", "evidence/clipboard-result.json"]}},
+  {"id": "build", "title": "构建与静态引用", "status": "passed", "blocking": true,
+   "evidence": {"kind": "command", "summary": "check.py run 退出 0", "commands": ["<command check_id>"]}},
+  {"id": "copy-feedback", "title": "复制按钮的失败恢复", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "剪贴板被拒绝时的手动恢复截图",
+                "paths": ["evidence/clipboard-denied.png"]}},
+  {"id": "copy-tone", "title": "复制成功提示的措辞", "status": "passed", "blocking": false,
+   "evidence": {"kind": "declared", "summary": "我认为提示语够清楚，但没有单独取证"}}
+]}
+```
+
+四种证据类型：
+
+| `kind` | 含义 | 能否支撑阻断项 |
+| --- | --- | --- |
+| `artifact` | 项目内的真实文件（截图、结果 JSON、日志、命令输出），工具记录 sha256 | 能 |
+| `command` | 之前 `check.py run` 的 `check_id`，要求退出码 0 且源码未变 | 能 |
+| `observation` | 无法归档的操作观察，例如手工读取剪贴板 | 不能，只能非阻断项 |
+| `declared` | 只是声明；纯文字 `evidence` 字符串按此处理 | 不能，只能非阻断项 |
+
+写不出可归档证据时，正确做法是把该项标成 `not_run` 并写明恢复条件，而不是写一句 `passed`。把阻断项写成 `observation` 或 `declared` 会被工具直接拒绝——这是"无证据就是 `not_run`"的机械版本。
+
+`--save-evidence` 会把引用到的证据复制到 `.site/checks/evidence/`，归档副本才是交付时核对的依据：复验时重新渲染的截图只覆盖工作文件，不会让已提交的证据失效；但归档副本或未归档的证据文件被改写，交付就会失败。
+
+工具在检查前后重算源码指纹：指纹变化、任一阻断项不是 `passed`、或阻断项的 `artifact`/`command` 证据验证不通过时整体 `status=failed`，并列出 `blocking_not_passed` 与 `evidence_failures`。成功时返回 `check_id`，凭据落在 `.site/checks/<check_id>.json`。报告回执必须带上这个 `check_id`；`site-builder` 只能用它换取 `delivered`，源码一变凭据自动失效。
+
+工具能验证证据文件存在、位于项目内、未被改写、且命令证据确实退出 0，但它**无法验证一张截图是否真的证明了所写结论**。手写一份矩阵 JSON 冒充凭据会在交付时被拒绝；把无关文件当作证据仍然要靠检查者的判断，所以"这一条证据真的支持这个结论"依旧是本 Skill 的责任。
+
+## 3. 命令记录
 
 需要执行任意项目命令并保留结构化结果时可使用：
 
@@ -53,7 +97,7 @@ python3 /absolute/site-check/scripts/check.py run /absolute/PROJECT -- <actual c
 
 工具将工作目录设为项目根，记录退出码、末尾输出、执行前后源码指纹和超时；源码在检查中变化会使结果 failed。输出可能含业务内容，运行前避免打印秘密，不公开上传。
 
-## 3. 结论
+## 4. 结论
 
 - `passed`：已实际执行且观察符合预期；
 - `failed`：实际结果不符合，写清位置、复现和影响；

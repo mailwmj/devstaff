@@ -96,9 +96,9 @@
 ## 14. 最终检查失败
 
 - **输入：** `site-check` 发现重新打开后记录丢失，其他轴通过。
-- **应调用：** 发现返回 `site-builder`；builder 修复后再次调用 `site-check`。
-- **应停位置：** 复验前保持 `stage=verifying`；通过后才可交付。
-- **禁止误判：** 不因三个轴通过就忽略失败项，不由 check 宣布 delivered。
+- **应调用：** 发现返回 `site-builder`；builder 先用 `reopen` 取回 writer 租约并修复，重新 `handoff` 与 `start-verify` 后再次调用 `site-check`。
+- **应停位置：** 复验前保持 `stage=verifying`；只有与冻结指纹一致、阻断项全部 `passed` 的 `check_id` 才能换取 `delivered`。
+- **禁止误判：** 不因三个轴通过就忽略失败项，不由 check 宣布 delivered，不在阻断失败时写 `delivered`，不沿用旧凭据。
 
 ## 15. 缺少浏览器能力
 
@@ -127,3 +127,10 @@
 - **应调用：** `site-builder` 在同一 Agent 中按协作顺序执行，每个阶段输出同样的协作回执。
 - **应停位置：** 正常遵守两个门禁和只读检查边界，并说明验证未隔离。
 - **禁止误判：** 不因工具缺失跳过 owner Skill 的规则，不把多个阶段混成一次无门禁实现。
+
+## 19. Writer 未退出就要验收
+
+- **输入：** 体验稿服务仍占用 4174，正式站已在 4175 可用；用户说“帮我验收一下”。
+- **应调用：** `site-builder` 先停止自有体验稿服务并核对 PID 已结束、端口已释放，登记正式服务的 `owner/PID/端口/根目录`，执行 `handoff` 与 `start-verify`，再调用 `site-check`。
+- **应停位置：** 冻结指纹后由独立 Checker 出具矩阵凭据 `check_id`；源码在交接后变化时重新交接并完整复验。
+- **禁止误判：** 不在 Writer 子进程仍运行时启动 Checker，不复用归属未确认的端口，不让 URL 指向体验稿目录，不沿用旧 `check_id`。

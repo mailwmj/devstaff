@@ -40,6 +40,11 @@ def project_files(root):
 
 
 def fingerprint(root):
+    """Content fingerprint shared with site-check and the site-brief state gate.
+
+    It deliberately ignores .site/state.json, the lease and the checks directory:
+    recording a transition must never invalidate a frozen acceptance fingerprint.
+    """
     metadata = root / '.site'
     if metadata.is_symlink():
         raise ValueError('Project metadata must not be a symlink')
@@ -48,14 +53,7 @@ def fingerprint(root):
         path = metadata / name
         if path.is_file() and not path.is_symlink():
             paths.append(path)
-    state_path = metadata / 'state.json'
     digest = hashlib.sha256()
-    if state_path.is_file() and not state_path.is_symlink():
-        state = json.loads(state_path.read_text(encoding='utf-8'))
-        digest.update(json.dumps(
-            {'project_id': state.get('project_id'), 'runtime': state.get('runtime')},
-            sort_keys=True,
-        ).encode())
     for path in sorted(set(paths)):
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(b'\0')

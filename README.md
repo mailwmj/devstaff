@@ -32,9 +32,24 @@ python scripts/install.py /absolute/path/to/agent/skills
 - 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
 - 视觉选择与开发授权是两个决定；
 - 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
-- `site-check` 独立给出证据，只有 `site-builder` 可以宣布正式交付；
+- 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须带用户那句原话（`--quote`），同一句不能连过两道门禁；
+- **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
+- `site-check` 独立给出带 `check_id` 的矩阵凭据；阻断项必须有截图、结果文件或命令凭据等可核验证据，交付时重新核对哈希，手写矩阵或改动过的证据都会被拒绝；
 - 简单修改和 Bug 按影响跳过无关阶段；
-- 系统级安装、费用、账号、密钥、真实敏感数据和高风险产品决定仍需用户授权。
+- 系统级安装、费用、账号、密钥、真实敏感数据和公开部署按宿主能力分档拦截，不由状态机记录。
+
+## 能力与支持矩阵
+
+诚实的能力边界，避免把"能记录"读成"能验证"：
+
+| 能力 | 有宿主支持时 | 无宿主支持时 |
+| --- | --- | --- |
+| 用户原话留存 | 始终可用 | 始终可用（`--quote` 必填） |
+| 标注升级为 `quote-matched` | 会话记录可读且能定位到用户消息 | 降级为 `agent-reported`，**不阻塞**；未知格式只降级 |
+| 用户同意的验证 | **任何宿主都不提供** | 靠交付时回放原话 + 用户本人核对 |
+| 不可逆动作拦截 | T1 审批提示 / T2 沙箱边界 | T3 停下来问并等回答，且如实标注 |
+
+**没有任何一档能证明用户同意。** 三道确认门禁在所有宿主上都可执行，因为它们的输入是 Agent 抄录的原话，而不是宿主内部文件；因此不存在"环境不支持导致流程停摆"的分支。
 
 详细需求见 [`REQUIREMENTS.md`](REQUIREMENTS.md)，统一术语见 [`CONTEXT.md`](CONTEXT.md)。
 
@@ -42,6 +57,7 @@ python scripts/install.py /absolute/path/to/agent/skills
 
 ```text
 python scripts/verify_skills.py .
+python tests/gate_flow.py
 ```
 
-检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)。
+`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：无依据跃迁、空的原话、`--anchor` 读不懂时的降级、按内容比对的原话复用、并发租约、Writer 未退出的交接、无证据或证据被改动的阻断项、阻断失败与源码变化后的交付，以及交付回放三条原话。**它不测、也无法测"用户是否真的同意"**——那条只能由交付回放交给用户本人判断。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)。
