@@ -1,6 +1,6 @@
 # 与改动相称的独立验证
 
-先从请求、`brief.md`、实施计划和实际工程提取本轮能力。每项使用：
+先从请求、`brief.md`、实施计划和实际工程提取本轮能力、明确排除项与适用状态。每项使用：
 
 ```text
 前提 → 用户操作 → 可观察结果
@@ -9,7 +9,15 @@
 证据：命令、操作观察、截图或具体限制
 ```
 
-## 0. 选择检查档位
+## 0. 建立覆盖范围并选择检查档位
+
+选择档位前先建立范围清单，不允许只从当前页面或已经写好的测试反推范围。清单至少包含：
+
+- `brief.md` 中每条已确认首版能力和明确排除项；
+- 每个纵向切片的成功结果、失败恢复、中途退出和适用状态；
+- 本轮请求新增或修改的行为，以及实际工程暴露出的必要回归面。
+
+把清单逐条映射到矩阵项；同一项可以有多份证据，但不能用一句“核心流程已测”吞掉多条能力。明确排除项也要有矩阵项，核对页面、导航、数据和文案没有暗示或实现该能力。缺少映射时，该项必须是 `failed`；确因账号、环境或能力无法执行时是 `not_run` 并写恢复条件，不能静默省略。只有明确列出且说明不适用理由的项目才能是 `not_applicable`。
 
 检查不是固定的全量回归，而是按本轮改动的影响范围选择档位。把选择和原因写入矩阵：
 
@@ -59,6 +67,15 @@ Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 
 
 用 `site-design` 的只读视觉审查分支，按相近页面、内容、状态和视口对照已确认方向或参考。检查主任务、构图、中文排版、控件状态、真实内容和响应式。主要问题修复后重新渲染；没有溢出不等于视觉通过。
 
+新建或整体重做不能只检查首页：至少实际渲染核心页面与最复杂的操作表面，并用 computed style 和操作状态核对以下内容；局部修改按受影响范围选择代表表面：
+
+- 已确认视觉意图及共享变量是否真实进入成品，同角色组件在不同页面是否一致；
+- 排版、空间、控件层级、图像裁剪与图标规格是否跨页面继承；
+- 适用的默认、悬停、按下、焦点、禁用、加载、成功和错误状态是否完整且可辨认；
+- 动效是否使用一致的快/常规/慢节奏并服务状态变化，`prefers-reduced-motion` 下是否减弱非必要运动而不丢失反馈。
+
+原创设计按选定方向和实际质量判断，不要求精确像素或色值复刻。只有用户明确要求还原且参考条件可比时，才把几何、色值或截图差异作为硬性标准。
+
 视觉轴要按 `site-design` 的 [设计质量](../../site-design/references/design-quality.md) 四条判据核对，并对**实际渲染**执行断言，而不是只做静态阅读：
 
 - **方向有来源**：核对项目已声明的母题是否真的兑现在成品里，以及换个产品名是否还成立；
@@ -98,6 +115,12 @@ python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /
   {"id": "copy-feedback", "title": "复制按钮的失败恢复", "status": "passed", "blocking": true,
    "evidence": {"kind": "artifact", "summary": "剪贴板被拒绝时的手动恢复截图",
                 "paths": ["evidence/clipboard-denied.png"]}},
+  {"id": "scope-no-payment", "title": "首版明确排除在线支付", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "桌面与手机的导航、课程页和咨询流程均未出现支付入口或支付承诺",
+                "paths": ["evidence/scope-desktop.png", "evidence/scope-mobile.png"]}},
+  {"id": "visual-inheritance", "title": "核心页与咨询弹窗继承选定视觉", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "1440px 核心页和弹窗的排版、间距、控件状态与动效节奏实测一致，减弱动效模式保留结果反馈",
+                "paths": ["evidence/core-page.png", "evidence/contact-dialog-states.png", "evidence/reduced-motion.json"]}},
   {"id": "copy-tone", "title": "复制成功提示的措辞", "status": "passed", "blocking": false,
    "evidence": {"kind": "declared", "summary": "我认为提示语够清楚，但没有单独取证"}}
 ]}
