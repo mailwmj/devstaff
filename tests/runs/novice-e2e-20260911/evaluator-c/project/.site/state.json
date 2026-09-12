@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
   "project_id": "novice-e2e-20260911-evaluator-c-project",
-  "revision": 1,
-  "stage": "concept_review",
-  "concept_confirmed": false,
+  "revision": 2,
+  "stage": "visual_drafting",
+  "concept_confirmed": true,
   "visual_confirmed": false,
   "development_authorized": false,
   "delegated": false,
   "runtime": null,
-  "next_action": "由创作者补充或选择课程活动内容表达方式，并确认首版方案回放"
+  "next_action": "制作并实际验证隔离的视觉体验稿，交由创作者选择；不得开始正式开发"
 }

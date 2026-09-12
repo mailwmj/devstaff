@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "name": "site-builder",
   "files": {
-    "SKILL.md": "a49388200dd43f0debc31f1c093abca871eae3793cfe3b482bc67f4d74de7fdf",
+    "SKILL.md": "8d202b2d0d8b0180d38563566b07eb8c2aeb717f6cb1346481ed5026c52d2b64",
     "agents/openai.yaml": "4f55a439961d7ed582746bd6e7c1059f19c8b4375ecb7261aa1dbe62572528cd",
     "assets/templates/static/web/index.html": "0233c93b96a16cbc290fe1f313ef3da0dd6266d3cde23622d849f6ac64f9bb43",
     "assets/templates/static/web/style.css": "634154fb9f896e61d0183057026ffb100ae73256030fe6d1d8746b6fec6f9a38",
@@ -11,10 +11,10 @@
     "assets/templates/tool/web/index.html": "83c845de525423999ff8e710b5db76e8c9b5f8450be718897054673737d8e7cd",
     "assets/templates/tool/web/style.css": "602af2abb7114a5833ebcebbf88d718f562c8d09bbe67d59a2d652bb901c46fb",
     "references/components.md": "e59e870f7bfcd6dc578012a5567dff2f5df06715bd707d50a3962bb0b3bd83b8",
-    "references/implementation.md": "6592bcf2dc8834f8d5db4e674ccb895c67f510e5c65d7ccfa9466df33632746a",
+    "references/implementation.md": "d5517db1cfed2673c7be109e52e1b08f18fda1057e53b03478a7c6afc2d71add",
     "references/publish.md": "c1d44f4365f3de3e506c9105e8ddedcca426d0192fac19654e70f7bbf07e5474",
-    "references/runtime.md": "dedc225863d6c6292d3e49d7206cece71841564f8d6109fb990cce534fa55bdc",
+    "references/runtime.md": "46e36ee19e9f209280164e276c6b74582b81a4200c34b329b0cbf1d0caf866e2",
     "scripts/preview.py": "a01f5b2b15dab1747feae6f0eb3cb831d84e7c79624bdd29047ce8f4301bb300",
-    "scripts/site.py": "25e2f63a4bef074709e0aba9e47f2621fe2c4e9ba7830da036072dbc60f7ac56"
+    "scripts/site.py": "a3c6037d421bda0ce10d5988a8938532688825e9d4cccef0e97b3eee87cbbf11"
   }
 }

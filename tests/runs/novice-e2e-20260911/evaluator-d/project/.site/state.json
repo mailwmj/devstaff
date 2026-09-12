@@ -1,12 +1,16 @@
 {
   "schema_version": 2,
   "project_id": "novice-e2e-20260911-evaluator-d",
-  "revision": 2,
-  "stage": "visual_drafting",
+  "revision": 7,
+  "stage": "delivered",
   "concept_confirmed": true,
-  "visual_confirmed": false,
-  "development_authorized": false,
+  "visual_confirmed": true,
+  "development_authorized": true,
   "delegated": false,
-  "runtime": null,
-  "next_action": "制作并展示单页课程介绍视觉体验稿，等待创作者明确确认视觉方向"
+  "runtime": {
+    "type": "static",
+    "entry": "web/index.html",
+    "start": "python3 -m http.server 4175 --directory web"
+  },
+  "next_action": "创作者可打开本地入口查看首版；发布前确认微信号与照片元数据，并补齐未定课程规则"
 }

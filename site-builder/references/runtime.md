@@ -30,7 +30,7 @@
 
 宿主能力无法探测时，按 T3 执行并如实记录，不写成"已由宿主拦截"。
 
-**这类动作故意不记进 `.site/state.json`。** 它们是动作授权，不是阶段跃迁；把动作塞进阶段状态机会让机制取代目标本身。可逆决定（方案、视觉、开发授权）走 `site-brief` 的确认记录，不可逆动作走这里，两者不混。
+**这类动作故意不记进 `.site/state.json`。** 它们是动作授权，不是阶段跃迁；把动作塞进阶段状态机会让机制取代目标本身。可逆决定（方案、页面结构、视觉风格、开发授权）走 `site-brief` 的确认记录，不可逆动作走这里，两者不混。
 
 ## 2. 选择运行方式
 
@@ -44,7 +44,7 @@ python3 /absolute/site-builder/scripts/site.py init /absolute/project --template
 python3 /absolute/project/.site/preview.py
 ```
 
-Python 工具要求 3.10+；Windows 可能使用 `py -3`，Mac/Linux 通常使用 `python3`，以实际检测为准。starter 只接受空目录或仅含 `.site` 记录的目录；后者保留原 brief/state，并在输出中标明是否需要由 `site-brief` 记录推荐 runtime。空目录会创建 `discovering` 默认状态，调用者必须立即把本轮已经获得的方案、视觉和开发授权交给 `site-brief` 恢复后，才能进入 `building`。starter 只是启动基础，不是视觉体验稿或用户项目完成品。
+Python 工具要求 3.10+；Windows 可能使用 `py -3`，Mac/Linux 通常使用 `python3`，以实际检测为准。starter 只接受空目录或仅含 `.site` 记录的目录；后者保留原 brief/state，并在输出中标明是否需要由 `site-brief` 记录推荐 runtime。空目录会创建 `discovering` 默认状态，调用者必须立即把本轮已经获得的方案、页面结构、视觉风格和开发授权交给 `site-brief` 恢复后，才能进入 `building`；只选定结构而还没做风格方案时，恢复后仍停在 `visual_drafting`。starter 只是启动基础，不是视觉体验稿或用户项目完成品。
 
 `site-builder` 的随包预览只服务项目 `web/`，默认回环地址和端口 8765，不是生产服务器。端口占用时不杀无关进程；无持久数据的首次预览可换端口。浏览器存储已绑定旧网址时，先确认旧入口或导出迁移，不能静默换来源导致用户以为数据丢失。
 

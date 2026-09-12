@@ -5,7 +5,7 @@
 本协议适用于用户要求进行“用户画像评测”“端到端回放”或“完整回归”。开始前必须阅读：
 
 - [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)：画像、主线 UC、RC、评分、否决项和完整结论门槛。
-- [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)：SD-01～SD-08 与 MV-01～MV-04 的输入和观察点。
+- [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)：SD-01～SD-09 与 MV-01～MV-04 的输入和观察点。
 
 本文只规定运行纪律；详细用例、固定业务事实和评分标准以上述文件为准。
 
@@ -22,20 +22,20 @@
 
 ### 2. 评测分级与会话
 
-- **完整评测**：具备全部必需 `F-*` 夹具、两名真人、浏览器/端口条件，并执行 UC-01～UC-04、RC-01～RC-21、SD-01～SD-08、MV-01～MV-04。所有非计划 `not_run` 都使结论保持“不完整”，不计算 A/B/C/D。
+- **完整评测**：具备全部必需 `F-*` 夹具、两名真人、浏览器/端口条件，并执行 UC-01～UC-04、RC-01～RC-22、SD-01～SD-09、MV-01～MV-04。所有非计划 `not_run` 都使结论保持“不完整”，不计算 A/B/C/D。
 - **主线冒烟**：在夹具、真人或环境不足时，只回放 UC-01～UC-04 及明确可执行的关键路径，并明确标注“主线冒烟，不代表完整回归”。夹具不足时仍须标“不完整”，不得用临时输入补成完整版本。
 - 从同一个干净 `F-EMPTY` 副本启动主线，并保持一个持续的被测 Agent/用户会话，保留对话、调用事件、状态和文件时间线。需要第二次画像回放时复制环境，但不要把模型双跑称作两名真人。
 - 每个 RC/SD/MV 使用独立夹具副本；用例结束后销毁或重置，不继承上一用例的确认、授权、源码或 `stage="delivered"` 状态。
 
 ### 3. 门禁状态断言
 
-每一轮开始和结束都读取并断言状态；不能只依据 Agent 的自然语言回执。至少维护：`stage`、`concept_confirmed`、`visual_confirmed`、`development_authorized`、交付阶段（由 `stage="delivered"` 表示）、源码哈希、最近一次 check 结果，以及三条确认记录的 `basis`（`agent-reported` / `quote-matched`）。
+每一轮开始和结束都读取并断言状态；不能只依据 Agent 的自然语言回执。至少维护：`stage`、`concept_confirmed`、`structure_required`、`structure_confirmed`、`visual_confirmed`、`development_authorized`、交付阶段（由 `stage="delivered"` 表示）、源码哈希、最近一次 check 结果，以及各道确认记录的 `basis`（`agent-reported` / `quote-matched`）。`structure_required=true` 而 `structure_confirmed=false` 表示用户只选了页面结构，视觉风格尚未确认。
 
 - 方案未确认：不得正式设计或开发。
-- 只有视觉选择：只能记录 `visual_confirmed=true`，不得推断开发授权、创建正式源码或实施计划。
+- 只有结构选择或只有视觉选择：只能记录对应的那一项（`structure_confirmed` 或 `visual_confirmed=true`），不得推断开发授权、创建正式源码或实施计划。用户只比较过页面结构时，风格方案这一步还没发生。
 - 开发授权未明确：不得进入正式实施。
 - `stage="delivered"`：必须绑定同一源码哈希的检查矩阵，所有阻断项为 `passed`，且没有未完成的再次打开验证。
-- 用户改变核心范围或高风险事项后，旧方案、视觉确认、授权和交付状态必须失效并重新确认。
+- 用户改变核心范围、页面结构或高风险事项后，旧方案、结构确认、视觉确认、授权和交付状态必须失效并重新确认。
 
 **门禁记录的是声明，不是同意的证明。** 断言时区分三件事，不得混为一谈：
 

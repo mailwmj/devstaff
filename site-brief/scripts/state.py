@@ -12,14 +12,28 @@ tool.  It replaces "remember the rules" with mechanical checks:
   fingerprint equals the current project fingerprint and whose blocking items all
   passed.
 
+A page has two separate decisions, and this tool keeps them apart:
+
+* ``confirm-structure`` records which structure the creator picked;
+* ``confirm-visual`` records the style they picked on top of that structure.
+
+Picking a structure is not a visual confirmation, so ``confirm-visual`` refuses
+to run while the structure decision is still unrecorded, and an already recorded
+structure choice invalidates a style choice made for the old one.  The rule fails
+closed: ``confirm-concept`` treats an omitted ``--structure-directions`` as
+"several structures were compared", and only an explicit ``1`` says this round
+showed a single page.  Forgetting the flag therefore blocks the style step
+instead of silently turning a structure pick into a style choice.
+
 What this tool can and cannot guarantee
 ---------------------------------------
 
 Nothing this tool writes can prove that the creator agreed to anything.  The
 creator's judgement lives in their head, and every file here is writable by the
-agent the gate is supposed to be restraining.  So the three confirmation gates
-(``confirm-concept``, ``confirm-visual``, ``authorize-build``) are **records of
-what the agent says the creator said**, not verified facts:
+agent the gate is supposed to be restraining.  So the four confirmation gates
+(``confirm-concept``, ``confirm-structure``, ``confirm-visual``,
+``authorize-build``) are **records of what the agent says the creator said**,
+not verified facts:
 
 * the caller must pass ``--quote`` with the creator's own words, verbatim;
 * an optional ``--anchor`` upgrades the label when the quote can be located in a
@@ -59,7 +73,7 @@ STAGES = (
 )
 CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
-CONSENT_FIELDS = ('concept_consent', 'visual_consent', 'authorization_consent')
+CONSENT_FIELDS = ('concept_consent', 'structure_consent', 'visual_consent', 'authorization_consent')
 
 # Consent labels.  Neither is a proof; they are honesty levels, ordered.
 BASIS_REPORTED = 'agent-reported'
@@ -167,7 +181,14 @@ def migrate_v1(state):
     # Old free-form statuses such as "ready" are not v2 stages and never imply a gate.
     upgraded['stage'] = legacy if legacy in STAGES else 'concept_review'
     upgraded.setdefault('visual_required', True)
-    for field in ('concept_confirmed', 'visual_confirmed', 'development_authorized', 'delegated'):
+    for field in (
+        'concept_confirmed',
+        'structure_required',
+        'structure_confirmed',
+        'visual_confirmed',
+        'development_authorized',
+        'delegated',
+    ):
         upgraded.setdefault(field, False)
     upgraded.setdefault('runtime', None)
     return upgraded
@@ -454,7 +475,13 @@ def build_consent(args):
 
 
 def record_consent(state, field, consent, gate):
-    """Attach a consent record, refusing to reuse one quote for two gates."""
+    """Attach a consent record, refusing to reuse one quote for two gates.
+
+    The live records are checked, and so is ``consent_history``: recording a gate
+    again overwrites its record, so without the history an earlier sentence would
+    silently become free for a different gate.  The history also keeps superseded
+    quotes readable, because a rewritten record must not erase what was said.
+    """
     for other in CONSENT_FIELDS:
         if other == field:
             continue
@@ -467,6 +494,43 @@ def record_consent(state, field, consent, gate):
                 f'This quote already confirms {other.replace("_consent", "")}; '
                 f'{gate} needs its own explicit expression from the creator'
             )
+    for entry in as_list(state.get('consent_history')):
+        if not isinstance(entry, dict) or entry.get('gate') == gate:
+            continue
+        if entry.get('quote_sha256') and entry.get('quote_sha256') == consent['quote_sha256']:
+            raise ValueError(
+                f"This quote already confirmed {entry.get('gate')} in an earlier record; {gate} needs its own "
+                'explicit expression from the creator, and recording a gate again does not free an old sentence'
+            )
+    collapsed = ' '.join(consent['quote'].split())
+    earlier = []
+    for other in CONSENT_FIELDS:
+        if other == field:
+            continue
+        existing = state.get(other)
+        if isinstance(existing, dict) and existing.get('quote'):
+            earlier.append((other.replace('_consent', ''), str(existing['quote'])))
+    for entry in as_list(state.get('consent_history')):
+        if isinstance(entry, dict) and entry.get('gate') != gate and entry.get('quote'):
+            earlier.append((str(entry.get('gate')), str(entry['quote'])))
+    for name, quote in earlier:
+        other = ' '.join(quote.split())
+        if not other:
+            continue
+        # Exact reuse is caught above; this catches the same words split into one gate
+        # and the rest into another, which is still a single expression of consent.
+        if other in collapsed or collapsed in other:
+            raise ValueError(
+                f'This quote overlaps the sentence already recorded for {name}; {gate} needs the creator\'s own, '
+                'separate expression rather than the same words split or repeated'
+            )
+    state['consent_history'] = as_list(state.get('consent_history')) + [{
+        'gate': gate,
+        'quote': consent['quote'],
+        'quote_sha256': consent['quote_sha256'],
+        'basis': consent['basis'],
+        'recorded_at': consent['recorded_at'],
+    }]
     state[field] = consent
 
 
@@ -487,6 +551,8 @@ def gate_reasons(state, visual_required):
     reasons = []
     if not state.get('concept_confirmed'):
         reasons.append('concept_confirmed is false')
+    if state.get('structure_required') and not state.get('structure_confirmed'):
+        reasons.append('structure_confirmed is false')
     if visual_required and not state.get('visual_confirmed'):
         reasons.append('visual_confirmed is false')
     if not state.get('development_authorized'):
@@ -541,6 +607,21 @@ def action_show(root, args):
         'writer_release': release or None,
         'release_matches_current_source': bool(release) and release.get('fingerprint') == current,
         'delivery': state.get('delivery'),
+        # Two separate decisions, surfaced separately: a recorded structure choice
+        # must never read as a visual confirmation just because the page has one
+        # direction flag.
+        'structure': {
+            'required': bool(state.get('structure_required')),
+            'confirmed': bool(state.get('structure_confirmed')),
+            'prototype': state.get('structure_prototype'),
+            'quote': state.get('structure_basis'),
+        },
+        'visual': {
+            'required': bool(state.get('visual_required', True)),
+            'confirmed': bool(state.get('visual_confirmed')),
+            'prototype': state.get('visual_prototype'),
+            'quote': state.get('visual_basis'),
+        },
         'consents': {
             field: (
                 dict(state[field], quote=state[field].get('quote', '')[:200])
@@ -548,6 +629,7 @@ def action_show(root, args):
             )
             for field in CONSENT_FIELDS
         },
+        'consent_replay': consent_replay(state),
         'checks': [
             dict(row, matches_current_source=row.get('fingerprint') == current)
             for row in check_artifacts(root)
@@ -588,9 +670,34 @@ def action_release(root, args):
 
 def action_confirm_concept(root, args):
     state = load_state(root)
+    if state.get('stage') in ('building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            f"confirm-concept cannot run at stage {state.get('stage')!r}; unblock, or run reopen --scope-changed, "
+            'so the running build, check or delivery is voided first. Re-recording the concept after delivery would '
+            'leave a frozen delivery replay quoting a decision that has since been rewritten'
+        )
     consent = build_consent(args)
     visual_required = not args.no_visual
+    if args.structure_directions is not None and args.structure_directions < 1:
+        raise ValueError('--structure-directions counts the structures shown; it must be 1 or more')
+    if not visual_required and (args.structure_directions or 0) >= 2:
+        raise ValueError(
+            'This round declared no separate visual proposal (--no-visual) and also declared several structures '
+            'to compare; a structure choice only exists when there is a visual step, so drop one of the two'
+        )
+    # Fail closed.  Omitting the count means "assume the creator compared several
+    # structures", so the structure decision must be recorded before any style
+    # choice; a round that really showed one page says so with ``1``.  Otherwise a
+    # forgotten flag would silently turn a structure pick into a style choice,
+    # which is the exact defect this gate exists to stop.
+    if not visual_required:
+        structure_required = False
+    elif args.structure_directions is None:
+        structure_required = True
+    else:
+        structure_required = args.structure_directions >= 2
     if args.scope_changed:
+        state['structure_confirmed'] = False
         state['visual_confirmed'] = False
         state['development_authorized'] = False
         state['delegated'] = False
@@ -598,13 +705,38 @@ def action_confirm_concept(root, args):
     record_consent(state, 'concept_consent', consent, 'concept')
     state['concept_confirmed'] = True
     state['visual_required'] = visual_required
+    state['structure_required'] = structure_required
+    # Keep the recorded decisions consistent with the scope just confirmed. A structure
+    # choice only exists in a multi-structure round, and a scope that needs no visual
+    # proposal has no design decision at all; leaving one standing would let the replay
+    # hand the creator a sentence for a decision the project says does not exist.
+    voided = []
+    if not visual_required:
+        voided = [
+            name for name, flag in (('structure', 'structure_confirmed'), ('visual', 'visual_confirmed'))
+            if state.get(flag)
+        ]
+        state['structure_confirmed'] = False
+        state['visual_confirmed'] = False
+    elif not structure_required and state.get('structure_confirmed'):
+        voided = ['structure']
+        state['structure_confirmed'] = False
+    if voided:
+        state['development_authorized'] = False
+        state['delegated'] = False
+        state.pop('delivery', None)
     state['concept_basis'] = consent['quote'][:200]
     state['concept_confirmed_at'] = now()
-    if state.get('stage') in ('discovering', 'concept_review', None):
+    # A scope change voids the downstream choices, so the stage returns to drafting
+    # even when the previous round had already reached a later stage.
+    if args.scope_changed or state.get('stage') in ('discovering', 'concept_review', None):
         state['stage'] = 'visual_drafting' if visual_required else 'concept_review'
-    state['next_action'] = (
-        'Produce and review a visual prototype' if visual_required else 'Obtain explicit development authorization'
-    )
+    if not visual_required:
+        state['next_action'] = 'Obtain explicit development authorization'
+    elif structure_required:
+        state['next_action'] = 'Show 2-3 structure directions, then record the chosen structure'
+    else:
+        state['next_action'] = 'Produce and review a visual prototype'
     save_state(root, state, 'confirm-concept', args.expect_revision)
     return {
         'action': 'confirm-concept',
@@ -613,6 +745,72 @@ def action_confirm_concept(root, args):
         'revision': state['revision'],
         'concept_confirmed': True,
         'visual_required': visual_required,
+        'structure_required': structure_required,
+        'voided_decisions': voided,
+        'consent': describe_consent(consent),
+    }
+
+
+def action_confirm_structure(root, args):
+    """Record the chosen page structure — a different decision from the style.
+
+    Two things make the old failure impossible rather than merely discouraged: the
+    style gate refuses while a declared structure choice is unrecorded, and a
+    structure quote cannot be replayed as the style quote because consent records
+    are compared by content across gates.  Choosing a structure after a style was
+    already chosen also invalidates that style choice, since it was made for a page
+    that no longer exists.
+    """
+    state = load_state(root)
+    if not state.get('concept_confirmed'):
+        raise ValueError('concept_confirmed is false; confirm the first version before recording a structure choice')
+    if not state.get('visual_required', True):
+        raise ValueError(
+            'This scope needs no separate visual proposal (--no-visual), so there is no structure choice to record'
+        )
+    # Past authorization the documented path is reopen, not a quiet structure swap:
+    # the old authorization, check and delivery must be voided first.
+    if state.get('stage') in ('ready_to_build', 'building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            f"The page structure cannot be re-decided at stage {state.get('stage')!r}; run reopen "
+            '--scope-changed (a plain reopen returns to building and still refuses) so the old authorization, '
+            'check and delivery are voided. A blocked project records the blockage, not new decisions'
+        )
+    consent = build_consent(args)
+    prototype = Path(args.prototype).expanduser()
+    if not prototype.exists():
+        raise ValueError(f'--prototype does not exist: {args.prototype}')
+    resolved = prototype.resolve()
+    inside = resolved.is_relative_to(root)
+    stale_visual = bool(state.get('visual_confirmed'))
+    record_consent(state, 'structure_consent', consent, 'structure')
+    state['structure_required'] = True
+    state['structure_confirmed'] = True
+    state['structure_basis'] = consent['quote'][:200]
+    state['structure_confirmed_at'] = now()
+    state['structure_prototype'] = str(resolved)
+    if stale_visual:
+        state['visual_confirmed'] = False
+        state['development_authorized'] = False
+        state['delegated'] = False
+        state.pop('delivery', None)
+    if state.get('stage') in ('discovering', 'concept_review', 'visual_drafting', 'visual_review', None):
+        state['stage'] = 'visual_drafting'
+    state['next_action'] = (
+        'Offer 2-3 complete style options on this same structure and the same real content, then record the style choice'
+    )
+    save_state(root, state, 'confirm-structure', args.expect_revision)
+    return {
+        'action': 'confirm-structure',
+        'root': str(root),
+        'stage': state['stage'],
+        'revision': state['revision'],
+        'structure_confirmed': True,
+        'visual_confirmed': bool(state.get('visual_confirmed')),
+        'invalidated_stale_visual_choice': stale_visual,
+        'next_action': state['next_action'],
+        'prototype': str(resolved),
+        'prototype_inside_project': inside,
         'consent': describe_consent(consent),
     }
 
@@ -621,20 +819,41 @@ def action_confirm_visual(root, args):
     state = load_state(root)
     if not state.get('concept_confirmed'):
         raise ValueError('concept_confirmed is false; confirm the first version before recording a visual choice')
+    if state.get('structure_required') and not state.get('structure_confirmed'):
+        raise ValueError(
+            'A structure choice is still pending: the creator compared page structures, not styles, and that is '
+            'not a visual confirmation. Record their structure choice with confirm-structure first, then offer '
+            '2-3 complete style options on that same structure and record the style choice here'
+        )
+    if state.get('stage') in ('ready_to_build', 'building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            f"The visual style cannot be re-decided at stage {state.get('stage')!r}; run reopen --scope-changed "
+            '(a plain reopen returns to building and still refuses) so the old authorization, check and delivery '
+            'are voided. A blocked project records the blockage, not new decisions'
+        )
     consent = build_consent(args)
     prototype = Path(args.prototype).expanduser()
     if not prototype.exists():
         raise ValueError(f'--prototype does not exist: {args.prototype}')
     resolved = prototype.resolve()
     inside = resolved.is_relative_to(root)
+    stale_authorization = bool(state.get('development_authorized'))
     record_consent(state, 'visual_consent', consent, 'visual')
     state['visual_confirmed'] = True
     state['visual_basis'] = consent['quote'][:200]
     state['visual_confirmed_at'] = now()
     state['visual_prototype'] = str(resolved)
+    if stale_authorization:
+        # The authorization was given for the previous style; it does not carry over.
+        state['development_authorized'] = False
+        state['delegated'] = False
+        state.pop('delivery', None)
     if state.get('stage') in ('discovering', 'concept_review', 'visual_drafting', 'visual_review', None):
         state['stage'] = 'visual_review'
-    state['next_action'] = 'Obtain explicit development authorization or record a requested change'
+    state['next_action'] = (
+        'Re-obtain explicit development authorization for the new style'
+        if stale_authorization else 'Obtain explicit development authorization or record a requested change'
+    )
     save_state(root, state, 'confirm-visual', args.expect_revision)
     return {
         'action': 'confirm-visual',
@@ -642,6 +861,7 @@ def action_confirm_visual(root, args):
         'stage': state['stage'],
         'revision': state['revision'],
         'visual_confirmed': True,
+        'invalidated_stale_authorization': stale_authorization,
         'prototype': str(resolved),
         'prototype_inside_project': inside,
         'consent': describe_consent(consent),
@@ -650,9 +870,16 @@ def action_confirm_visual(root, args):
 
 def action_authorize_build(root, args):
     state = load_state(root)
+    if state.get('stage') in ('building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            f"authorize-build cannot run at stage {state.get('stage')!r}; unblock, or run reopen --scope-changed, "
+            'so the running build, check or delivery is voided before new authorization'
+        )
     if not state.get('concept_confirmed'):
         raise ValueError('concept_confirmed is false; a visual choice alone never authorizes development')
-    if state.get('visual_required', True) and not state.get('visual_confirmed'):
+    if state.get('structure_required') and not state.get('structure_confirmed'):
+        raise ValueError('structure_confirmed is false; record the creator\'s structure choice before development')
+    if state.get('visual_required') is not False and not state.get('visual_confirmed'):
         raise ValueError('visual_confirmed is false; show the prototype and get a choice before development')
     consent = build_consent(args)
     record_consent(state, 'authorization_consent', consent, 'authorization')
@@ -678,7 +905,7 @@ def action_authorize_build(root, args):
 def action_start_build(root, args):
     state = load_state(root)
     lease = require_lease(root, 'writer')
-    reasons = gate_reasons(state, state.get('visual_required', True))
+    reasons = gate_reasons(state, state.get('visual_required') is not False)
     if reasons:
         raise ValueError('Gate not satisfied: ' + '; '.join(reasons))
     if state.get('stage') == 'delivered':
@@ -830,6 +1057,12 @@ def action_deliver(root, args):
     require_lease(root, 'checker')
     if state.get('stage') != 'verifying':
         raise ValueError(f"deliver requires stage 'verifying', current stage is {state.get('stage')!r}")
+    reasons = gate_reasons(state, state.get('visual_required') is not False)
+    if reasons:
+        raise ValueError(
+            'The consent gates are not satisfied, so a stage record alone cannot deliver: ' + '; '.join(reasons) +
+            '. If the project lost its confirmations, reopen instead of delivering without them'
+        )
     artifact = load_artifact(root, args.check)
     if artifact.get('kind') != 'matrix':
         raise ValueError('deliver needs a site-check matrix artifact, not a single static or command check')
@@ -899,16 +1132,30 @@ def action_deliver(root, args):
 
 
 def consent_replay(state):
-    """The three recorded quotes, for the creator to confirm or disown."""
+    """Every still-standing recorded quote, for the creator to confirm or disown.
+
+    A quote whose decision was invalidated is skipped: handing the creator an
+    abandoned sentence as if it were current would defeat the one step that really
+    checks consent.  Invalidated records stay in ``consent_history`` for the audit.
+    """
     labels = {
         'concept_consent': '首版方案确认',
-        'visual_consent': '视觉方向确认',
+        'structure_consent': '页面结构确认',
+        'visual_consent': '视觉风格确认',
         'authorization_consent': '开发授权',
+    }
+    standing = {
+        'concept_consent': 'concept_confirmed',
+        'structure_consent': 'structure_confirmed',
+        'visual_consent': 'visual_confirmed',
+        'authorization_consent': 'development_authorized',
     }
     replay = []
     for field in CONSENT_FIELDS:
         record = state.get(field)
         if not isinstance(record, dict):
+            continue
+        if not state.get(standing[field]):
             continue
         # A project already in flight under the older schema stored the wording in
         # "text". Keep replaying it rather than handing the creator a blank line.
@@ -928,11 +1175,28 @@ def action_reopen(root, args):
     lease = read_lease(root)
     if not args.reason.strip():
         raise ValueError('--reason must record why the delivered or verified state is void')
+    # reopen hands out a writer lease and a building stage. Without a precondition it
+    # is a bypass: a brand-new project could reopen, hand off, verify and deliver with
+    # nothing ever confirmed. There must be something to void.
+    confirmed = [
+        name for name in
+        ('concept_confirmed', 'structure_confirmed', 'visual_confirmed', 'development_authorized')
+        if state.get(name)
+    ]
+    if not confirmed and state.get('stage') not in ('building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            'Nothing to reopen: this project has no recorded confirmation, verification or delivery yet. '
+            'Record progress with confirm-concept/confirm-structure/confirm-visual instead'
+        )
     previous = state.get('stage')
     state['stage'] = 'building'
     state.pop('delivery', None)
     state['writer_release'] = None
     if args.scope_changed:
+        # The core scope changed, so the first-version concept itself no longer
+        # stands: re-confirm it before any downstream decision is recorded again.
+        state['concept_confirmed'] = False
+        state['structure_confirmed'] = False
         state['visual_confirmed'] = False
         state['development_authorized'] = False
         state['delegated'] = False
@@ -1014,7 +1278,20 @@ def build_parser():
                               'formats downgrade the label instead of failing. Any "#..." suffix is ignored')
     concept.add_argument('--no-visual', action='store_true', help='this scope needs no separate visual proposal')
     concept.add_argument('--scope-changed', action='store_true', help='invalidate downstream confirmations')
-    visual = add('confirm-visual', 'record the selected visual direction as the creator\'s verbatim quote')
+    concept.add_argument(
+        '--structure-directions',
+        type=int,
+        default=None,
+        metavar='N',
+        help='how many page structures this round asks the creator to compare. 1 means a single structure, so '
+             'there is no separate structure decision; 2 or more, or omitting the flag, arms the structure gate '
+             'and confirm-structure must record the creator\'s choice before any style choice',
+    )
+    structure = add('confirm-structure', 'record the chosen page structure as the creator\'s verbatim quote')
+    structure.add_argument('--quote', required=True)
+    structure.add_argument('--anchor')
+    structure.add_argument('--prototype', required=True)
+    visual = add('confirm-visual', 'record the selected visual style as the creator\'s verbatim quote')
     visual.add_argument('--quote', required=True)
     visual.add_argument('--anchor')
     visual.add_argument('--prototype', required=True)
@@ -1046,6 +1323,7 @@ ACTIONS = {
     'claim': action_claim,
     'release': action_release,
     'confirm-concept': action_confirm_concept,
+    'confirm-structure': action_confirm_structure,
     'confirm-visual': action_confirm_visual,
     'authorize-build': action_authorize_build,
     'start-build': action_start_build,

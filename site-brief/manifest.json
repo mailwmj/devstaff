@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "name": "site-brief",
   "files": {
-    "SKILL.md": "6cff16e6442ef3832a37f9fd0a891104c047d74859b8d5e5e779639552c8f61f",
+    "SKILL.md": "c9e072635fd6cd35b75f5a2c56bfa975bb1d5a839ff3d3769dca8c7c4b0f35e8",
     "agents/openai.yaml": "438b5bb158643f5fc9ee6da63ff127d83ee290692e3650d2802cbc9fe805daab",
-    "references/brief.md": "ea2d689887f88a38f60cde9860db15101ce53fb81de1f5ffc0825b4d9db47046",
+    "references/brief.md": "8bc0e70ec0e50db5c1b045569c34e6f8e1e7b1ab487dea55316023c7eb97494c",
     "references/discovery.md": "9c80b28fcc67e1a6dd44ddd19e383abb1cbeb79ff1a0c36e4c4e1cc9354ed52a",
     "references/research.md": "e5ffb0b3ce9298a7a384d1547c708d4959344833cd5bd3e1d2ad2d7464c45378",
-    "references/state.md": "0796c59caa6b0bc7a9797b638c171cebc7f6752e70dfed3fc7e64f452211d4c0",
-    "scripts/state.py": "d4a2bc379f0a553a628514a8d150d2099ab680e1a44b787f32aae69ca32bbc83"
+    "references/state.md": "b81434d4fb7a11be265f07d0b3f110efb976a6399814e75f9b50d090d9d29a3f",
+    "scripts/state.py": "db670162cc8e2e8263aee1374acccefae49fc21a52ead30655ed98715802d23f"
   }
 }

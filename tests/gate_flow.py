@@ -21,6 +21,11 @@ report's vetoes actually live:
   still hash the same at delivery time, so a hand-written matrix, a missing
   screenshot or an edited evidence file cannot reach ``delivered``.
 
+It also pins the 2026-09-12 finding: choosing among page *structures* was recorded
+as a *style* choice, and the style step never happened.  ``--structure-directions``
+marks such a round, ``confirm-structure`` records the structure decision on its own,
+and ``confirm-visual`` refuses while that decision is pending.
+
 What it deliberately does not test: whether the creator truly meant the quote.  No
 local script can decide that.  Delivery replays the quotes for the creator instead
 (``consent_replay``), and that hand-back is asserted here.
@@ -41,7 +46,9 @@ SITE_TOOL = REPO / 'site-builder' / 'scripts' / 'site.py'
 
 PASSED = 0
 CONCEPT_LINE = '这个第一版可以，就先做这些。'
+STRUCTURE_LINE = '结构就按 A 吧，我要左边列表右边详情那种。'
 VISUAL_LINE = '第二个挺好看，颜色也不错。'
+STYLE_LINE = '那就用第二套配色和字体吧。'
 AUTHORIZE_LINE = '就按第二个和刚才说的第一版做吧，开始做。'
 # Only ever spoken by the agent, never by the creator.
 AGENT_ONLY_LINE = '我建议用第二个方向，你看行不行。'
@@ -127,6 +134,8 @@ def transcript(folder, name='session.jsonl'):
             'role': 'user', 'content': [{'type': 'text', 'text': CONCEPT_LINE}]}},
         {'type': 'message', 'id': 'agent', 'message': {
             'role': 'assistant', 'content': [{'type': 'text', 'text': AGENT_ONLY_LINE}]}},
+        {'type': 'message', 'id': 'structure', 'message': {
+            'role': 'user', 'content': [{'type': 'text', 'text': STRUCTURE_LINE}]}},
         {'type': 'message', 'id': 'visual', 'message': {
             'role': 'user', 'content': [{'type': 'text', 'text': VISUAL_LINE}]}},
         {'type': 'message', 'id': 'authorize', 'message': {
@@ -189,10 +198,36 @@ def main():
 
     # 3. An unreadable host format downgrades the label instead of killing the gate.
     unreadable = unreadable_transcript(temp)
-    concept = ok(STATE_TOOL, 'confirm-concept', root, '--quote', CONCEPT_LINE, '--anchor', unreadable)
+    concept = ok(STATE_TOOL, 'confirm-concept', root, '--quote', CONCEPT_LINE, '--anchor', unreadable,
+                 '--structure-directions', 3)
     assert concept['consent']['basis'] == 'agent-reported', 'an unreadable host record must not upgrade'
     assert concept['consent']['anchor_note'], 'the downgrade must be explained, not silent'
     assert concept['consent']['quote'] == CONCEPT_LINE
+
+    # 3a. Choosing among page structures is a different decision from choosing a style.
+    # Recording the structure pick as the style choice is what shipped a half-finished
+    # prototype on 2026-09-12, so the style gate now refuses while it is pending.
+    assert concept['structure_required'] is True, 'comparing structures must arm the structure gate'
+    assert 'structure choice is still pending' in refused(
+        STATE_TOOL, 'confirm-visual', root, '--quote', VISUAL_LINE,
+        '--prototype', root / 'prototype.html')
+    refused(STATE_TOOL, 'confirm-structure', root, '--quote', '   ',
+            '--prototype', root / 'prototype.html')
+    refused(STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+            '--prototype', root / 'prototype.html', '--anchor', f'{temp}/missing.jsonl')
+    structure = ok(STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+                   '--prototype', root / 'prototype.html', '--anchor', session)
+    assert structure['consent']['basis'] == 'quote-matched'
+    assert structure['structure_confirmed'] is True and structure['visual_confirmed'] is False
+    # The structure sentence cannot be recycled as the style choice.
+    assert 'already confirms' in refused(
+        STATE_TOOL, 'confirm-visual', root, '--quote', STRUCTURE_LINE,
+        '--prototype', root / 'prototype.html')
+    shown_after = ok(STATE_TOOL, 'show', root)
+    assert shown_after['structure']['confirmed'] is True, 'show must expose the structure decision'
+    assert shown_after['visual']['confirmed'] is False, 'a structure pick is not a style confirmation'
+    # Structure settled, style still pending: development stays blocked.
+    refused(STATE_TOOL, 'authorize-build', root, '--quote', AUTHORIZE_LINE)
 
     # 3b. Two visual directions chosen is not development authorization.
     refused(STATE_TOOL, 'authorize-build', root, '--quote', AUTHORIZE_LINE)
@@ -213,6 +248,15 @@ def main():
     assert authorized['consent']['basis'] == 'quote-matched'
     # An agent's own sentence is never a basis, and an anchor cannot rescue it.
     refused(STATE_TOOL, 'authorize-build', root, '--quote', AGENT_ONLY_LINE, '--anchor', session)
+    # Past authorization a structure swap must go through reopen, not a quiet re-record.
+    assert 'run reopen' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', '还是换成另一个结构吧。',
+        '--prototype', root / 'prototype.html')
+    # The style gate is symmetric: a swap after authorization is refused as well, so the
+    # authorization cannot be left standing over a page it was never given for.
+    assert 'run reopen' in refused(
+        STATE_TOOL, 'confirm-visual', root, '--quote', '还是换成另一套配色吧。',
+        '--prototype', root / 'prototype.html')
 
     # 4. Writer and Checker cannot hold the project at the same time.
     ok(STATE_TOOL, 'start-build', root)
@@ -402,14 +446,32 @@ def main():
     assert delivered['stage'] == 'delivered' and delivered['delivery']['check_id'] == final['check_id']
     # Delivery hands the creator their own words back: the only real check on consent.
     assert [entry['quote'] for entry in delivered['consent_replay']] == [
-        CONCEPT_LINE, VISUAL_LINE, AUTHORIZE_LINE], 'delivery must replay all three quotes verbatim'
-    assert [entry['label'] for entry in delivered['consent_replay']] == ['首版方案确认', '视觉方向确认', '开发授权']
+        CONCEPT_LINE, STRUCTURE_LINE, VISUAL_LINE, AUTHORIZE_LINE
+    ], 'delivery must replay every recorded quote verbatim, structure choice included'
+    assert [entry['label'] for entry in delivered['consent_replay']] == [
+        '首版方案确认', '页面结构确认', '视觉风格确认', '开发授权'
+    ], 'the structure pick and the style pick must be replayed as two separate decisions'
     refused(STATE_TOOL, 'claim', root, '--owner', 'builder-b')
+    # A delivered project cannot be re-authorized or re-decided in place: the check and
+    # the delivery must be voided through reopen first.
+    assert 'authorize-build cannot run' in refused(
+        STATE_TOOL, 'authorize-build', root, '--quote', '就按新的那套再授权一次。')
+    # `block` records a blockage; it is not a one-command detour around the guards.
+    ok(STATE_TOOL, 'block', root, '--reason', '临时记录一下')
+    assert 'cannot be re-decided at stage' in refused(
+        STATE_TOOL, 'confirm-visual', root, '--quote', '换成第三套配色。',
+        '--prototype', root / 'prototype.html')
+    assert 'cannot be re-decided at stage' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', '换成 C 结构。',
+        '--prototype', root / 'prototype.html')
+    assert 'cannot run at stage' in refused(STATE_TOOL, 'confirm-concept', root, '--quote', '再确认一次。')
+    ok(STATE_TOOL, 'unblock', root)
+    assert stage_of(root) == 'delivered', 'unblock must return to the stage it was blocked from'
     ok(STATE_TOOL, 'reopen', root, '--reason', '用户要求改首屏文案')
     assert stage_of(root) == 'building'
     # The issued consent trail stays readable for the audit.
     audit = json.loads((root / '.site' / 'state.json').read_text(encoding='utf-8'))
-    for field in ('concept_consent', 'visual_consent', 'authorization_consent'):
+    for field in ('concept_consent', 'structure_consent', 'visual_consent', 'authorization_consent'):
         record = audit[field]
         assert record['basis'] in ('agent-reported', 'quote-matched')
         assert record['quote_sha256'] == hashlib.sha256(record['quote'].encode('utf-8')).hexdigest()
@@ -443,6 +505,127 @@ def main():
     refused(STATE_TOOL, 'start-build', legacy)
     refused(STATE_TOOL, 'claim', legacy, '--owner', 'builder-c', '--force')
     PASSED += 3
+    # A scope that declared no visual proposal has no structure step either.
+    (legacy / 'prototype.html').write_text('<!doctype html><title>x</title>', encoding='utf-8')
+    assert 'no structure choice' in refused(
+        STATE_TOOL, 'confirm-structure', legacy, '--quote', STRUCTURE_LINE,
+        '--prototype', legacy / 'prototype.html')
+
+    # 10b. One structure means no separate structure decision, and re-deciding the
+    # structure voids a style choice that was made for the page that no longer exists.
+    single = temp / 'single-direction'
+    ok(SITE_TOOL, 'init', single, '--template', 'static', '--title', '单结构回归')
+    (single / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    one = ok(STATE_TOOL, 'confirm-concept', single, '--quote', CONCEPT_LINE, '--structure-directions', 1)
+    assert one['structure_required'] is False, 'one structure arms no structure gate'
+    assert ok(STATE_TOOL, 'confirm-visual', single, '--quote', VISUAL_LINE,
+              '--prototype', single / 'prototype.html')['visual_confirmed'] is True
+    changed = ok(STATE_TOOL, 'confirm-structure', single, '--quote', STRUCTURE_LINE,
+                 '--prototype', single / 'prototype.html')
+    assert changed['invalidated_stale_visual_choice'] is True, 'the invalidation must be reported'
+    assert changed['visual_confirmed'] is False, 'a style chosen for the old structure cannot survive'
+    refused(STATE_TOOL, 'authorize-build', single, '--quote', AUTHORIZE_LINE)
+    # `--scope-changed` also clears the structure decision, not just the style one.
+    ok(STATE_TOOL, 'confirm-visual', single, '--quote', STYLE_LINE,
+       '--prototype', single / 'prototype.html')
+    rescoped = ok(STATE_TOOL, 'confirm-concept', single, '--quote', '范围改了，重来一版。',
+                  '--scope-changed', '--structure-directions', 1)
+    assert rescoped['stage'] == 'visual_drafting' and rescoped['structure_required'] is False
+    after = json.loads((single / '.site' / 'state.json').read_text(encoding='utf-8'))
+    assert after['structure_confirmed'] is False and after['visual_confirmed'] is False
+
+    # 10c. The two-step rule fails closed: a round that does not say how many structures
+    # it showed is treated as several, so the structure decision must be recorded first.
+    undeclared = temp / 'undeclared'
+    ok(SITE_TOOL, 'init', undeclared, '--template', 'static', '--title', '未声明回归')
+    (undeclared / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    guess = ok(STATE_TOOL, 'confirm-concept', undeclared, '--quote', CONCEPT_LINE)
+    assert guess['structure_required'] is True, 'an undeclared round must fail closed'
+    assert 'structure choice is still pending' in refused(
+        STATE_TOOL, 'confirm-visual', undeclared, '--quote', STRUCTURE_LINE,
+        '--prototype', undeclared / 'prototype.html')
+    refused(STATE_TOOL, 'confirm-concept', undeclared, '--quote', CONCEPT_LINE, '--structure-directions', 0)
+    refused(STATE_TOOL, 'confirm-concept', undeclared, '--quote', CONCEPT_LINE, '--structure-directions', -2)
+    assert 'drop one of the two' in refused(
+        STATE_TOOL, 'confirm-concept', undeclared, '--quote', CONCEPT_LINE,
+        '--no-visual', '--structure-directions', 3)
+    # An explicit single-structure declaration is the only way to skip the structure gate.
+    declared = ok(STATE_TOOL, 'confirm-concept', undeclared, '--quote', CONCEPT_LINE,
+                  '--structure-directions', 1)
+    assert declared['structure_required'] is False
+    ok(STATE_TOOL, 'confirm-visual', undeclared, '--quote', VISUAL_LINE,
+       '--prototype', undeclared / 'prototype.html')
+
+    # 10d. Recording a gate again does not free an old sentence for another gate.
+    recycled = temp / 'recycled'
+    ok(SITE_TOOL, 'init', recycled, '--template', 'static', '--title', '复用回归')
+    (recycled / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    ok(STATE_TOOL, 'confirm-concept', recycled, '--quote', CONCEPT_LINE)
+    ok(STATE_TOOL, 'confirm-concept', recycled, '--quote', '换个说法再确认一次方案。')
+    assert 'earlier record' in refused(
+        STATE_TOOL, 'confirm-structure', recycled, '--quote', CONCEPT_LINE,
+        '--prototype', recycled / 'prototype.html')
+    # The superseded sentence stays readable for the audit instead of vanishing.
+    history = json.loads((recycled / '.site' / 'state.json').read_text(encoding='utf-8'))['consent_history']
+    assert [row['quote'] for row in history] == [CONCEPT_LINE, '换个说法再确认一次方案。'], history
+
+    # 10e. A core-scope change voids the concept too, and voided quotes leave the replay:
+    # the delivery hand-back must never present an abandoned sentence as current.
+    scoped = temp / 'scoped'
+    ok(SITE_TOOL, 'init', scoped, '--template', 'static', '--title', '范围变更回归')
+    (scoped / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    ok(STATE_TOOL, 'confirm-concept', scoped, '--quote', CONCEPT_LINE, '--structure-directions', 1)
+    ok(STATE_TOOL, 'confirm-visual', scoped, '--quote', VISUAL_LINE, '--prototype', scoped / 'prototype.html')
+    assert len(ok(STATE_TOOL, 'show', scoped)['consent_replay']) == 2, 'standing decisions are replayed'
+    ok(STATE_TOOL, 'reopen', scoped, '--reason', '核心范围变了', '--scope-changed')
+    rescope_state = json.loads((scoped / '.site' / 'state.json').read_text(encoding='utf-8'))
+    assert rescope_state['concept_confirmed'] is False, 'a core-scope change voids the concept'
+    assert rescope_state['visual_confirmed'] is False
+    refused(STATE_TOOL, 'authorize-build', scoped, '--quote', AUTHORIZE_LINE)
+    assert ok(STATE_TOOL, 'show', scoped)['consent_replay'] == [], (
+        'a voided decision must not be replayed as standing consent'
+    )
+
+    # 10f. reopen is not a way into building: a project with nothing recorded cannot hand
+    # itself a writer lease and stage its way to delivered with every gate false.
+    virgin = temp / 'virgin'
+    ok(SITE_TOOL, 'init', virgin, '--template', 'static', '--title', '空项目回归')
+    assert 'Nothing to reopen' in refused(STATE_TOOL, 'reopen', virgin, '--reason', '随便一个理由')
+    assert stage_of(virgin) == 'discovering'
+    refused(STATE_TOOL, 'handoff', virgin, '--stopped-pid', dead_pid(), '--freed-port', free_port())
+
+    # 10g. A scope that declares no visual step has no design decisions left standing, so
+    # a structure quote cannot keep being replayed for a decision the project dropped.
+    downgraded = temp / 'downgraded'
+    ok(SITE_TOOL, 'init', downgraded, '--template', 'static', '--title', '降级回归')
+    (downgraded / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    ok(STATE_TOOL, 'confirm-concept', downgraded, '--quote', CONCEPT_LINE, '--structure-directions', 2)
+    ok(STATE_TOOL, 'confirm-structure', downgraded, '--quote', STRUCTURE_LINE,
+       '--prototype', downgraded / 'prototype.html')
+    dropped = ok(STATE_TOOL, 'confirm-concept', downgraded, '--quote', CONCEPT_LINE, '--no-visual')
+    assert dropped['voided_decisions'] == ['structure'], 'dropping the visual step must void the structure choice'
+    assert json.loads((downgraded / '.site' / 'state.json').read_text(encoding='utf-8'))[
+        'structure_confirmed'] is False
+    assert [row['label'] for row in ok(STATE_TOOL, 'show', downgraded)['consent_replay']] == ['首版方案确认']
+
+    # 10h. One sentence split across two gates is still one expression of consent.
+    split = temp / 'split'
+    ok(SITE_TOOL, 'init', split, '--template', 'static', '--title', '拆句回归')
+    (split / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    ok(STATE_TOOL, 'confirm-concept', split, '--quote', CONCEPT_LINE, '--structure-directions', 1)
+    ok(STATE_TOOL, 'confirm-visual', split, '--quote', VISUAL_LINE, '--prototype', split / 'prototype.html')
+    assert 'overlaps the sentence' in refused(
+        STATE_TOOL, 'authorize-build', split, '--quote', VISUAL_LINE + '那就开始做吧。')
+
+    # 10i. Only an explicit false declares "this scope needs no visual step".
+    hand = temp / 'hand-written'
+    (hand / '.site').mkdir(parents=True)
+    (hand / '.site' / 'state.json').write_text(json.dumps({
+        'schema_version': 2, 'project_id': 'hand-written', 'revision': 1, 'stage': 'visual_review',
+        'concept_confirmed': True, 'structure_required': False, 'structure_confirmed': False,
+        'visual_required': None, 'visual_confirmed': False, 'development_authorized': False,
+    }), encoding='utf-8')
+    refused(STATE_TOOL, 'authorize-build', hand, '--quote', AUTHORIZE_LINE)
 
     # 11. The three independent fingerprint() implementations must agree on a hard tree.
     # They claim to be byte-identical; nothing else forces that, and a silent drift here
