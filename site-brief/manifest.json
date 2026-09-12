@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "version": "0.11.0",
+  "version": "0.12.0",
   "name": "site-brief",
   "files": {
     "SKILL.md": "c9e072635fd6cd35b75f5a2c56bfa975bb1d5a839ff3d3769dca8c7c4b0f35e8",
     "agents/openai.yaml": "438b5bb158643f5fc9ee6da63ff127d83ee290692e3650d2802cbc9fe805daab",
-    "references/brief.md": "8bc0e70ec0e50db5c1b045569c34e6f8e1e7b1ab487dea55316023c7eb97494c",
-    "references/discovery.md": "9c80b28fcc67e1a6dd44ddd19e383abb1cbeb79ff1a0c36e4c4e1cc9354ed52a",
+    "references/brief.md": "8648ac93109ba54837c16061e08399be0aa5bb771ed4e4dea336e5ce6eceaaf4",
+    "references/discovery.md": "6cb292b56cab2f23b2ebb190d3427a6410b99d2f1eed1d5506213ad9e4125e26",
     "references/research.md": "e5ffb0b3ce9298a7a384d1547c708d4959344833cd5bd3e1d2ad2d7464c45378",
     "references/state.md": "b81434d4fb7a11be265f07d0b3f110efb976a6399814e75f9b50d090d9d29a3f",
     "scripts/state.py": "db670162cc8e2e8263aee1374acccefae49fc21a52ead30655ed98715802d23f"

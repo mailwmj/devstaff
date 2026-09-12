@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "version": "0.11.0",
+  "version": "0.12.0",
   "name": "site-design",
   "files": {
-    "SKILL.md": "17d9cd1e5cdbabf0fecab665ce38a1b00953ab4d2ac3390feab520134f643d71",
+    "SKILL.md": "5bbd7f0da17d4578e1f779f7e42e9407fb45117337197d0301fa873553c484ca",
     "agents/openai.yaml": "ffc89619339654d7e8a92ef03414297001c8e25d1b6578330def40bb1efc55a3",
     "assets/design/gallery.html": "d62f6c60e261246355a11da01fdcc8f676dbe15c9b5cc53ba760f1b856cb15c7",
     "assets/design/primitives.css": "266411c2866d26fedcd8bf1bf812f8b5c24b9bfec0bf0d56ade73e84a4d6fb81",
@@ -14,11 +14,12 @@
     "references/design-intent.md": "e56bfa134e8ec170d8bd8d6d1e3b0f13f3da9607999c83ed5f7f326fc5edd7fc",
     "references/design-quality.md": "018266477e18311c8b507a7394bbd721bd060bdea8b4b98010e39ea6cbcfda91",
     "references/design-tokens.md": "ade646dad3b527049a6b59b82067505830a8b769482d0c8ae455474496a43fd7",
+    "references/interaction-contract.md": "fb1d22f0ed896a51b6617e08a47ddbd0bc0b1a64e5a337e1181c7a39eccd4f0b",
     "references/prototype.md": "1e4f625da092d90e647d696ca8a3d0179aaf800666e1686cde4b5c61014d0f52",
     "references/reference-input.md": "a15ef052d6e8223f2ab7aff7162e5f4b15b3eca6aef57a22967c8c8482b2e0eb",
     "references/review-protocol.md": "75c6254c18ec1cea024481487a33c42137ef80452777a77ebce6928bfe277f29",
     "references/style-vocabulary.md": "75407fda8609964ba25547f3441d71b1926ad5cc1b6f2b3b55851aeaa9b0bbad",
-    "references/surface-brief.md": "e671dc4cbe4e1b7a56c287fdff94079492fb3f1400e1b8b59c458fdd419810b6",
+    "references/surface-brief.md": "19f54eac069478e0aa388114e8967772ecc0a811abba4b15e16d731c92fc5722",
     "references/typography.md": "c0b8c0b50bef65791db4fb28955fdfb4b929cefecc1aa4dbfd50a04f888e5cb1",
     "references/visual-direction.md": "b1458a24f2448493d5fcbbd6b50f6dc73c5877fcaa8ba57927058c79b2ba4513",
     "scripts/design.py": "600790f75840a3cfbb6c53b4243a7fa6181a13c6e1ff56d7b0d22f75d58ecd97"

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.11.0",
+  "version": "0.12.0",
   "name": "site-builder",
   "files": {
     "SKILL.md": "b565d6026e846d0ff4112d2a758559e937c7620b5fe2deed975ae0e6c7ce3878",
@@ -11,7 +11,7 @@
     "assets/templates/tool/web/index.html": "83c845de525423999ff8e710b5db76e8c9b5f8450be718897054673737d8e7cd",
     "assets/templates/tool/web/style.css": "602af2abb7114a5833ebcebbf88d718f562c8d09bbe67d59a2d652bb901c46fb",
     "references/components.md": "e59e870f7bfcd6dc578012a5567dff2f5df06715bd707d50a3962bb0b3bd83b8",
-    "references/implementation.md": "3c87f24feae7b1efca7b4fcbb2c5c81ac64f43b5ffb4352a7a0bad1552f88b12",
+    "references/implementation.md": "a167438ac87f4b04e3faa87f9adc60940af42645d1c841b2c05583bd9857762c",
     "references/publish.md": "c1d44f4365f3de3e506c9105e8ddedcca426d0192fac19654e70f7bbf07e5474",
     "references/runtime.md": "46e36ee19e9f209280164e276c6b74582b81a4200c34b329b0cbf1d0caf866e2",
     "scripts/preview.py": "a01f5b2b15dab1747feae6f0eb3cb831d84e7c79624bdd29047ce8f4301bb300",
