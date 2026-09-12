@@ -9,6 +9,30 @@
 证据：命令、操作观察、截图或具体限制
 ```
 
+## 0. 选择检查档位
+
+检查不是固定的全量回归，而是按本轮改动的影响范围选择档位。把选择和原因写入矩阵：
+
+| 档位 | 适用情况 | 最低范围 |
+| --- | --- | --- |
+| `smoke` | 文案、颜色、间距、静态布局或不影响行为的局部修改 | 受影响页面实际打开、静态/构建检查、一个代表性视口；若入口或启动方式被改动，增加一次再次打开 |
+| `targeted` | 单个交互、计算、导入导出局部修复或明确 Bug | `smoke` + 受影响的核心操作、相关错误/边界状态，以及涉及持久化时的再次打开 |
+| `full` | 新建、主流程或导航变化、结构重做、权限、隐私、共享数据、持久化、导入导出或高风险事项 | 静态/构建、核心任务和反例、视觉、适用响应式视口、再次打开，以及隐私/越权/错误输入等高价值反例 |
+
+档位只能缩小不受影响的检查，不能跳过本轮受影响的核心任务。没有浏览器、运行环境或必要账号时，缺口必须记录为 `not_run`，不能通过降低档位掩盖。
+
+矩阵输入可写成：
+
+```json
+{
+  "profile": "targeted",
+  "profile_reason": "修复导出按钮的空数据处理，不涉及页面结构和持久化格式",
+  "items": []
+}
+```
+
+长时间验证期间只报告阶段变化：开始验证、进入新检查轴、发现阻断问题、开始修复复验和最终结果。不要把每条命令都当成用户需要的进度消息。
+
 ## 1. 四个检查轴
 
 ### 静态与构建
@@ -47,10 +71,10 @@ Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 
 
 ## 2. 产出矩阵凭据
 
-四条轴完成后，把本轮每一项写成机器可读矩阵并交给检查工具落盘：
+本档位适用的检查完成后，把本轮每一项写成机器可读矩阵并交给检查工具落盘：
 
 ```text
-python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /absolute/matrix.json --save-evidence
+python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /absolute/matrix.json --profile targeted --save-evidence
 ```
 
 `matrix.json` 的每项包含 `id`、`title`、`status`（`passed | failed | not_run | not_applicable`）、`blocking`（布尔）和 `evidence`。证据不是一句描述，而是说明它从哪里来：

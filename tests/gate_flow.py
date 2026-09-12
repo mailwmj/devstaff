@@ -108,9 +108,13 @@ def dead_pid():
     return child.pid
 
 
-def matrix_file(folder, items):
+def matrix_file(folder, items, profile=None, profile_reason=''):
     path = Path(folder) / 'matrix.json'
-    path.write_text(json.dumps({'items': items}), encoding='utf-8')
+    payload = {'items': items}
+    if profile is not None:
+        payload['profile'] = profile
+        payload['profile_reason'] = profile_reason
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
     return path
 
 
@@ -362,6 +366,12 @@ def main():
     assert check_artifact(root, first['check_id']).is_file()
     assert first['evidence_failures'] == []
     assert all(row['evidence']['verified'] for row in first['items'] if row['blocking'])
+    targeted = ok(
+        CHECK_TOOL, 'matrix', root,
+        '--input', matrix_file(temp, passing_items(), 'targeted', '只验证导出交互'),
+    )
+    assert targeted['profile'] == 'targeted'
+    assert targeted['profile_reason'] == '只验证导出交互'
     archived = root / '.site' / 'checks' / 'evidence' / 'desktop.png'
     assert archived.is_file(), 'save-evidence must archive the screenshot delivery re-checks'
 

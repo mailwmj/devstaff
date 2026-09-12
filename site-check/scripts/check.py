@@ -42,6 +42,7 @@ import uuid
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
 CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
+CHECK_PROFILES = ('smoke', 'targeted', 'full')
 EVIDENCE_KINDS = ('artifact', 'command', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
 VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command')
@@ -220,7 +221,14 @@ def validate_evidence(root, item, identifier, current, cache):
     return evidence, entries, problems
 
 
-def matrix_check(root, payload, label=None, save_evidence=False):
+def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
+    payload_profile = payload.get('profile') if isinstance(payload, dict) else None
+    profile = profile or payload_profile or 'full'
+    if profile not in CHECK_PROFILES:
+        raise ValueError(f'Check profile must be one of {CHECK_PROFILES}, got {profile!r}')
+    profile_reason = ''
+    if isinstance(payload, dict):
+        profile_reason = str(payload.get('profile_reason') or '').strip()
     items = payload.get('items') if isinstance(payload, dict) else payload
     if not isinstance(items, list) or not items:
         raise ValueError('Check matrix needs a non-empty list of items')
@@ -291,6 +299,8 @@ def matrix_check(root, payload, label=None, save_evidence=False):
         'check_id': str(uuid.uuid4()),
         'created_at': now(),
         'label': label or '',
+        'profile': profile,
+        'profile_reason': profile_reason,
         'input_fingerprint': before,
         'fingerprint': after,
         'source_changed': before != after,
@@ -507,6 +517,8 @@ def main():
     matrix.add_argument('root', type=Path)
     matrix.add_argument('--input', required=True, help='JSON file with the checked items and their evidence')
     matrix.add_argument('--label')
+    matrix.add_argument('--profile', choices=CHECK_PROFILES,
+                        help='scope of this verification: smoke, targeted, or full (default: full)')
     matrix.add_argument('--save-evidence', action='store_true',
                         help='copy referenced evidence into .site/checks/evidence so re-runs cannot overwrite it')
     args = parser.parse_args()
@@ -521,7 +533,7 @@ def main():
             output = run_check(root, args.command, args.timeout)
         else:
             payload = json.loads(Path(args.input).expanduser().read_text(encoding='utf-8'))
-            output = matrix_check(root, payload, args.label, args.save_evidence)
+            output = matrix_check(root, payload, args.label, args.save_evidence, args.profile)
         output = finalize(root, output)
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 1 if output.get('status') == 'failed' else 0
