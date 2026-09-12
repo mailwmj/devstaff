@@ -4,7 +4,7 @@
 
 ## 使用方式
 
-1. 先完成 `surface-brief.md`，确认页面命题、用户路径和首屏结构。
+1. 先完成 `surface-brief.md`，包括按 [视觉方向](visual-direction.md) 推导出的母题、视觉世界、色彩来源、字体角色与构图命题。
 2. 再使用 `design.py build` 生成 `tokens.css`、`selection.json` 和 `intent.md`。
 3. 将 `intent.md` 复制到项目的 `.site/design/design-intent.md`，补齐项目事实、理由、例外和证据。
 4. 由 `site-builder` 把 token 映射到正式设计系统，不让正式页面依赖 Skill 安装路径。
@@ -63,8 +63,8 @@
 
 ## 边界
 
-- recipe 只是实现校准，不是页面方向。
+- recipe 只是实现校准，不是页面方向；母题、视觉世界与构图命题只能来自 [视觉方向](visual-direction.md)，不能由配方反推。
 - `selection.json` 记录工具配置，不代表用户确认。
-- detector 或色对检查通过，不代表页面设计通过。
-- 真实图片、品牌素材和生成素材都要记录来源、许可、裁切和用途。
+- detector 或色对检查通过，不代表页面设计通过；目录里的字号与配方里的色对都不是渲染结果，展示前必须在实际页面上重做 [评审协议](review-protocol.md) 的字面、色对与触控断言。
+- 真实图片、品牌素材和生成素材都要记录来源、许可、裁切和用途；来源或许可不清的素材不进稿件。
 - 后续页面应继承已确认意图；只有业务事实或任务变化时才重新选择基础方向。

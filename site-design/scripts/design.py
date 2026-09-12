@@ -45,6 +45,39 @@ def color_checks(tokens):
             for fg, bg, minimum in pairs]
 
 
+def px(value):
+    match = re.fullmatch(r'([0-9.]+)px', value.strip())
+    return float(match.group(1)) if match else None
+
+
+# Craft floors taken from references/typography.md.  They guard the catalog's own
+# defaults, not the project's final page: an established design system may
+# override the heuristic values, but the catalog must never ship a broken one.
+TYPOGRAPHY_FLOORS = {'text-reading': 16.0, 'text-body': 16.0, 'text-label': 14.0, 'text-caption': 12.0}
+TYPOGRAPHY_LEADING_FLOOR = 1.7
+FORBIDDEN_FONT_HINTS = ('Söhne', 'Soehne', 'Circular', 'Gotham', 'Helvetica Now', 'GT ', 'Larsseit')
+
+
+def typography_checks(tokens):
+    rows = []
+    for key, floor in TYPOGRAPHY_FLOORS.items():
+        size = px(str(tokens[key]))
+        rows.append({'token': key, 'value': tokens[key], 'minimum': floor,
+                     'passed': size is not None and size >= floor})
+    leading = float(str(tokens['leading-reading']).strip())
+    rows.append({'token': 'leading-reading', 'value': tokens['leading-reading'],
+                 'minimum': TYPOGRAPHY_LEADING_FLOOR, 'passed': leading >= TYPOGRAPHY_LEADING_FLOOR})
+    tracking = str(tokens['tracking-heading']).strip()
+    negative = tracking.startswith('-') and not re.fullmatch(r'-0(\.0+)?(em|px|%)?', tracking)
+    rows.append({'token': 'tracking-heading', 'value': tracking, 'minimum': '0 (CJK headings)',
+                 'passed': not negative})
+    fonts = ' '.join(str(tokens[key]) for key in ('font-ui', 'font-heading', 'font-reading'))
+    licensed = [name for name in FORBIDDEN_FONT_HINTS if name in fonts]
+    rows.append({'token': 'font-*', 'value': 'licensed font names', 'minimum': 'system or open fonts only',
+                 'passed': not licensed})
+    return rows
+
+
 def compose(data, recipe, **overrides):
     if recipe not in data['recipes']:
         raise ValueError(f'Unknown recipe: {recipe}')
@@ -62,10 +95,16 @@ def compose(data, recipe, **overrides):
     failed = [f"{r['foreground']}/{r['background']}={r['ratio']:.2f}" for r in results if not r['passed']]
     if failed:
         raise ValueError('Color pairs below catalog thresholds: ' + ', '.join(failed))
+    typo = typography_checks(tokens)
+    typo_failed = [f"{r['token']}={r['value']}" for r in typo if not r['passed']]
+    if typo_failed:
+        raise ValueError('Typography floors violated: ' + ', '.join(typo_failed))
     return {'catalog_version': data['version'], 'recipe': recipe, 'selection': selection,
-            'tokens': tokens, 'color_checks': results,
+            'tokens': tokens, 'color_checks': results, 'typography_checks': typo,
+            'roles': data['typographies'][selection['typography']]['roles'],
             'layout_guidance': data['layouts'][selection['layout']]['guidance'],
             'limits': ['Opaque listed color pairs only; not full accessibility or visual acceptance.',
+                       'Typography floors guard catalog defaults, not a rendered page.',
                        'Selection records tool configuration, not user approval.']}
 
 
@@ -142,11 +181,37 @@ def gallery_html(data, template, primitives):
     return template.replace('__PRIMITIVES__', primitives).replace('__RECIPES__', payload)
 
 
+CATALOG_BLOCK = re.compile(
+    r'(<script type="application/json" id="catalog">)(.*?)(</script>)', re.DOTALL)
+
+
+def sync_gallery(data, path):
+    """Re-inject the composed catalog into the existing gallery, in place.
+
+    The gallery keeps its own markup and styles; only the embedded recipe
+    payload is regenerated, so it cannot drift from tokens.json.
+    """
+    if not path.is_file():
+        raise ValueError(f'Gallery not found: {path}')
+    text = path.read_text(encoding='utf-8')
+    if not CATALOG_BLOCK.search(text):
+        raise ValueError('Gallery has no <script id="catalog"> block to update')
+    recipes = {key: {**value, **compose(data, key)} for key, value in data['recipes'].items()}
+    payload = json.dumps(recipes, ensure_ascii=False).replace('<', '\\u003c')
+    updated = CATALOG_BLOCK.sub(lambda m: m.group(1) + payload + m.group(3), text, count=1)
+    if updated == text:
+        return False
+    path.write_text(updated, encoding='utf-8')
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('list')
     commands.add_parser('validate')
+    sync = commands.add_parser('sync-gallery', help='refresh the gallery catalog payload from tokens.json')
+    sync.add_argument('--gallery', type=Path, default=resources() / 'gallery.html')
     build = commands.add_parser('build')
     build.add_argument('--recipe', required=True)
     for key in GROUPS:
@@ -162,7 +227,25 @@ def main():
                 compose(data, recipe)
             for palette in data['palettes']:
                 compose(data, next(iter(data['recipes'])), palette=palette)
-            print(f"{len(data['recipes'])} recipes and {len(data['palettes'])} palettes passed listed color-pair checks.")
+            gallery = resources() / 'gallery.html'
+            drift = ''
+            if gallery.is_file():
+                match = CATALOG_BLOCK.search(gallery.read_text(encoding='utf-8'))
+                expected = json.dumps(
+                    {key: {**value, **compose(data, key)} for key, value in data['recipes'].items()},
+                    ensure_ascii=False).replace('<', '\\u003c')
+                if not match:
+                    drift = 'Gallery has no <script id="catalog"> block.'
+                elif match.group(2) != expected:
+                    drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
+            if drift:
+                raise ValueError(drift)
+            print(f"{len(data['recipes'])} recipes and {len(data['palettes'])} palettes passed listed color-pair and typography-floor checks; gallery catalog in sync.")
+        elif args.command == 'sync-gallery':
+            gallery = args.gallery.expanduser()
+            changed = sync_gallery(data, gallery)
+            print(json.dumps({'gallery': str(gallery.resolve()), 'catalog_version': data['version'],
+                              'recipes': len(data['recipes']), 'changed': changed}, ensure_ascii=False))
         else:
             result = compose(data, args.recipe, **{key: getattr(args, key) for key in GROUPS})
             dest = args.out.expanduser()

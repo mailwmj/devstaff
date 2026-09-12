@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "name": "site-builder",
   "files": {
     "SKILL.md": "b565d6026e846d0ff4112d2a758559e937c7620b5fe2deed975ae0e6c7ce3878",

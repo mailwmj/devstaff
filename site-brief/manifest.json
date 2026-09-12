@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "name": "site-brief",
   "files": {
     "SKILL.md": "c9e072635fd6cd35b75f5a2c56bfa975bb1d5a839ff3d3769dca8c7c4b0f35e8",

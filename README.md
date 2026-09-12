@@ -47,6 +47,7 @@ python scripts/install.py /absolute/path/to/agent/skills
 
 - 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
 - 结构选择、视觉选择与开发授权是三个决定：用户选了页面结构不等于确认了视觉风格；
+- `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文，再按受众、任务、内容和素材条件匹配 2～3 个适合的风格供用户选择；候选必须在母题层不同而非只换配色，推荐要有依据但不能替用户确认；
 - 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
 - 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须带用户那句原话（`--quote`），同一句不能连过两道门禁；
 - **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
@@ -74,6 +75,9 @@ python scripts/install.py /absolute/path/to/agent/skills
 ```text
 python scripts/verify_skills.py .
 python tests/gate_flow.py
+python site-design/scripts/design.py validate
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：无依据跃迁、空的原话、`--anchor` 读不懂时的降级、按内容比对的原话复用（结构那句用不成视觉那句）、声明了多结构却想直接记视觉确认时的拒绝、只有结构没有风格时的拦截、交付前重新核对四道确认门禁、空项目不能借 reopen 拿到 building、以及 block/重新授权绕过阶段守卫、并发租约、Writer 未退出的交接、无证据或证据被改动的阻断项、阻断失败与源码变化后的交付，以及交付回放每条原话。**它不测、也无法测"用户是否真的同意"**——那条只能由交付回放交给用户本人判断。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)。
+`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：无依据跃迁、空的原话、`--anchor` 读不懂时的降级、按内容比对的原话复用（结构那句用不成视觉那句）、声明了多结构却想直接记视觉确认时的拒绝、只有结构没有风格时的拦截、交付前重新核对四道确认门禁、空项目不能借 reopen 拿到 building、以及 block/重新授权绕过阶段守卫、并发租约、Writer 未退出的交接、无证据或证据被改动的阻断项、阻断失败与源码变化后的交付，以及交付回放每条原话。**它不测、也无法测"用户是否真的同意"**——那条只能由交付回放交给用户本人判断。`design.py validate` 检查 `tokens.json` 每个配方与色板的列出色对、排版下限（字号、正文行高、中文标题字距、字体许可），并在 `gallery.html` 内嵌目录与配置漂移时失败；改过 `tokens.json` 后用 `design.py sync-gallery` 刷新预览。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
+
+**这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/design-quality.md`](site-design/references/design-quality.md) 的四条判据核对。
