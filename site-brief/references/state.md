@@ -20,6 +20,7 @@
   "development_authorized": false,
   "delegated": false,
   "runtime": null,
+  "transition_history": [],
   "next_action": "澄清核心用户和首版任务"
 }
 ```
@@ -57,9 +58,9 @@ python3 /absolute/site-brief/scripts/state.py start-build /absolute/PROJECT
 python3 /absolute/site-brief/scripts/state.py handoff     /absolute/PROJECT --stopped-pid 1234 --freed-port 4174 --service-json '{"owner":"正式站","pid":5678,"port":4175,"root":"/absolute/PROJECT"}'
 python3 /absolute/site-brief/scripts/state.py start-verify /absolute/PROJECT
 python3 /absolute/site-brief/scripts/state.py deliver     /absolute/PROJECT --check <check_id>
-python3 /absolute/site-brief/scripts/state.py reopen      /absolute/PROJECT --reason "为什么旧验收作废"
+python3 /absolute/site-brief/scripts/state.py reopen      /absolute/PROJECT --reason "为什么旧验收作废" [--check <failed_check_id>]
 python3 /absolute/site-brief/scripts/state.py block       /absolute/PROJECT --reason "阻塞事实与恢复条件"
-python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
+python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT --owner "本轮会话"
 ```
 
 工具在依据缺失时以退出码 2 拒绝并说明缺口，只有真正写入后才报告状态改变。调用者传入 `--expect-revision` 时，文件修订不一致即拒绝，避免多 Agent 覆盖。
@@ -68,10 +69,10 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
 
 **必须说清楚能力边界：没有任何本地脚本能证明用户真的同意过。** 用户的判断在用户脑子里，而这个工具写的每个文件，被约束的 Agent 自己也能写。所以四道 `confirm-*` 记录的是**Agent 说用户说了什么**，不是已被验证的事实：
 
-- `--quote` 必填：抄录用户原话，逐字。空话或转述会被拒绝。工具**不检查**这句话是否真是用户说的，也检查不了。
+- `--quote` 必填：抄录用户原话，逐字；换行与空格原样保存在 `quote`，`quote_sha256` 对精确字节取摘要。空话或转述会被拒绝。工具**不检查**这句话是否真是用户说的，也检查不了。
 - `--anchor` 可选：指向宿主会话记录。若能在其中某条**用户**消息里找到这句原话，标注升级为 `quote-matched`；找不到就是虚假断言，直接拒绝；而**读不懂的宿主格式只降级、不阻塞**——这是刻意的，门禁不得依赖宿主内部实现。
 - 两个等级的记录都带 `basis_note`，明说它不是同意的证明。
-- 四道门禁按**引语内容**（`quote_sha256`）比对，不是按文件路径：复制一份会话记录不能把同一句话用两次，结构那句也用不成视觉那句。
+- 四道门禁另存 `quote_normalized_sha256`，只用它识别换行/空格差异下的同一句话；精确 `quote_sha256` 不承担规范化。复制一份会话记录或调整空白都不能把同一句话用两次，结构那句也用不成视觉那句。旧记录没有规范化摘要时从已有 `quote` 回算，保持兼容。
 - 一句话拆成两半、分别用于两道门禁也算同一句：新原话与已记录原话互为包含关系（含 `--anchor` 路径）会被拒绝。极短的口头应答（如“可以。”）如果字面重复了上一句的措辞，也会被要求换一句——那不是两种决定各自的表达。
 - 每次记录都会追加到 `consent_history`。**把某道门禁重新记录一次，不会让旧那句话重新可用**：历史里属于别的门禁的原话依然被拒绝，被覆盖的原话也留在历史里可审，不会被静默抹掉。
 
@@ -80,18 +81,24 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
 | 命令 | 记录的判断依据 | 拒绝条件（示例） |
 | --- | --- | --- |
 | `confirm-concept` | `--quote` 用户原话（可选 `--anchor` 升级）；`--structure-directions N` 声明本轮比较几个结构 | 缺 `--quote` 或为空；`--anchor` 可读但不含该原话；**已到 `building`/`verifying`/`delivered`/`blocked` 阶段**（须先 `unblock` 或 `reopen --scope-changed`，否则交付回放里冻结的原话会和被改写的记录对不上） |
-| `confirm-structure` | `--quote` 用户对页面结构的选择 + 真实存在的 `--prototype` | 方案未确认；声明了不需要视觉方案（`--no-visual`）；**已到 `ready_to_build`/`building`/`verifying`/`delivered` 阶段**（须先 `reopen --scope-changed`）；原型文件不存在；复用别的门禁那句原话 |
-| `confirm-visual` | `--quote` 与真实存在的 `--prototype` | 方案未确认；**结构选择还没记录（含未声明结构数时的兜底拒绝）**；**已到 `ready_to_build`/`building`/`verifying`/`delivered` 阶段**（须先 `reopen --scope-changed`）；原型文件不存在；复用方案或结构确认那句原话 |
+| `confirm-structure` | `--quote` 用户对页面结构的选择 + 项目内普通文件 `--prototype` | 方案未确认；声明了不需要视觉方案（`--no-visual`）；**已到 `ready_to_build`/`building`/`verifying`/`delivered` 阶段**（须先 `reopen --scope-changed`）；原型是目录、符号链接、链接父目录或项目外文件；复用别的门禁那句原话 |
+| `confirm-visual` | `--quote` 与项目内普通文件 `--prototype` | 方案未确认；**结构选择还没记录（含未声明结构数时的兜底拒绝）**；**已到 `ready_to_build`/`building`/`verifying`/`delivered` 阶段**（须先 `reopen --scope-changed`）；原型是目录、符号链接、链接父目录或项目外文件；复用方案或结构确认那句原话 |
 | `authorize-build` | `--quote` 指向明确授权 | 方案未确认；结构或视觉确认缺项；**已到 `building`/`verifying`/`delivered`/`blocked` 阶段**（须先 `unblock` 或 `reopen --scope-changed`，否则项目能靠重新授权把自己从已交付状态里拿出来）；复用其他门禁那句原话 |
 | `start-build` | 已有 writer lease 且四道门禁字段满足 | 无 lease；门禁缺项；已交付未 `reopen` |
-| `handoff` | `--stopped-pid`、`--freed-port`、`--service-json` | 任一 PID 仍在运行；端口被未登记服务占用；登记的服务根目录不在项目内 |
+| `handoff` | `--stopped-pid`、`--freed-port`、`--service-json` | 任一应停止 PID 仍在运行；端口被未登记服务占用；登记服务缺少存活 PID、端口未监听或根目录不在项目内 |
 | `start-verify` | `handoff` 记录与当前指纹一致 | 无 `handoff`；交接后源码再次变化 |
-| `deliver` | `site-check` 的矩阵凭据 `--check <check_id>` | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；非矩阵凭据；指纹与当前源码不一致；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command` 证据；证据文件在检查后被改动 |
-| `reopen` | `--reason`；实质范围变化时加 `--scope-changed` | 缺少 `--reason`；**没有任何可作废的已发生状态**（空项目不许借 `reopen` 拿到 writer 租约和 `building`）；未记录为什么旧验收作废。`--scope-changed` 会同时作废方案、结构、视觉与授权确认，之后必须重新 `confirm-concept` |
+| `deliver` | `site-check` 的内容寻址矩阵凭据 `--check <check_id>` | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；文件名、内部 ID 或内容摘要不一致；非矩阵凭据；指纹与当前源码不一致；档位最低轴缺失；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command` 证据；证据文件或引用命令在检查后被改动 |
+| `reopen` | `--reason`；Checker 已接管时还需 `--check <failed_check_id>`；实质范围变化时加 `--scope-changed` | 缺少 `--reason`；`verifying`/checker lease 下缺少当前源码上的失败矩阵；**没有任何可作废的已发生状态**（空项目不许借 `reopen` 拿到 writer 租约和 `building`）。`--scope-changed` 会同时作废方案、结构、视觉与授权确认，之后必须重新 `confirm-concept` |
 
-`claim` 是项目级单写者租约：同一项目同时只能有一个 Writer 或一个 Checker。`start-verify` 会把租约从 writer 交给 checker，`deliver` 结束后释放。绕过租约必须显式 `--force --reason`，并被记录在 `lease_overrides` 里。
+`claim` 是项目级单写者租约：同一 owner 重复 `claim` 返回原租约且不改获取时间；不同 owner 或 Writer/Checker 角色冲突会拒绝。`start-verify` 把租约从 writer 交给 checker，`deliver` 结束后释放；手动 `release` 必须提供与当前租约相同的 `--owner`，且不能释放 `verifying` 中的活跃 Checker。确需处理已确认失效的陈旧租约时，先用 `block` 记录 Checker 异常与恢复条件，再使用显式留痕路径处理；`verifying` 中的 `claim --force` 同样拒绝。
 
-检查结束后租约仍在 checker 手里：通过时用 `deliver` 释放；不通过时用 `reopen` 把租约取回 writer（同时清空 `writer_release` 和旧交付），再修复并重新交接。`reopen` 只应在独立 Checker 已经返回后调用。
+检查结束后租约仍在 checker 手里：通过时用 `deliver` 释放；不通过时用 `reopen --check <failed_check_id>` 原子取回 writer（同时清空 `writer_release` 和旧交付），再修复并重新交接。失败矩阵必须绑定当前源码；没有 Checker 结果时不能抢回租约。
+
+每次 `save_state` 都向 `transition_history` 追加时间、动作、可用的租约 owner/role，以及固定字段的前后摘要。摘要不包含历史自身，避免递归膨胀；它帮助定位误操作和状态漂移，不构成外部可信审计日志。
+
+冻结指纹包含正式项目文件、列出的 `.site` 文档以及 `.site/design/**` 普通文件；排除会随流程写入的 `state.json`、lease 与 `.site/checks/`。因此确认后的设计稿变化会使交接或验收失效。
+
+`--service-json` 的 PID 存活与端口监听分别检查；跨平台实现不声称能证明该端口一定由所填 PID 占有，这个对应关系仍是调用者声明，Checker 应从实际 URL 核对。
 
 ## 一轮完整事务
 
@@ -104,7 +111,7 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
 → deliver --check <check_id>
 ```
 
-失败时保持 `verifying`：修复要先用 `reopen` 取回 writer 租约，改完源码后重新 `handoff` 与 `start-verify`；旧 `check_id` 因指纹变化自动失效，不得沿用。连续两轮没有新证据或进展时用 `block` 记录恢复条件。
+失败时保持 `verifying`：修复要先用 `reopen --check <failed_check_id>` 取回 writer 租约，改完源码后重新 `handoff` 与 `start-verify`；旧 `check_id` 因指纹变化自动失效，不得沿用。连续两轮没有新证据或进展时用 `block` 记录恢复条件。
 
 ## 判断权与记录权
 
@@ -113,7 +120,7 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
 - `site-builder` 判断开发授权、实施阶段和是否满足交付条件；
 - `site-check` 只返回检查结果和矩阵凭据，不请求写入 `delivered`。
 
-记录请求必须带判断依据，例如用户原话、体验稿路径、检查凭据或阻塞事实。门禁工具只负责按依据持久化，不替调用 Skill 重新作出专业判断；它也不判断那句用户原话在语义上是否真等于授权——语义判断仍由 `site-brief` 和 `site-builder` 负责，工具保证的只是"这句话被逐字记下来了，且没有被重复使用"。
+记录请求必须带判断依据，例如用户原话、体验稿路径、检查凭据或阻塞事实。门禁工具只负责按依据持久化，不替调用 Skill 重新作出专业判断；它也不判断那句用户原话在语义上是否真等于授权——语义判断仍由 `site-brief` 和 `site-builder` 负责，工具保证的只是"这句话被逐字记下来了，且没有被重复使用"。内容寻址凭据同样只对误改可见：拥有项目写权限的恶意 Agent 能重算整套 JSON，本地脚本不是对抗它的安全边界。
 
 `consent_replay` **只列仍然生效的确认**：被 `--scope-changed` 或重新决策作废的那些原话不再出现在回放里（它们仍留在 `consent_history` 供审计）。回放里出现一句，就意味着它对应的那个决定此刻仍然算数。
 
@@ -142,3 +149,5 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT
 ## 兼容旧记录
 
 读取 schema v1 的 `status`、`next_action`、运行信息和旧文档，再从用户最新要求及实际代码恢复事实。门禁工具在第一次写入时把 v1 记录升级为 v2：`status` 映射为 `stage`，`ready` 一类旧自由值统一落到 `concept_review`，缺失的确认字段按 `false` 补齐，其余旧字段原样保留。旧记录里没有 `structure_required` / `structure_confirmed`，一律按 `false` 读取：历史项目不会因为新规则被追溯拦停。但旧项目下次调用 `confirm-concept` 时同样适用兜底规则——不写 `--structure-directions 1` 就会被当作多结构轮次。不删除 `contract.md`、`work.md` 或历史证据，也不凭旧 `ready` 推断确认字段为真。
+
+`0.12.x` 及更早版本生成的随机 UUID 检查凭据不具备内容摘要，`show` 会保留并标为损坏，`deliver` 不接受。升级不删除旧凭据；要交付时由 Checker 在冻结源码上重新生成 `0.13.0` 内容寻址矩阵。

@@ -20,6 +20,10 @@ report's vetoes actually live:
 * a blocking matrix item needs ``artifact`` or ``command`` evidence whose files
   still hash the same at delivery time, so a hand-written matrix, a missing
   screenshot or an edited evidence file cannot reach ``delivered``.
+* check artifacts are content-addressed, every profile explains its scope, full
+  checks cover five release axes, and narrower checks still include a core task;
+* lease ownership, failed-check handback, project-local regular prototypes,
+  service liveness and compact transition history survive the whole CLI flow.
 
 It also pins the 2026-09-12 finding: choosing among page *structures* was recorded
 as a *style* choice, and the style step never happened.  ``--structure-directions``
@@ -32,6 +36,7 @@ local script can decide that.  Delivery replays the quotes for the creator inste
 """
 import hashlib
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -108,12 +113,11 @@ def dead_pid():
     return child.pid
 
 
-def matrix_file(folder, items, profile=None, profile_reason=''):
+def matrix_file(folder, items, profile='full', profile_reason='完整发布验收'):
     path = Path(folder) / 'matrix.json'
     payload = {'items': items}
-    if profile is not None:
-        payload['profile'] = profile
-        payload['profile_reason'] = profile_reason
+    payload['profile'] = profile
+    payload['profile_reason'] = profile_reason
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
     return path
 
@@ -183,6 +187,25 @@ def main():
     refused(STATE_TOOL, 'confirm-visual', root, '--quote', VISUAL_LINE,
             '--prototype', root / 'prototype.html')
     refused(STATE_TOOL, 'start-build', root)
+    first_claim = ok(STATE_TOOL, 'claim', root, '--owner', 'builder-a')
+    repeated_claim = ok(STATE_TOOL, 'claim', root, '--owner', 'builder-a')
+    assert repeated_claim['lease'] == first_claim['lease'], 'same-owner claim must preserve the active lease'
+    assert repeated_claim['idempotent'] is True, 'same-owner claim must report that no lease changed'
+    assert 'builder-a' in refused(
+        STATE_TOOL, 'claim', root, '--owner', 'builder-b'
+    ), 'a second writer must not replace the active owner'
+    assert 'builder-a' in refused(
+        STATE_TOOL, 'release', root, '--owner', 'builder-b'
+    ), 'a different owner must not release the active lease'
+    forced_claim = ok(
+        STATE_TOOL, 'claim', root, '--owner', 'builder-b',
+        '--force', '--reason', 'builder-a 已确认异常退出',
+    )
+    assert forced_claim['lease']['owner'] == 'builder-b' and forced_claim['forced'] is True
+    lease_audit = json.loads((root / '.site' / 'state.json').read_text(encoding='utf-8'))['lease_overrides'][-1]
+    assert lease_audit['previous']['owner'] == 'builder-a' and lease_audit['reason'] == 'builder-a 已确认异常退出'
+    released = ok(STATE_TOOL, 'release', root, '--owner', 'builder-b')
+    assert released['released']['owner'] == 'builder-b'
     ok(STATE_TOOL, 'claim', root, '--owner', 'builder-a')
     refused(STATE_TOOL, 'start-build', root)
     refused(STATE_TOOL, 'claim', root, '--owner', 'builder-a', '--force')
@@ -219,6 +242,30 @@ def main():
             '--prototype', root / 'prototype.html')
     refused(STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
             '--prototype', root / 'prototype.html', '--anchor', f'{temp}/missing.jsonl')
+    prototype_directory = root / 'prototype-directory'
+    prototype_directory.mkdir()
+    assert 'regular file' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+        '--prototype', prototype_directory,
+    )
+    prototype_link = root / 'prototype-link.html'
+    prototype_link.symlink_to(root / 'prototype.html')
+    assert 'symlink' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+        '--prototype', prototype_link,
+    )
+    prototype_parent_link = root / 'prototype-parent-link'
+    prototype_parent_link.symlink_to(root, target_is_directory=True)
+    assert 'parent directory' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+        '--prototype', prototype_parent_link / 'prototype.html',
+    )
+    outside_prototype = temp / 'outside-prototype.html'
+    outside_prototype.write_text('<!doctype html><title>outside</title>', encoding='utf-8')
+    assert 'inside the project' in refused(
+        STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
+        '--prototype', outside_prototype,
+    )
     structure = ok(STATE_TOOL, 'confirm-structure', root, '--quote', STRUCTURE_LINE,
                    '--prototype', root / 'prototype.html', '--anchor', session)
     assert structure['consent']['basis'] == 'quote-matched'
@@ -278,16 +325,36 @@ def main():
     occupied_port = occupied.getsockname()[1]
     try:
         refused(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', occupied_port)
-        refused(
+        assert 'inside the project' in refused(
             STATE_TOOL, 'handoff', root,
-            '--service-json', json.dumps({'owner': 'formal', 'port': occupied_port, 'root': str(temp)}),
+            '--service-json', json.dumps({
+                'owner': 'formal', 'pid': os.getpid(), 'port': occupied_port, 'root': str(temp),
+            }),
         )
+        assert 'pid' in refused(
+            STATE_TOOL, 'handoff', root,
+            '--service-json', json.dumps({'owner': 'formal', 'port': occupied_port, 'root': str(root)}),
+        ), 'a registered service must identify its live process'
+        assert 'not running' in refused(
+            STATE_TOOL, 'handoff', root,
+            '--service-json', json.dumps({
+                'owner': 'formal', 'pid': dead_pid(), 'port': occupied_port, 'root': str(root),
+            }),
+        ), 'a registered service PID must still be alive'
+        assert 'not listening' in refused(
+            STATE_TOOL, 'handoff', root,
+            '--service-json', json.dumps({
+                'owner': 'formal', 'pid': os.getpid(), 'port': free_port(), 'root': str(root),
+            }),
+        ), 'a registered service port must actually be listening'
         # A registered service may stay up, but only inside the project root.
         ok(
             STATE_TOOL, 'handoff', root,
             '--stopped-pid', dead_pid(),
             '--freed-port', free_port(),
-            '--service-json', json.dumps({'owner': 'formal', 'port': occupied_port, 'root': str(root)}),
+            '--service-json', json.dumps({
+                'owner': 'formal', 'pid': os.getpid(), 'port': occupied_port, 'root': str(root),
+            }),
         )
     finally:
         occupied.close()
@@ -305,6 +372,15 @@ def main():
     # 7. Delivery needs a fingerprint-bound matrix with every blocking item passed.
     ok(STATE_TOOL, 'start-verify', root)
     assert stage_of(root) == 'verifying'
+    assert 'failed check' in refused(
+        STATE_TOOL, 'reopen', root, '--reason', '还没有 Checker 结果'
+    ), 'an active Checker must not be replaced without a failed matrix result'
+    assert 'reopen --check' in refused(
+        STATE_TOOL, 'claim', root, '--owner', 'builder-b', '--force', '--reason', '绕过 Checker'
+    ), 'force claim must not bypass an active verification lease'
+    assert 'reopen --check' in refused(
+        STATE_TOOL, 'release', root, '--owner', 'builder-a'
+    ), 'release must not bypass an active verification lease'
     (root / 'evidence').mkdir()
     (root / 'evidence' / 'desktop.png').write_bytes(b'\x89PNG\r\n\x1a\nscreenshot')
     (root / 'evidence' / 'clipboard.json').write_text('{"copied": "linlaoshi_nature_test"}', encoding='utf-8')
@@ -313,29 +389,63 @@ def main():
         """Command evidence must belong to the source the matrix fingerprints."""
         command = ok(CHECK_TOOL, 'run', root, '--', PY, '-c', 'print("build ok")')
         return [
-            {'id': 'static', 'title': '静态引用', 'status': 'passed', 'blocking': True,
+            {'id': 'static', 'axis': 'static_build', 'title': '静态引用', 'status': 'passed', 'blocking': True,
              'evidence': {'kind': 'command', 'summary': 'check.py run 退出 0', 'commands': [command['check_id']]}},
-            {'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+            {'id': 'core-task', 'axis': 'core_task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
              'evidence': artifact_evidence(['evidence/desktop.png', 'evidence/clipboard.json'])},
-            {'id': 'favicon', 'title': 'favicon', 'status': 'failed', 'blocking': False,
+            {'id': 'visual-desktop', 'axis': 'visual_desktop', 'title': '桌面视觉',
+             'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png'])},
+            {'id': 'visual-mobile', 'axis': 'visual_mobile', 'title': '手机视觉',
+             'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png'])},
+            {'id': 'reopen', 'axis': 'reopen', 'title': '再次打开', 'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/clipboard.json'])},
+            {'id': 'favicon', 'axis': 'static_build', 'title': 'favicon', 'status': 'failed', 'blocking': False,
              'evidence': {'kind': 'declared', 'summary': '冷启动 404'}},
         ]
+
+    assert 'profile_reason' in refused(
+        CHECK_TOOL, 'matrix', root,
+        '--input', matrix_file(temp, passing_items(), 'targeted', ''),
+    ), 'every check profile must explain why that scope was selected'
+    assert '"axis"' in refused(
+        CHECK_TOOL, 'matrix', root,
+        '--input', matrix_file(temp, [
+            {'id': 'missing-axis', 'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png'])},
+        ], 'smoke', '验证矩阵字段'),
+    ), 'every matrix item must name its verification axis'
+    assert 'required blocking axes' in refused(
+        CHECK_TOOL, 'matrix', root,
+        '--input', matrix_file(temp, [
+            {'id': 'core-only', 'axis': 'core_task', 'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png'])},
+        ], 'full', '故意缺轴的完整检查'),
+    ), 'full verification must cover every release axis'
+    static_only = passing_items()[0]
+    for narrow_profile in ('targeted', 'smoke'):
+        assert 'core_task' in refused(
+            CHECK_TOOL, 'matrix', root,
+            '--input', matrix_file(temp, [static_only], narrow_profile, '故意漏掉核心任务'),
+        ), f'{narrow_profile} verification must include an affected core task'
 
     # Command evidence from an earlier round is stale once the source changed.
     stale_command = ok(CHECK_TOOL, 'run', root, '--', PY, '-c', 'print("stale build")')
     (root / 'evidence' / 'note.txt').write_text('source moved on after that command', encoding='utf-8')
     stale = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
-        {'id': 'static', 'status': 'passed', 'blocking': True,
+        {'id': 'static', 'axis': 'core_task', 'status': 'passed', 'blocking': True,
          'evidence': {'kind': 'command', 'summary': '旧命令', 'commands': [stale_command['check_id']]}},
-    ]))
+    ], 'smoke', '验证旧命令凭据'))
     assert stale.returncode == 1
-    assert 'different source' in json.loads(stale.stdout)['evidence_failures'][0]['reason']
+    stale_reason = json.loads(stale.stdout)['evidence_failures'][0]['reason']
+    assert 'different source' in stale_reason, stale_reason
     PASSED += 1
 
     # 7a. A blocking item declared with prose is not evidence.
-    prose = [{'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+    prose = [{'id': 'core-task', 'axis': 'core_task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
               'evidence': '我实际操作过，成功了'}]
-    prose_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, prose))
+    prose_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, prose, 'smoke', '验证文字声明'))
     assert prose_matrix.returncode == 1, 'prose evidence must not satisfy a blocking item'
     prose_result = json.loads(prose_matrix.stdout)
     assert prose_result['status'] == 'failed' and prose_result['evidence_failures']
@@ -344,9 +454,9 @@ def main():
     PASSED += 3
 
     # 7b. Naming a screenshot that does not exist fails instead of passing.
-    ghost = [{'id': 'core-task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+    ghost = [{'id': 'core-task', 'axis': 'core_task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
               'evidence': artifact_evidence(['evidence/missing.png'])}]
-    ghost_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, ghost))
+    ghost_matrix = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, ghost, 'smoke', '验证缺失证据'))
     assert ghost_matrix.returncode == 1, 'a missing artifact must not pass'
     ghost_result = json.loads(ghost_matrix.stdout)
     assert 'does not exist' in ghost_result['evidence_failures'][0]['reason']
@@ -355,8 +465,9 @@ def main():
     outside = temp / 'outside.png'
     outside.write_bytes(b'x')
     escaped = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
-        {'id': 'core-task', 'status': 'passed', 'blocking': True, 'evidence': artifact_evidence([outside])},
-    ]))
+        {'id': 'core-task', 'axis': 'core_task', 'status': 'passed', 'blocking': True,
+         'evidence': artifact_evidence([outside])},
+    ], 'smoke', '验证越界证据'))
     assert escaped.returncode == 1 and 'outside the project' in json.loads(escaped.stdout)['evidence_failures'][0]['reason']
     PASSED += 3
 
@@ -366,6 +477,28 @@ def main():
     assert check_artifact(root, first['check_id']).is_file()
     assert first['evidence_failures'] == []
     assert all(row['evidence']['verified'] for row in first['items'] if row['blocking'])
+    assert 'failed check matrix' in refused(
+        STATE_TOOL, 'reopen', root, '--reason', '不能拿通过结果返工', '--check', first['check_id']
+    ), 'reopen must not use a passing matrix to take back the Checker lease'
+    first_path = check_artifact(root, first['check_id'])
+    first_bytes = first_path.read_bytes()
+    edited_first = json.loads(first_bytes)
+    edited_first['label'] = 'edited after the check'
+    first_path.write_text(json.dumps(edited_first, ensure_ascii=False), encoding='utf-8')
+    assert 'content digest' in refused(
+        STATE_TOOL, 'deliver', root, '--check', first['check_id']
+    ), 'editing a stored matrix must invalidate its content-addressed check_id'
+    first_path.write_bytes(first_bytes)
+    command_id = first['items'][0]['evidence']['items'][0]['command_check_id']
+    command_path = check_artifact(root, command_id)
+    command_bytes = command_path.read_bytes()
+    edited_command = json.loads(command_bytes)
+    edited_command['stdout'] = 'edited after the matrix referenced it'
+    command_path.write_text(json.dumps(edited_command, ensure_ascii=False), encoding='utf-8')
+    assert 'content digest' in refused(
+        STATE_TOOL, 'deliver', root, '--check', first['check_id']
+    ), 'editing referenced command evidence must invalidate delivery'
+    command_path.write_bytes(command_bytes)
     targeted = ok(
         CHECK_TOOL, 'matrix', root,
         '--input', matrix_file(temp, passing_items(), 'targeted', '只验证导出交互'),
@@ -377,7 +510,7 @@ def main():
 
     # A blocking failure keeps the project in verifying.
     failing = passing + [
-        {'id': 'contrast', 'title': '对比度', 'status': 'failed', 'blocking': True,
+        {'id': 'contrast', 'axis': 'visual_desktop', 'title': '对比度', 'status': 'failed', 'blocking': True,
          'evidence': {'kind': 'artifact', 'summary': '4.17:1 < 4.5:1', 'paths': ['evidence/contrast.txt']}},
     ]
     (root / 'evidence' / 'contrast.txt').write_text('#627b78 on #f2f6f4 = 4.17:1', encoding='utf-8')
@@ -392,7 +525,9 @@ def main():
     # A matrix item with no evidence at all fails instead of passing quietly.
     missing_evidence = call(
         CHECK_TOOL, 'matrix', root,
-        '--input', matrix_file(temp, [{'id': 'x', 'status': 'passed', 'blocking': True}]),
+        '--input', matrix_file(temp, [
+            {'id': 'x', 'axis': 'core_task', 'status': 'passed', 'blocking': True},
+        ], 'smoke', '验证缺少证据'),
     )
     assert missing_evidence.returncode == 1
     missing_result = json.loads(missing_evidence.stdout)
@@ -400,8 +535,9 @@ def main():
     PASSED += 1
     # An unknown evidence kind fails instead of being treated as a claim.
     unknown_kind = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, [
-        {'id': 'x', 'status': 'passed', 'blocking': True, 'evidence': {'kind': 'guessed', 'summary': 'x'}},
-    ]))
+        {'id': 'x', 'axis': 'core_task', 'status': 'passed', 'blocking': True,
+         'evidence': {'kind': 'guessed', 'summary': 'x'}},
+    ], 'smoke', '验证未知证据类型'))
     assert unknown_kind.returncode == 1
     assert 'kind must be one of' in json.loads(unknown_kind.stdout)['evidence_failures'][0]['reason']
     PASSED += 1
@@ -437,7 +573,7 @@ def main():
         'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True, 'evidence': '我说通过了'}],
     }, ensure_ascii=False), encoding='utf-8')
     error = refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
-    assert 'verified evidence' in error, error
+    assert 'content digest' in error, error
     # An emptied artifact map is equally refused instead of passing on nothing.
     (forged_path).write_text(json.dumps({
         'schema_version': 1, 'kind': 'matrix', 'check_id': forged['check_id'], 'status': 'passed',
@@ -445,10 +581,21 @@ def main():
         'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True,
                    'evidence': {'kind': 'artifact', 'summary': 'x', 'items': [], 'verified': True}}],
     }, ensure_ascii=False), encoding='utf-8')
-    assert 'missing' in refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
+    assert 'content digest' in refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
 
     # 8. Delivery through the frozen matrix, then reopen for the next round.
-    ok(STATE_TOOL, 'reopen', root, '--reason', '修复对比度并重新验收')
+    recovery = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items() + [
+        {'id': 'contrast', 'axis': 'visual_desktop', 'title': '对比度', 'status': 'failed', 'blocking': True,
+         'evidence': artifact_evidence(['evidence/contrast.txt'])},
+    ]))
+    assert recovery.returncode == 1
+    recovery = json.loads(recovery.stdout)
+    reopened = ok(
+        STATE_TOOL, 'reopen', root, '--reason', '修复对比度并重新验收',
+        '--check', recovery['check_id'],
+    )
+    assert reopened['failed_check_id'] == recovery['check_id']
+    PASSED += 1
     ok(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', free_port())
     ok(STATE_TOOL, 'start-verify', root)
     final = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()), '--save-evidence')
@@ -486,6 +633,8 @@ def main():
         assert record['basis'] in ('agent-reported', 'quote-matched')
         assert record['quote_sha256'] == hashlib.sha256(record['quote'].encode('utf-8')).hexdigest()
         assert record['basis_note'], 'every consent record must state that it is not a proof'
+    build_transition = next(row for row in audit['transition_history'] if row['action'] == 'start-build')
+    assert build_transition['actor'] == 'builder-a' and build_transition['lease_role'] == 'writer'
     PASSED += 1
 
     # 9. A project without .site is never initialized or rewritten by the checker.
@@ -494,6 +643,29 @@ def main():
     (third_party / 'index.html').write_text('<!doctype html><title>x</title>', encoding='utf-8')
     bare = ok(CHECK_TOOL, 'static', third_party)
     assert bare['artifact'] is None and not (third_party / '.site').exists()
+
+    # 9b. Verbatim means the exact caller text; normalization is separate and is
+    # used only to detect a repeated sentence across formatting differences.
+    exact = temp / 'exact-quote'
+    exact_quote = '这个第一版可以。\n  就这样做。'
+    canonical_quote = '这个第一版可以。 就这样做。'
+    ok(SITE_TOOL, 'init', exact, '--template', 'static', '--title', '原话回归')
+    ok(STATE_TOOL, 'confirm-concept', exact, '--quote', exact_quote, '--structure-directions', 1)
+    exact_state = json.loads((exact / '.site' / 'state.json').read_text(encoding='utf-8'))
+    exact_record = exact_state['concept_consent']
+    assert exact_record['quote'] == exact_quote, 'confirmation text must preserve whitespace and newlines exactly'
+    assert exact_record['quote_sha256'] == hashlib.sha256(exact_quote.encode('utf-8')).hexdigest()
+    assert exact_record['quote_normalized_sha256'] == hashlib.sha256(canonical_quote.encode('utf-8')).hexdigest()
+    transition = exact_state['transition_history'][-1]
+    assert transition['action'] == 'confirm-concept'
+    assert transition['before']['stage'] == 'discovering' and transition['after']['stage'] == 'visual_drafting'
+    assert 'transition_history' not in transition['before'] and 'transition_history' not in transition['after']
+    (exact / 'prototype.html').write_text('<!doctype html><title>prototype</title>', encoding='utf-8')
+    assert 'already confirms' in refused(
+        STATE_TOOL, 'confirm-visual', exact, '--quote', canonical_quote,
+        '--prototype', exact / 'prototype.html',
+    ), 'whitespace changes must not make one consent sentence reusable at another gate'
+    PASSED += 1
 
     # 10. A legacy schema v1 record is upgraded on first write and never implies a gate.
     legacy = temp / 'legacy'
@@ -642,12 +814,14 @@ def main():
     # would void every frozen acceptance fingerprint while every other test stayed green.
     hard = temp / 'hard-tree'
     (hard / '.site' / 'checks').mkdir(parents=True)
+    (hard / '.site' / 'design').mkdir()
     (hard / 'assets' / 'deep').mkdir(parents=True)
     (hard / '.hidden-dir').mkdir(parents=True)
     (hard / 'index.html').write_text('<!doctype html><title>hard</title>', encoding='utf-8')
     (hard / 'assets' / 'deep' / 'app.js').write_text('console.log(1)', encoding='utf-8')
     (hard / '.site' / 'brief.md').write_text('# 目标', encoding='utf-8')
     (hard / '.site' / 'implementation-plan.md').write_text('# 计划', encoding='utf-8')
+    (hard / '.site' / 'design' / 'prototype.html').write_text('<title>direction a</title>', encoding='utf-8')
     (hard / '.site' / 'state.json').write_text(json.dumps({'schema_version': 2, 'project_id': 'hard'}))
     (hard / '.site' / 'lease.json').write_text('{}', encoding='utf-8')
     (hard / '.site' / 'checks' / 'c.json').write_text('{}', encoding='utf-8')
@@ -659,12 +833,21 @@ def main():
     outside.write_text('outside', encoding='utf-8')
     (hard / 'linked-dir').symlink_to(hard / 'assets')
     (hard / 'linked-file.js').symlink_to(outside)
+    assert 'regular directory' in refused(
+        CHECK_TOOL, 'static', hard, '--web-root', 'linked-dir'
+    ), 'an explicit web root must not be accepted through a symlink'
     gates = ok(STATE_TOOL, 'show', hard)['fingerprint']
     statics = ok(CHECK_TOOL, 'static', hard)['fingerprint']
     inspected_hard = ok(SITE_TOOL, 'inspect', hard)['fingerprint']
     assert gates == statics == inspected_hard, (
         f'fingerprint implementations disagree: state={gates[:12]} check={statics[:12]} site={inspected_hard[:12]}'
     )
+    (hard / '.site' / 'design' / 'prototype.html').write_text('<title>direction b</title>', encoding='utf-8')
+    changed_gates = ok(STATE_TOOL, 'show', hard)['fingerprint']
+    changed_statics = ok(CHECK_TOOL, 'static', hard)['fingerprint']
+    changed_inspected = ok(SITE_TOOL, 'inspect', hard)['fingerprint']
+    assert changed_gates == changed_statics == changed_inspected
+    assert changed_gates != gates, 'changing .site/design must invalidate the frozen source fingerprint'
     PASSED += 1
 
     print(f'OK: {PASSED} gate assertions passed')

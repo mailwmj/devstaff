@@ -9,8 +9,10 @@ tool.  It replaces "remember the rules" with mechanical checks:
 * ``handoff`` records stopped PIDs, freed ports and the frozen fingerprint;
 * ``start-verify`` refuses unless the source still matches that frozen fingerprint;
 * ``deliver`` only accepts a ``site-check`` matrix artifact (``check_id``) whose
-  fingerprint equals the current project fingerprint and whose blocking items all
-  passed.
+  filename, internal id and canonical content digest agree, whose fingerprint
+  equals the current project fingerprint and whose blocking items all passed;
+* exact confirmation wording and compact before/after state summaries stay in the
+  audit history, while normalized quote hashes are used only for duplicate checks.
 
 A page has two separate decisions, and this tool keeps them apart:
 
@@ -41,10 +43,11 @@ not verified facts:
   downgrades the label instead of failing the gate;
 * neither label is forgery-proof, and the record says so in ``basis_note``.
 
-The gate keeps the record honest: verbatim, timestamped, append-only in
-revision, and impossible to rewrite silently.  It does not, and must not claim
-to, keep the agent honest.  The verification that matters happens when the
-creator is shown their own words again at delivery time.
+The gate makes accidental drift visible: records are verbatim, timestamped,
+revisioned and content-addressed where appropriate. A writer with project access
+can still rebuild all local files consistently, so the tool does not, and must not
+claim to, keep a hostile agent honest. The verification that matters happens when
+the creator is shown their own words again at delivery time.
 """
 from __future__ import annotations
 
@@ -132,6 +135,11 @@ def fingerprint(root):
     metadata = root / '.site'
     if metadata.is_symlink():
         raise ValueError('Project metadata must not be a symlink')
+    design = metadata / 'design'
+    if design.exists() and (design.is_symlink() or not design.is_dir()):
+        raise ValueError('Project design metadata must be a regular directory')
+    if design.is_dir():
+        paths.extend(path for path in project_files(design) if path.is_file())
     for name in ('brief.md', 'implementation-plan.md', 'contract.md', 'work.md', 'preview.py'):
         path = metadata / name
         if path.is_file() and not path.is_symlink():
@@ -194,18 +202,50 @@ def migrate_v1(state):
     return upgraded
 
 
+def state_summary(state):
+    release = state.get('writer_release') if isinstance(state.get('writer_release'), dict) else {}
+    delivery = state.get('delivery') if isinstance(state.get('delivery'), dict) else {}
+    return {
+        'stage': state.get('stage') or state.get('status'),
+        'revision': state.get('revision'),
+        'concept_confirmed': bool(state.get('concept_confirmed')),
+        'structure_required': bool(state.get('structure_required')),
+        'structure_confirmed': bool(state.get('structure_confirmed')),
+        'visual_confirmed': bool(state.get('visual_confirmed')),
+        'development_authorized': bool(state.get('development_authorized')),
+        'writer_release_fingerprint': release.get('fingerprint'),
+        'delivery_check_id': delivery.get('check_id'),
+    }
+
+
 def save_state(root, state, action, expect_revision=None):
     if expect_revision is not None and state.get('revision') != expect_revision:
         raise ValueError(
             f"Revision conflict: expected {expect_revision}, file has {state.get('revision')}; re-read the project"
         )
+    state_path = root / '.site' / 'state.json'
+    before_state = read_json(state_path)
+    if before_state.get('schema_version') == 1:
+        before_state = migrate_v1(before_state)
+    before = state_summary(before_state)
     state['schema_version'] = 2
     if 'status' in state:
         state['status'] = state['stage']
     state['revision'] = int(state.get('revision') or 0) + 1
-    state['updated_at'] = now()
+    recorded_at = now()
+    state['updated_at'] = recorded_at
     state['last_action'] = action
-    write_json(root / '.site' / 'state.json', state)
+    lease = read_lease(root)
+    transition = {
+        'at': recorded_at,
+        'action': action,
+        'actor': lease.get('owner') if lease else None,
+        'lease_role': lease.get('role') if lease else None,
+        'before': before,
+        'after': state_summary(state),
+    }
+    state['transition_history'] = as_list(state.get('transition_history')) + [transition]
+    write_json(state_path, state)
     return state
 
 
@@ -285,8 +325,9 @@ def check_artifacts(root):
             continue
         try:
             data = read_json(path)
-        except (OSError, json.JSONDecodeError):
-            rows.append({'check_id': path.stem, 'artifact': str(path), 'error': 'unreadable'})
+            validate_artifact_identity(data, path.stem, path)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            rows.append({'check_id': path.stem, 'artifact': str(path), 'error': str(error)})
             continue
         rows.append({
             'check_id': data.get('check_id', path.stem),
@@ -297,6 +338,33 @@ def check_artifacts(root):
             'artifact': path.relative_to(root).as_posix(),
         })
     return rows
+
+
+def artifact_digest(data):
+    canonical = {
+        key: value for key, value in data.items()
+        if key not in ('check_id', 'artifact')
+    }
+    encoded = json.dumps(
+        canonical,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+        allow_nan=False,
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def validate_artifact_identity(artifact, check_id, path):
+    if not isinstance(artifact, dict):
+        raise ValueError(f'Damaged check artifact {check_id!r}')
+    if artifact.get('check_id') != check_id or path.stem != check_id:
+        raise ValueError(f'Damaged check artifact {check_id!r}: filename and internal check_id differ')
+    if artifact_digest(artifact) != check_id:
+        raise ValueError(f'Damaged check artifact {check_id!r}: content digest does not match check_id')
+    expected = f'.site/{CHECK_ARTIFACT_DIR}/{check_id}.json'
+    if artifact.get('artifact') != expected:
+        raise ValueError(f'Damaged check artifact {check_id!r}: artifact path does not match its filename')
 
 
 def load_artifact(root, check_id):
@@ -311,6 +379,7 @@ def load_artifact(root, check_id):
         raise ValueError(f'Damaged check artifact {check_id!r}: {error}') from error
     if not isinstance(artifact, dict):
         raise ValueError(f'Damaged check artifact {check_id!r}')
+    validate_artifact_identity(artifact, check_id, path)
     return artifact
 
 
@@ -323,12 +392,45 @@ def normalize_quote(raw):
     "好，就这样" is a legitimate approval for a reversible decision, and any minimum
     here would just be a number to satisfy.
     """
-    text = ' '.join((raw or '').split())
-    if not text:
+    if not isinstance(raw, str) or not raw.strip():
         raise ValueError(
             '--quote needs the creator\'s own words, verbatim; a gate never records an empty basis'
         )
-    return text
+    return raw
+
+
+def canonical_quote(raw):
+    return ' '.join(str(raw or '').split())
+
+
+def normalized_quote_digest(record):
+    recorded = record.get('quote_normalized_sha256')
+    if isinstance(recorded, str) and recorded:
+        return recorded
+    quote = record.get('quote') or record.get('text')
+    if isinstance(quote, str) and quote:
+        return hashlib.sha256(canonical_quote(quote).encode('utf-8')).hexdigest()
+    legacy = record.get('quote_sha256')
+    return legacy if isinstance(legacy, str) else None
+
+
+def regular_file(root, raw, option):
+    path = Path(raw).expanduser()
+    if path.is_symlink():
+        raise ValueError(f'{option} must not be a symlink: {raw}')
+    if not path.is_file():
+        raise ValueError(f'{option} must be a regular file: {raw}')
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f'{option} must be a regular file inside the project: {raw}')
+    parent = path.absolute().parent
+    while parent != parent.parent:
+        if parent.is_symlink():
+            raise ValueError(f'{option} parent directory must not be a symlink: {raw}')
+        if parent.resolve() == root:
+            break
+        parent = parent.parent
+    return resolved
 
 
 def anchor_text(path):
@@ -468,6 +570,7 @@ def build_consent(args):
         'basis_note': note,
         'quote': quote,
         'quote_sha256': hashlib.sha256(quote.encode('utf-8')).hexdigest(),
+        'quote_normalized_sha256': hashlib.sha256(canonical_quote(quote).encode('utf-8')).hexdigest(),
         'anchor': str(anchor_path) if anchor_path is not None else None,
         'anchor_note': anchor_note,
         'recorded_at': now(),
@@ -489,7 +592,7 @@ def record_consent(state, field, consent, gate):
         if not isinstance(existing, dict):
             continue
         # Compare by content, not by path: copying a file used to defeat this.
-        if existing.get('quote_sha256') and existing.get('quote_sha256') == consent['quote_sha256']:
+        if normalized_quote_digest(existing) == consent['quote_normalized_sha256']:
             raise ValueError(
                 f'This quote already confirms {other.replace("_consent", "")}; '
                 f'{gate} needs its own explicit expression from the creator'
@@ -497,7 +600,7 @@ def record_consent(state, field, consent, gate):
     for entry in as_list(state.get('consent_history')):
         if not isinstance(entry, dict) or entry.get('gate') == gate:
             continue
-        if entry.get('quote_sha256') and entry.get('quote_sha256') == consent['quote_sha256']:
+        if normalized_quote_digest(entry) == consent['quote_normalized_sha256']:
             raise ValueError(
                 f"This quote already confirmed {entry.get('gate')} in an earlier record; {gate} needs its own "
                 'explicit expression from the creator, and recording a gate again does not free an old sentence'
@@ -528,6 +631,7 @@ def record_consent(state, field, consent, gate):
         'gate': gate,
         'quote': consent['quote'],
         'quote_sha256': consent['quote_sha256'],
+        'quote_normalized_sha256': consent['quote_normalized_sha256'],
         'basis': consent['basis'],
         'recorded_at': consent['recorded_at'],
     }]
@@ -541,6 +645,7 @@ def describe_consent(consent):
         'basis_note': consent['basis_note'],
         'quote': consent['quote'][:200],
         'quote_sha256': consent['quote_sha256'][:16],
+        'quote_normalized_sha256': consent['quote_normalized_sha256'][:16],
         'anchor': consent.get('anchor'),
         'anchor_note': consent.get('anchor_note'),
         'recorded_at': consent['recorded_at'],
@@ -585,8 +690,8 @@ def parse_services(raw_items):
         if not root.is_dir():
             raise ValueError(f'service root is not a directory: {root_text}')
         pid = item.get('pid')
-        if pid is not None and (not isinstance(pid, int) or pid <= 0):
-            raise ValueError('--service-json "pid" must be a positive integer')
+        if not isinstance(pid, int) or pid <= 0:
+            raise ValueError('--service-json needs a positive integer "pid"')
         services.append({'owner': owner, 'port': port, 'root': str(root), 'pid': pid})
     return services
 
@@ -640,13 +745,34 @@ def action_show(root, args):
 def action_claim(root, args):
     state = load_state(root)
     existing = read_lease(root)
-    if existing and existing.get('role') != 'writer' and not args.force:
-        raise ValueError(
-            f"Lease is held by {existing.get('role')!r} since {existing.get('acquired_at')}; "
-            'finish or release it, or pass --force with --reason'
-        )
     if args.force and not args.reason:
         raise ValueError('--force requires --reason so the bypass stays auditable')
+    if existing and existing.get('role') == 'checker' and state.get('stage') == 'verifying':
+        raise ValueError(
+            'An active verification lease cannot be force-claimed; '
+            'run the Checker matrix, then use reopen --check <failed_check_id>'
+        )
+    if (
+        existing
+        and existing.get('role') == 'writer'
+        and existing.get('owner') == args.owner
+        and not args.force
+    ):
+        return {
+            'action': 'claim',
+            'root': str(root),
+            'lease': existing,
+            'forced': False,
+            'idempotent': True,
+        }
+    if existing and (
+        existing.get('role') != 'writer' or existing.get('owner') != args.owner
+    ) and not args.force:
+        raise ValueError(
+            f"Lease is held by {existing.get('role')!r} owner {existing.get('owner')!r} "
+            f"since {existing.get('acquired_at')}; "
+            'finish or release it, or pass --force with --reason'
+        )
     if state.get('stage') == 'delivered' and not args.force:
         raise ValueError('Project is delivered; run reopen before claiming the writer lease again')
     lease = write_lease(root, 'writer', args.owner)
@@ -655,13 +781,30 @@ def action_claim(root, args):
             {'at': now(), 'reason': args.reason, 'previous': existing}
         ]
         save_state(root, state, 'claim')
-    return {'action': 'claim', 'root': str(root), 'lease': lease, 'forced': bool(args.force)}
+    return {
+        'action': 'claim',
+        'root': str(root),
+        'lease': lease,
+        'forced': bool(args.force),
+        'idempotent': False,
+    }
 
 
 def action_release(root, args):
     existing = read_lease(root)
     if not existing:
         raise ValueError('No active lease to release')
+    if existing.get('owner') != args.owner:
+        raise ValueError(
+            f"Lease is owned by {existing.get('owner')!r}, not {args.owner!r}; "
+            'only the active owner may release it'
+        )
+    state = load_state(root)
+    if existing.get('role') == 'checker' and state.get('stage') == 'verifying':
+        raise ValueError(
+            'An active verification lease cannot be released; '
+            'run the Checker matrix, then use reopen --check <failed_check_id>'
+        )
     if args.role and existing.get('role') != args.role:
         raise ValueError(f"Lease role is {existing.get('role')!r}, not {args.role!r}")
     clear_lease(root)
@@ -777,10 +920,7 @@ def action_confirm_structure(root, args):
             'check and delivery are voided. A blocked project records the blockage, not new decisions'
         )
     consent = build_consent(args)
-    prototype = Path(args.prototype).expanduser()
-    if not prototype.exists():
-        raise ValueError(f'--prototype does not exist: {args.prototype}')
-    resolved = prototype.resolve()
+    resolved = regular_file(root, args.prototype, '--prototype')
     inside = resolved.is_relative_to(root)
     stale_visual = bool(state.get('visual_confirmed'))
     record_consent(state, 'structure_consent', consent, 'structure')
@@ -832,10 +972,7 @@ def action_confirm_visual(root, args):
             'are voided. A blocked project records the blockage, not new decisions'
         )
     consent = build_consent(args)
-    prototype = Path(args.prototype).expanduser()
-    if not prototype.exists():
-        raise ValueError(f'--prototype does not exist: {args.prototype}')
-    resolved = prototype.resolve()
+    resolved = regular_file(root, args.prototype, '--prototype')
     inside = resolved.is_relative_to(root)
     stale_authorization = bool(state.get('development_authorized'))
     record_consent(state, 'visual_consent', consent, 'visual')
@@ -932,6 +1069,12 @@ def action_handoff(root, args):
     if alive:
         raise ValueError(f'Writer children still running: {alive}; stop them before handing off')
     services = parse_services(args.service_json)
+    stopped_services = [item['pid'] for item in services if not pid_is_running(item['pid'])]
+    if stopped_services:
+        raise ValueError(f'Registered service PIDs are not running: {stopped_services}')
+    silent_services = [item['port'] for item in services if port_is_free(item['port'])]
+    if silent_services:
+        raise ValueError(f'Registered service ports are not listening: {silent_services}')
     service_ports = {item['port'] for item in services}
     occupied = [port for port in args.freed_port if port not in service_ports and not port_is_free(port)]
     if occupied:
@@ -1029,9 +1172,15 @@ def verify_delivery_evidence(root, artifact):
                 check_id = entry.get('command_check_id') if isinstance(entry, dict) else None
                 if not check_id:
                     continue
-                path = root / '.site' / CHECK_ARTIFACT_DIR / f'{check_id}.json'
-                if not path.is_file():
-                    problems.append(f'command evidence {check_id}: stored result is missing')
+                try:
+                    command = load_artifact(root, check_id)
+                except ValueError as error:
+                    problems.append(f'command evidence {check_id}: {error}')
+                    continue
+                if command.get('kind') != 'command' or command.get('status') != 'passed':
+                    problems.append(f'command evidence {check_id}: stored result is not a passing command')
+                elif command.get('fingerprint') != artifact.get('fingerprint') or command.get('source_changed'):
+                    problems.append(f'command evidence {check_id}: stored result belongs to different source')
     if blocking_artifacts == 0 and any(
         isinstance(item, dict) and (item.get('evidence') or {}).get('kind') == 'artifact'
         for item in as_list(artifact.get('items'))
@@ -1175,6 +1324,18 @@ def action_reopen(root, args):
     lease = read_lease(root)
     if not args.reason.strip():
         raise ValueError('--reason must record why the delivered or verified state is void')
+    failed_check = None
+    if state.get('stage') == 'verifying' or (lease and lease.get('role') == 'checker'):
+        if not args.check:
+            raise ValueError(
+                'Reopening an active Checker needs --check with the failed check_id; '
+                'run and record the Checker matrix before returning the lease to a Writer'
+            )
+        failed_check = load_artifact(root, args.check)
+        if failed_check.get('kind') != 'matrix' or failed_check.get('status') != 'failed':
+            raise ValueError('--check must identify a failed check matrix before the Writer can resume')
+        if failed_check.get('fingerprint') != fingerprint(root):
+            raise ValueError('The failed check belongs to different source; run the Checker matrix again')
     # reopen hands out a writer lease and a building stage. Without a precondition it
     # is a bypass: a brand-new project could reopen, hand off, verify and deliver with
     # nothing ever confirmed. There must be something to void.
@@ -1202,6 +1363,7 @@ def action_reopen(root, args):
         state['delegated'] = False
         state['stage'] = 'visual_drafting' if state.get('visual_required', True) else 'concept_review'
     state['reopen_basis'] = args.reason.strip()
+    state['reopen_check_id'] = args.check if failed_check else None
     state['next_action'] = 'Rebuild the affected scope, then hand off again before the next check'
     write_lease(root, 'writer', args.owner)
     save_state(root, state, 'reopen', args.expect_revision)
@@ -1212,6 +1374,7 @@ def action_reopen(root, args):
         'revision': state['revision'],
         'previous_stage': previous,
         'previous_lease': lease,
+        'failed_check_id': args.check if failed_check else None,
         'scope_changed': bool(args.scope_changed),
     }
 
@@ -1268,6 +1431,7 @@ def build_parser():
     claim.add_argument('--force', action='store_true')
     claim.add_argument('--reason')
     release = add('release', 'drop the lease without delivering')
+    release.add_argument('--owner', required=True, help='must match the active lease owner')
     release.add_argument('--role', choices=['writer', 'checker'])
     concept = add('confirm-concept', 'record concept confirmation as the creator\'s verbatim quote')
     concept.add_argument('--quote', required=True,
@@ -1311,6 +1475,7 @@ def build_parser():
     reopen = add('reopen', 'void verification or delivery before changing source again')
     reopen.add_argument('--reason', required=True)
     reopen.add_argument('--owner', default='reopen')
+    reopen.add_argument('--check', help='failed matrix check_id required when taking back an active Checker lease')
     reopen.add_argument('--scope-changed', action='store_true')
     block = add('block', 'record a hard stop and its recovery condition')
     block.add_argument('--reason', required=True)

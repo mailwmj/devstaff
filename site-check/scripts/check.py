@@ -3,7 +3,10 @@
 Every run gets a ``check_id`` and, when the project has ``.site`` metadata, is
 persisted under ``.site/checks/<check_id>.json`` together with the source
 fingerprint.  ``site-builder`` accepts delivery only through a ``matrix``
-artifact whose fingerprint still matches the frozen source.
+artifact whose fingerprint still matches the frozen source. ``check_id`` is the
+SHA-256 of canonical artifact content (excluding its derived id/path), so accidental
+edits are detected on every load. This is tamper-evident bookkeeping, not a signature
+or a defense against an agent that can rewrite the whole project.
 
 The matrix does not take a bare ``evidence`` sentence.  Each item declares
 where its evidence comes from:
@@ -24,6 +27,11 @@ where its evidence comes from:
 
 Only ``artifact`` and ``command`` may carry a blocking item; anything else has
 to be reported as ``not_run`` instead of ``passed``.
+
+Every matrix needs a non-empty ``profile_reason`` and an ``axis`` on each item.
+Full verification requires blocking static/build, core-task, desktop visual,
+mobile visual and reopening axes; narrower profiles still require a blocking
+affected core task.
 """
 import argparse
 import hashlib
@@ -37,12 +45,12 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
-import uuid
 
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
 CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
 CHECK_PROFILES = ('smoke', 'targeted', 'full')
+FULL_REQUIRED_AXES = ('static_build', 'core_task', 'visual_desktop', 'visual_mobile', 'reopen')
 EVIDENCE_KINDS = ('artifact', 'command', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
 VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command')
@@ -71,6 +79,11 @@ def fingerprint(root):
     metadata = root / '.site'
     if metadata.is_symlink():
         raise ValueError('Project metadata must not be a symlink')
+    design = metadata / 'design'
+    if design.exists() and (design.is_symlink() or not design.is_dir()):
+        raise ValueError('Project design metadata must be a regular directory')
+    if design.is_dir():
+        paths.extend(path for path in files(design) if path.is_file())
     for name in ('brief.md', 'implementation-plan.md', 'contract.md', 'work.md', 'preview.py'):
         path = metadata / name
         if path.is_file() and not path.is_symlink():
@@ -81,6 +94,31 @@ def fingerprint(root):
         digest.update(path.read_bytes())
         digest.update(b'\0')
     return digest.hexdigest()
+
+
+def artifact_digest(data):
+    canonical = {
+        key: value for key, value in data.items()
+        if key not in ('check_id', 'artifact')
+    }
+    encoded = json.dumps(
+        canonical,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+        allow_nan=False,
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def validate_artifact_identity(artifact, check_id, path):
+    if artifact.get('check_id') != check_id or path.stem != check_id:
+        raise ValueError(f'Damaged check artifact {check_id!r}: filename and internal check_id differ')
+    if artifact_digest(artifact) != check_id:
+        raise ValueError(f'Damaged check artifact {check_id!r}: content digest does not match check_id')
+    expected = f'.site/{CHECK_ARTIFACT_DIR}/{check_id}.json'
+    if artifact.get('artifact') != expected:
+        raise ValueError(f'Damaged check artifact {check_id!r}: artifact path does not match its filename')
 
 
 def write_artifact(root, data):
@@ -106,10 +144,18 @@ def write_artifact(root, data):
 
 
 def finalize(root, data):
-    data.setdefault('check_id', str(uuid.uuid4()))
-    data['artifact'] = write_artifact(root, data)
-    if data['artifact'] is None:
+    data.pop('check_id', None)
+    data.pop('artifact', None)
+    data.pop('artifact_note', None)
+    metadata = root / '.site'
+    persists = metadata.is_dir() and not metadata.is_symlink()
+    if not persists:
+        data['artifact'] = None
         data['artifact_note'] = 'No .site metadata; the evidence was reported but not persisted'
+    data['check_id'] = artifact_digest(data)
+    if persists:
+        data['artifact'] = f'.site/{CHECK_ARTIFACT_DIR}/{data["check_id"]}.json'
+        data['artifact'] = write_artifact(root, data)
     return data
 
 
@@ -159,6 +205,7 @@ def load_check_artifact(root, check_id):
         raise ValueError(f'Damaged check artifact {check_id!r}: {error}') from error
     if not isinstance(artifact, dict):
         raise ValueError(f'Damaged check artifact {check_id!r}')
+    validate_artifact_identity(artifact, check_id, path)
     return artifact
 
 
@@ -229,6 +276,8 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
     profile_reason = ''
     if isinstance(payload, dict):
         profile_reason = str(payload.get('profile_reason') or '').strip()
+    if not profile_reason:
+        raise ValueError('Check matrix needs a non-empty profile_reason explaining why this scope was selected')
     items = payload.get('items') if isinstance(payload, dict) else payload
     if not isinstance(items, list) or not items:
         raise ValueError('Check matrix needs a non-empty list of items')
@@ -253,6 +302,10 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
             raise ValueError(f'Matrix item {identifier!r} status must be one of {CHECK_STATUSES}')
         if not isinstance(item.get('blocking'), bool):
             raise ValueError(f'Matrix item {identifier!r} needs a boolean "blocking"')
+        axis = item.get('axis')
+        if not isinstance(axis, str) or not axis.strip():
+            raise ValueError(f'Matrix item {identifier!r} needs a non-empty string "axis"')
+        axis = axis.strip()
         try:
             evidence, entries, problems = validate_evidence(root, item, identifier, before, {})
         except ValueError as error:
@@ -270,11 +323,19 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
                 artifacts[row['path']] = row
         normalized.append({
             'id': identifier,
+            'axis': axis,
             'title': str(item.get('title') or identifier),
             'status': status,
             'blocking': item['blocking'],
             'evidence': evidence,
         })
+    required_axes = FULL_REQUIRED_AXES if profile == 'full' else ('core_task',)
+    covered_axes = {item['axis'] for item in normalized if item['blocking']}
+    missing_axes = [axis for axis in required_axes if axis not in covered_axes]
+    if missing_axes:
+        raise ValueError(
+            f'Profile {profile!r} is missing required blocking axes: {", ".join(missing_axes)}'
+        )
     if save_evidence:
         for row in artifacts.values():
             source = root / row['path']
@@ -296,7 +357,6 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
     return {
         'schema_version': 1,
         'kind': 'matrix',
-        'check_id': str(uuid.uuid4()),
         'created_at': now(),
         'label': label or '',
         'profile': profile,
@@ -313,6 +373,7 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         'limits': [
             'The matrix verifies that declared evidence exists and is unchanged; it does not execute browser, visual or reopening checks by itself',
             'Only artifact and command evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
+            'Content-addressed artifacts expose accidental edits but are not signed or hostile-writer-proof',
         ],
         'follow_up': ['Fix blocking failures in site-builder', 'Re-run the whole matrix against a newly frozen fingerprint'],
     }
@@ -368,7 +429,13 @@ class Page(HTMLParser):
 
 
 def static_check(root, offline=False, web_root=None):
-    web = (root / web_root).resolve() if web_root else (root / 'web' if (root / 'web').is_dir() else root)
+    if web_root:
+        requested_web = root / web_root
+        if requested_web.is_symlink():
+            raise ValueError('Web root must be a regular directory inside the project')
+        web = requested_web.resolve()
+    else:
+        web = root / 'web' if (root / 'web').is_dir() else root
     if not web.is_dir() or not web.is_relative_to(root) or web.is_symlink():
         raise ValueError('Web root must be a regular directory inside the project')
     issues = []
@@ -456,7 +523,6 @@ def static_check(root, offline=False, web_root=None):
     return {
         'schema_version': 1,
         'kind': 'static',
-        'check_id': str(uuid.uuid4()),
         'created_at': now(),
         'fingerprint': fingerprint(root),
         'status': 'failed' if errors else ('not_applicable' if not pages else 'passed'),
@@ -488,7 +554,6 @@ def run_check(root, command, timeout):
     return {
         'schema_version': 1,
         'kind': 'command',
-        'check_id': str(uuid.uuid4()),
         'created_at': now(),
         'command': command,
         'input_fingerprint': before,

@@ -49,6 +49,11 @@ def fingerprint(root):
     if metadata.is_symlink():
         raise ValueError('Project metadata must not be a symlink')
     paths = list(project_files(root))
+    design = metadata / 'design'
+    if design.exists() and (design.is_symlink() or not design.is_dir()):
+        raise ValueError('Project design metadata must be a regular directory')
+    if design.is_dir():
+        paths.extend(path for path in project_files(design) if path.is_file())
     for name in ('brief.md', 'implementation-plan.md', 'contract.md', 'work.md', 'preview.py'):
         path = metadata / name
         if path.is_file() and not path.is_symlink():

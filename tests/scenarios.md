@@ -96,7 +96,7 @@
 ## 14. 最终检查失败
 
 - **输入：** `site-check` 发现重新打开后记录丢失，其他轴通过。
-- **应调用：** 发现返回 `site-builder`；builder 先用 `reopen` 取回 writer 租约并修复，重新 `handoff` 与 `start-verify` 后再次调用 `site-check`。
+- **应调用：** 发现返回 `site-builder`；builder 先用 `reopen --check <failed_check_id>` 取回 writer 租约并修复，重新 `handoff` 与 `start-verify` 后再次调用 `site-check`。
 - **应停位置：** 复验前保持 `stage=verifying`；只有与冻结指纹一致、阻断项全部 `passed` 的 `check_id` 才能换取 `delivered`。
 - **禁止误判：** 不因三个轴通过就忽略失败项，不由 check 宣布 delivered，不在阻断失败时写 `delivered`，不沿用旧凭据。
 

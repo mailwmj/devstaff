@@ -1,0 +1,45 @@
+name: Verify release bundle
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify manifests and collaboration graph
+        run: python3 scripts/verify_skills.py .
+
+      - name: Run state-gate regression
+        run: python3 tests/gate_flow.py
+
+      - name: Validate design assets
+        run: python3 site-design/scripts/design.py validate
+
+      - name: Verify installation from a clean release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE_FILE="$(mktemp)"
+          RELEASE_DIR="$(mktemp -d)"
+          INSTALL_DIR="$(mktemp -d)"
+          git archive --format=tar HEAD --output="$ARCHIVE_FILE"
+          tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
+          python3 "$RELEASE_DIR/scripts/verify_skills.py" "$RELEASE_DIR"
+          python3 "$RELEASE_DIR/scripts/install.py" "$INSTALL_DIR"

@@ -217,7 +217,9 @@
 - `delivered`
 - `blocked`
 
-门禁脚本同时维护项目级 Writer/Checker 租约、交接记录和验收凭据：`handoff` 校验 Writer 的 PID 已结束、端口已释放并登记正式服务的 owner/PID/端口/根目录，同时冻结源码指纹；`start-verify` 在源码变化时拒绝交接；`delivered` 只能绑定与当前指纹一致、阻断项全部 `passed` 的 `check_id`，源码变化后旧凭据自动失效。
+门禁脚本同时维护项目级 Writer/Checker 租约、交接记录和验收凭据：同 owner 重复 `claim` 幂等，不同 owner 不得无理由覆盖，`release` 必须匹配 owner；`handoff` 校验 Writer 的 PID 已结束、端口已释放，登记正式服务必须提供存活 PID、监听端口和项目内根目录，并冻结包含 `.site/design/**` 的源码指纹；`start-verify` 在源码变化时拒绝交接；Checker 只凭当前源码上的失败矩阵原子 `reopen` 给 Writer。`delivered` 只能绑定文件名、内部 ID 与内容摘要一致、当前指纹一致、档位最低轴齐全且阻断项全部 `passed` 的 `check_id`，源码变化后旧凭据自动失效。
+
+确认原话必须保留精确空格和换行并单独计算 `quote_sha256`；防重复使用另一个规范化摘要，兼容旧记录。每次状态写入追加不递归的前后摘要、动作、时间和可用的租约 owner/role。状态历史、租约和内容寻址凭据用于减少漏步骤、误覆盖与状态漂移，不构成针对拥有本地写权限的恶意 Agent 的安全边界。
 
 已有旧协议项目可以继续读取原记录；不得因升级而覆盖或清空原文件。
 
@@ -244,7 +246,7 @@ Skills 遵循通用 Agent Skills 目录规范并作为一套安装。核心文�
 
 ## 12. 验证与交付
 
-`site-builder` 在正式实现后调用 `site-check`，对本轮范围执行适用的静态/构建、核心业务、视觉和再次打开检查；检查矩阵逐条映射已确认首版能力、交互合同的 `required / excluded`、`recommended` 的采用或偏离依据、`confirm` 的处理结果，以及各纵向切片的成功、失败恢复、中途退出和适用状态，缺失映射不得静默省略。视觉轴由 `site-check` 调用 `site-design` 只读审查，实际渲染代表性的核心页面和复杂操作表面，核对跨页面视觉继承、控件状态、动效节奏与减弱动效行为；原创设计不默认要求像素级复刻。Writer 与 Checker 严格串行：Writer 先停止自有体验稿和开发服务并交接冻结指纹，Checker 全程只读，只把矩阵凭据写到 `.site/checks/`。`site-builder` 修复范围内问题后必须重新交接并复验，旧 `check_id` 不得沿用。宿主支持独立 Agent 时优先隔离检查上下文，减少自行实现、自行判定的偏差；用户试用不能替代 Agent 能执行的验证。
+`site-builder` 在正式实现后调用 `site-check`，对本轮范围执行适用的静态/构建、核心业务、视觉和再次打开检查；检查矩阵必须声明档位与非空选择原因，每项标记检查轴。`full` 最低包含 `static_build`、`core_task`、`visual_desktop`、`visual_mobile`、`reopen` 五个阻断轴，`smoke` / `targeted` 至少包含受影响的阻断 `core_task`。矩阵逐条映射已确认首版能力、交互合同的 `required / excluded`、`recommended` 的采用或偏离依据、`confirm` 的处理结果，以及各纵向切片的成功、失败恢复、中途退出和适用状态，缺失映射不得静默省略。视觉轴由 `site-check` 调用 `site-design` 只读审查，实际渲染代表性的核心页面和复杂操作表面，核对跨页面视觉继承、控件状态、动效节奏与减弱动效行为；原创设计不默认要求像素级复刻。Writer 与 Checker 严格串行：Writer 先停止自有体验稿和开发服务并交接冻结指纹，Checker 全程只读，只把矩阵凭据写到 `.site/checks/`。内容寻址 `check_id` 用于发现 artifact 误改，不替代 Checker 对证据语义的判断。`site-builder` 修复范围内问题后必须引用失败矩阵取回 Writer、重新交接并复验，旧 `check_id` 不得沿用。宿主支持独立 Agent 时优先隔离检查上下文，减少自行实现、自行判定的偏差；用户试用不能替代 Agent 能执行的验证。
 
 不强制生成 `acceptance-guide.md`。交付消息用通俗语言说明：
 

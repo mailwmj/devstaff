@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "version": "0.12.0",
+  "version": "0.13.0",
   "name": "site-builder",
   "files": {
-    "SKILL.md": "b565d6026e846d0ff4112d2a758559e937c7620b5fe2deed975ae0e6c7ce3878",
+    "SKILL.md": "72f764744ac118b02b78562c4c4bf5ea176b924e5e41e2da85fa57b99c5d8522",
     "agents/openai.yaml": "4f55a439961d7ed582746bd6e7c1059f19c8b4375ecb7261aa1dbe62572528cd",
     "assets/templates/static/web/index.html": "0233c93b96a16cbc290fe1f313ef3da0dd6266d3cde23622d849f6ac64f9bb43",
     "assets/templates/static/web/style.css": "634154fb9f896e61d0183057026ffb100ae73256030fe6d1d8746b6fec6f9a38",
@@ -15,6 +15,6 @@
     "references/publish.md": "c1d44f4365f3de3e506c9105e8ddedcca426d0192fac19654e70f7bbf07e5474",
     "references/runtime.md": "46e36ee19e9f209280164e276c6b74582b81a4200c34b329b0cbf1d0caf866e2",
     "scripts/preview.py": "a01f5b2b15dab1747feae6f0eb3cb831d84e7c79624bdd29047ce8f4301bb300",
-    "scripts/site.py": "a3c6037d421bda0ce10d5988a8938532688825e9d4cccef0e97b3eee87cbbf11"
+    "scripts/site.py": "c5878ed2c3be066247c48223272129d5c77e1c78c04dec0dfe90c810ae959331"
   }
 }

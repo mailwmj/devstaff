@@ -42,6 +42,7 @@ python scripts/install.py /absolute/path/to/agent/skills
 ```
 
 更新整套时使用 `--replace`；脚本先在临时目录复制并校验四个 manifest，成功后才整体替换，拒绝只覆盖其中一个 Skill。
+正式用户仍按上表手动复制 Skill 并幂等追加指令文件；本项目不会自动写入用户的全局 Agent 配置。
 
 ## 关键约束
 
@@ -50,9 +51,10 @@ python scripts/install.py /absolute/path/to/agent/skills
 - 结构候选前先按任务形成轻量交互合同：`required / recommended / confirm / excluded` 约束对象生命周期、工作区、完整 Flow、本地化和范围；行业经验只能提出建议或待确认项，不能创造首版功能；
 - `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文，再按受众、任务、内容和素材条件匹配 2～3 个适合的风格供用户选择；候选必须在母题层不同而非只换配色，推荐要有依据但不能替用户确认；
 - 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
-- 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须带用户那句原话（`--quote`），同一句不能连过两道门禁；
+- 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须原样保留用户那句原话（`--quote`），规范化摘要只用于识别空白差异下的重复，同一句不能连过两道门禁；每次写状态都追加紧凑的前后摘要与可用的租约 owner；
 - **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
-- `site-check` 独立给出带 `check_id` 的矩阵凭据；阻断项必须有截图、结果文件或命令凭据等可核验证据，交付时重新核对哈希，手写矩阵或改动过的证据都会被拒绝；
+- `site-check` 独立给出内容寻址的 `check_id` 矩阵凭据；每个档位必须说明 `profile_reason`，`full` 必须覆盖静态/构建、核心任务、桌面视觉、手机视觉与再次打开五个阻断轴，`smoke` / `targeted` 也不得省略受影响核心任务；阻断项必须有截图、结果文件或命令凭据等可核验证据，交付时重新核对摘要与证据哈希；
+- 内容摘要、租约和状态历史用于防漏步骤、误覆盖和状态漂移，属于**可发现误改的工作流记录**，不是防御拥有本地写权限的恶意 Agent 的安全边界；语义、产品、视觉和“证据是否真的支持结论”仍由模型、Checker 与用户判断；
 - 简单修改和 Bug 按影响跳过无关阶段；
 - 系统级安装、费用、账号、密钥、真实敏感数据和公开部署按宿主能力分档拦截，不由状态机记录。
 
@@ -65,6 +67,7 @@ python scripts/install.py /absolute/path/to/agent/skills
 | 用户原话留存 | 始终可用 | 始终可用（`--quote` 必填） |
 | 标注升级为 `quote-matched` | 会话记录可读且能定位到用户消息 | 降级为 `agent-reported`，**不阻塞**；未知格式只降级 |
 | 用户同意的验证 | **任何宿主都不提供** | 靠交付时回放原话 + 用户本人核对 |
+| artifact 误改发现 | 内容寻址 `check_id`、文件名/内部 ID/摘要复核 | 同样可用；不防拥有写权限者重新伪造整套记录 |
 | 不可逆动作拦截 | T1 审批提示 / T2 沙箱边界 | T3 停下来问并等回答，且如实标注 |
 
 **没有任何一档能证明用户同意。** 各道确认门禁在所有宿主上都可执行，因为它们的输入是 Agent 抄录的原话，而不是宿主内部文件；因此不存在"环境不支持导致流程停摆"的分支。
@@ -79,6 +82,6 @@ python tests/gate_flow.py
 python site-design/scripts/design.py validate
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：无依据跃迁、空的原话、`--anchor` 读不懂时的降级、按内容比对的原话复用（结构那句用不成视觉那句）、声明了多结构却想直接记视觉确认时的拒绝、只有结构没有风格时的拦截、交付前重新核对四道确认门禁、空项目不能借 reopen 拿到 building、以及 block/重新授权绕过阶段守卫、并发租约、Writer 未退出的交接、无证据或证据被改动的阻断项、阻断失败与源码变化后的交付，以及交付回放每条原话。**它不测、也无法测"用户是否真的同意"**——那条只能由交付回放交给用户本人判断。`design.py validate` 检查 `tokens.json` 每个配方与色板的列出色对、排版下限（字号、正文行高、中文标题字距、字体许可），并在 `gallery.html` 内嵌目录与配置漂移时失败；改过 `tokens.json` 后用 `design.py sync-gallery` 刷新预览。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
+`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 检查 `tokens.json` 每个配方与色板的列出色对、排版下限（字号、正文行高、中文标题字距、字体许可），并在 `gallery.html` 内嵌目录与配置漂移时失败；改过 `tokens.json` 后用 `design.py sync-gallery` 刷新预览。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
 
 **这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/design-quality.md`](site-design/references/design-quality.md) 的四条判据核对。

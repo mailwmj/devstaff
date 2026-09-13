@@ -24,11 +24,11 @@
 
 | 档位 | 适用情况 | 最低范围 |
 | --- | --- | --- |
-| `smoke` | 文案、颜色、间距、静态布局或不影响行为的局部修改 | 受影响页面实际打开、静态/构建检查、一个代表性视口；若入口或启动方式被改动，增加一次再次打开 |
-| `targeted` | 单个交互、计算、导入导出局部修复或明确 Bug | `smoke` + 受影响的核心操作、相关错误/边界状态，以及涉及持久化时的再次打开 |
+| `smoke` | 文案、颜色、间距、静态布局或不影响行为的局部修改 | 受影响页面实际打开、静态/构建检查、一个代表性视口，以及至少一个受影响 `core_task`；若入口或启动方式被改动，增加一次再次打开 |
+| `targeted` | 单个交互、计算、导入导出局部修复或明确 Bug | `smoke` + 至少一个受影响 `core_task`、相关错误/边界状态，以及涉及持久化时的再次打开 |
 | `full` | 新建、主流程或导航变化、结构重做、权限、隐私、共享数据、持久化、导入导出或高风险事项 | 静态/构建、核心任务和反例、视觉、适用响应式视口、再次打开，以及隐私/越权/错误输入等高价值反例 |
 
-档位只能缩小不受影响的检查，不能跳过本轮受影响的核心任务。没有浏览器、运行环境或必要账号时，缺口必须记录为 `not_run`，不能通过降低档位掩盖。
+档位只能缩小不受影响的检查，不能跳过本轮受影响的核心任务。`profile_reason` 在所有档位都必填。没有浏览器、运行环境或必要账号时，缺口必须记录为 `not_run`，不能通过降低档位掩盖。
 
 矩阵输入可写成：
 
@@ -42,7 +42,9 @@
 
 长时间验证期间只报告阶段变化：开始验证、进入新检查轴、发现阻断问题、开始修复复验和最终结果。不要把每条命令都当成用户需要的进度消息。
 
-## 1. 四个检查轴
+## 1. 四类检查与五个机器轴
+
+矩阵每项必须有非空 `axis`。`full` 至少包含五个阻断轴：`static_build`、`core_task`、`visual_desktop`、`visual_mobile`、`reopen`；只有这些轴都存在且各自阻断项通过，矩阵才可能用于交付。`smoke` 和 `targeted` 至少包含阻断 `core_task`，其他轴由影响范围决定。模型负责把实际场景拆到正确轴并判断是否充分，工具只校验最低覆盖和结果结构。
 
 ### 静态与构建
 
@@ -104,25 +106,31 @@ Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 
 python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /absolute/matrix.json --profile targeted --save-evidence
 ```
 
-`matrix.json` 的每项包含 `id`、`title`、`status`（`passed | failed | not_run | not_applicable`）、`blocking`（布尔）和 `evidence`。证据不是一句描述，而是说明它从哪里来：
+`matrix.json` 顶层必须包含 `profile` 与非空 `profile_reason`；每项包含 `id`、`axis`、`title`、`status`（`passed | failed | not_run | not_applicable`）、`blocking`（布尔）和 `evidence`。证据不是一句描述，而是说明它从哪里来：
 
 ```json
-{"items": [
-  {"id": "core-task", "title": "了解课程并复制微信号", "status": "passed", "blocking": true,
+{"profile": "full", "profile_reason": "新建站正式发布前完整验收", "items": [
+  {"id": "core-task", "axis": "core_task", "title": "了解课程并复制微信号", "status": "passed", "blocking": true,
    "evidence": {"kind": "artifact", "summary": "桌面 1440x1000 实际操作并复制成功",
                 "paths": ["evidence/desktop-1440.png", "evidence/clipboard-result.json"]}},
-  {"id": "build", "title": "构建与静态引用", "status": "passed", "blocking": true,
+  {"id": "build", "axis": "static_build", "title": "构建与静态引用", "status": "passed", "blocking": true,
    "evidence": {"kind": "command", "summary": "check.py run 退出 0", "commands": ["<command check_id>"]}},
-  {"id": "copy-feedback", "title": "复制按钮的失败恢复", "status": "passed", "blocking": true,
+  {"id": "copy-feedback", "axis": "core_task", "title": "复制按钮的失败恢复", "status": "passed", "blocking": true,
    "evidence": {"kind": "artifact", "summary": "剪贴板被拒绝时的手动恢复截图",
                 "paths": ["evidence/clipboard-denied.png"]}},
-  {"id": "scope-no-payment", "title": "首版明确排除在线支付", "status": "passed", "blocking": true,
+  {"id": "scope-no-payment", "axis": "core_task", "title": "首版明确排除在线支付", "status": "passed", "blocking": true,
    "evidence": {"kind": "artifact", "summary": "桌面与手机的导航、课程页和咨询流程均未出现支付入口或支付承诺",
                 "paths": ["evidence/scope-desktop.png", "evidence/scope-mobile.png"]}},
-  {"id": "visual-inheritance", "title": "核心页与咨询弹窗继承选定视觉", "status": "passed", "blocking": true,
+  {"id": "visual-desktop", "axis": "visual_desktop", "title": "桌面核心页继承选定视觉", "status": "passed", "blocking": true,
    "evidence": {"kind": "artifact", "summary": "1440px 核心页和弹窗的排版、间距、控件状态与动效节奏实测一致，减弱动效模式保留结果反馈",
                 "paths": ["evidence/core-page.png", "evidence/contact-dialog-states.png", "evidence/reduced-motion.json"]}},
-  {"id": "copy-tone", "title": "复制成功提示的措辞", "status": "passed", "blocking": false,
+  {"id": "visual-mobile", "axis": "visual_mobile", "title": "手机核心页布局与状态", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "390x844 实际渲染与核心操作状态",
+                "paths": ["evidence/mobile-core.png"]}},
+  {"id": "reopen", "axis": "reopen", "title": "按使用说明再次打开", "status": "passed", "blocking": true,
+   "evidence": {"kind": "artifact", "summary": "冷启动后核心任务和保存数据仍可用",
+                "paths": ["evidence/reopen-result.json"]}},
+  {"id": "copy-tone", "axis": "core_task", "title": "复制成功提示的措辞", "status": "passed", "blocking": false,
    "evidence": {"kind": "declared", "summary": "我认为提示语够清楚，但没有单独取证"}}
 ]}
 ```
@@ -140,9 +148,9 @@ python3 /absolute/site-check/scripts/check.py matrix /absolute/PROJECT --input /
 
 `--save-evidence` 会把引用到的证据复制到 `.site/checks/evidence/`，归档副本才是交付时核对的依据：复验时重新渲染的截图只覆盖工作文件，不会让已提交的证据失效；但归档副本或未归档的证据文件被改写，交付就会失败。
 
-工具在检查前后重算源码指纹：指纹变化、任一阻断项不是 `passed`、或阻断项的 `artifact`/`command` 证据验证不通过时整体 `status=failed`，并列出 `blocking_not_passed` 与 `evidence_failures`。成功时返回 `check_id`，凭据落在 `.site/checks/<check_id>.json`。报告回执必须带上这个 `check_id`；`site-builder` 只能用它换取 `delivered`，源码一变凭据自动失效。
+工具在检查前后重算源码指纹：指纹变化、最低轴缺失、任一阻断项不是 `passed`、或阻断项的 `artifact`/`command` 证据验证不通过时，矩阵会拒绝生成或整体 `status=failed`。成功时返回由规范化 JSON 内容计算的 SHA-256 `check_id`，凭据落在 `.site/checks/<check_id>.json`；读取时复核文件名、内部 ID、内容摘要及派生路径。报告回执必须带上这个 `check_id`；`site-builder` 只能用它换取 `delivered`，源码一变凭据自动失效。
 
-工具能验证证据文件存在、位于项目内、未被改写、且命令证据确实退出 0，但它**无法验证一张截图是否真的证明了所写结论**。手写一份矩阵 JSON 冒充凭据会在交付时被拒绝；把无关文件当作证据仍然要靠检查者的判断，所以"这一条证据真的支持这个结论"依旧是本 Skill 的责任。
+工具能验证证据文件存在、位于项目内、未被改写、且命令证据确实退出 0，但它**无法验证一张截图是否真的证明了所写结论**。内容寻址能发现事故式手改和引用漂移，不是签名：拥有项目写权限的 Agent 可以重算 JSON 与 `check_id`，因此不能宣称防伪或防恶意写入。把无关文件当作证据仍然要靠独立 Checker 的判断，所以"这一条证据真的支持这个结论"依旧是本 Skill 的责任。
 
 ## 3. 命令记录
 
