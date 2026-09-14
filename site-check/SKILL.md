@@ -9,8 +9,8 @@ description: Use when independently checking a website or web app for build, cor
 ## 执行
 
 1. **锁定对象。** 读取正式入口、源码、brief/计划、`.site/design/packet.json`、分发合同和 prototype lineage。没有 `.site` 也可检查第三方项目，但不初始化或迁移它。
-2. **建立矩阵。** 读 [验证规则](references/verification.md)，按后果与影响面选择 `smoke | targeted | full`。每项写成“前提 → 操作 → 可观察结果”，映射 DesignPacket 的 `required / excluded`、核心任务、失败恢复、状态、视口和 reopen。缺证据写 `not_run`。
-3. **静态与构建。** 沿用项目原生命令；普通静态页可用 `scripts/check.py static`。命令成功只证明该命令。
+2. **建立矩阵。** 读 [验证规则](references/verification.md)，按后果与影响面选择 `smoke | targeted | full`。每项写成“前提 → 操作 → 可观察结果”，映射 DesignPacket 的 `required / excluded`、核心任务、失败恢复、状态、视口和 reopen；多切片时将历史交付切片作为回归不变量一同复验。缺证据写 `not_run`。
+3. **静态与构建。** 沿用项目原生命令；普通静态页可用 `scripts/check.py static`。审查是否存在境外不可达外链 CDN、是否包含社交分享元标签。命令成功只证明该命令。
 4. **真实任务与渲染。** 在正式运行入口执行核心任务和高价值反例。调用 `site-design` 只读审查，并运行：
 
    ```sh

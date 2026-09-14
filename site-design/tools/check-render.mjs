@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
@@ -77,24 +77,41 @@ function cliCommand() {
   const bundled = join(homedir(), '.codex', 'skills', 'playwright', 'scripts', 'playwright_cli.sh');
   if (configured && existsSync(configured)) return { command: configured, prefix: [] };
   if (existsSync(bundled)) return { command: bundled, prefix: [] };
-  return { command: 'npx', prefix: ['--yes', '--package', '@playwright/cli', 'playwright-cli'] };
+  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return { command, prefix: ['--yes', '--package', '@playwright/cli', 'playwright-cli'] };
 }
 
 async function runCli(session, args, cwd) {
   const cli = cliCommand();
-  const { stdout, stderr } = await execFileAsync(
-    cli.command,
-    [...cli.prefix, `-s=${session}`, '--json', ...args],
-    { cwd, maxBuffer: 16 * 1024 * 1024, timeout: 120_000 },
-  );
-  let output;
-  try {
-    output = JSON.parse(stdout);
-  } catch {
-    throw new Error(`Browser command returned invalid JSON: ${stderr || stdout}`);
+  const isWin = process.platform === 'win32' && (cli.command === 'npx' || cli.command === 'npx.cmd');
+  let tempScriptFile = null;
+  let finalArgs = args;
+  if (args[0] === 'run-code' && typeof args[1] === 'string') {
+    const tmpDir = join(homedir(), '.codex', 'tmp');
+    mkdirSync(tmpDir, { recursive: true });
+    tempScriptFile = join(tmpDir, `pw-code-${session}-${Date.now()}-${Math.random().toString(36).slice(2)}.js`);
+    writeFileSync(tempScriptFile, args[1], 'utf8');
+    finalArgs = ['run-code', '--filename', tempScriptFile];
   }
-  if (output.isError || output.error) throw new Error(output.error || stderr || 'Browser command failed');
-  return output;
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      cli.command,
+      [...cli.prefix, `-s=${session}`, '--json', ...finalArgs],
+      { cwd, maxBuffer: 16 * 1024 * 1024, timeout: 120_000, shell: isWin },
+    );
+    let output;
+    try {
+      output = JSON.parse(stdout);
+    } catch {
+      throw new Error(`Browser command returned invalid JSON: ${stderr || stdout}`);
+    }
+    if (output.isError || output.error) throw new Error(output.error || stderr || 'Browser command failed');
+    return output;
+  } finally {
+    if (tempScriptFile && existsSync(tempScriptFile)) {
+      try { unlinkSync(tempScriptFile); } catch {}
+    }
+  }
 }
 
 const DIAGNOSTICS = String.raw`async page => {

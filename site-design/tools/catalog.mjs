@@ -127,10 +127,13 @@ export function analyze(filePath, kind) {
 
   const zhMatch = text.match(/^#\s+(.+)$/gm)?.slice(1).find(l => /[\u4e00-\u9fff]/.test(l));
 
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const assetsIndex = normalizedPath.indexOf('assets/');
+
   return {
-    id: filePath.split('/').pop().replace(/-DESIGN\.md$/, ''),
+    id: filePath.split(/[/\\]/).pop().replace(/-DESIGN\.md$/, ''),
     kind,
-    file: filePath.slice(filePath.indexOf('assets/')),
+    file: assetsIndex !== -1 ? normalizedPath.slice(assetsIndex) : normalizedPath,
     name: (text.match(/^#\s*Design System:\s*(.+)$/m) || [, 'Unknown'])[1].trim(),
     name_zh: zhMatch ? zhMatch.replace(/^#\s+/, '').trim() : null,
     surface,

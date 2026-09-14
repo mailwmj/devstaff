@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 
 export function parseDesignMd(filePath) {
   const content = readFileSync(filePath, 'utf-8');
-  const type = filePath.includes('/masters/') ? 'master' : 'style';
+  const isMaster = filePath.includes('/masters/') || filePath.includes('\\masters\\') || /(?:^|[/\\])masters[/\\]/.test(filePath);
+  const type = isMaster ? 'master' : 'style';
   const name = extractName(content);
   const isDark = detectDarkTheme(content);
 
