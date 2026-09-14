@@ -32,6 +32,7 @@ li { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bott
 li span { flex: 1; overflow-wrap: anywhere; }
 li time { font-size: 12px; color: var(--muted); }
 li button { flex-shrink: 0; }
+li .row-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 footer, p { color: var(--muted); }
 footer { font-size: 13px; }
 #import-review { margin-top: 18px; padding: 18px; border: 1px solid var(--line); background: #f4f6f7; }
@@ -40,4 +41,6 @@ footer { font-size: 13px; }
   .entry-row, .actions { align-items: stretch; flex-direction: column; }
   li { flex-wrap: wrap; }
   li span { min-width: 65%; }
+  li .row-actions { width: 100%; }
+  li .row-actions button { flex: 1; }
 }

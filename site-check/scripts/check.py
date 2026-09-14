@@ -32,29 +32,48 @@ Every matrix needs a non-empty ``profile_reason`` and an ``axis`` on each item.
 Full verification requires blocking static/build, core-task, desktop visual,
 mobile visual and reopening axes; narrower profiles still require a blocking
 affected core task.
+
+The profile is not a free choice.  Each matrix declares ``consequence`` (would a
+wrong result hurt the user: a missed train, lost money, leaked data) and
+``surface`` (how far the change reaches), and the tool derives the only profile
+that round may use.  ``full`` is reserved for high-consequence changes that also
+reach wide, so cosmetic polish can never buy a full re-verification.
+
+Archived evidence is budgeted rather than merely allowed: at most
+``EVIDENCE_BUDGET_PER_ITEM`` files per item and ``EVIDENCE_BUDGET_TOTAL`` for the
+whole matrix, because a folder of screenshots is not a conclusion.
+
+Small fixes may re-verify only the affected items and carry the rest with
+``carried_from`` (a prior ``check_id``).  Narrow profiles only; the tool proves
+the link and the disclosure, never that the change left the item untouched.
 """
 import argparse
 import hashlib
-from html.parser import HTMLParser
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
+from html.parser import HTMLParser
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
 CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
 CHECK_PROFILES = ('smoke', 'targeted', 'full')
+CHECK_CONSEQUENCES = ('high', 'low')
+CHECK_SURFACES = ('narrow', 'wide')
 FULL_REQUIRED_AXES = ('static_build', 'core_task', 'visual_desktop', 'visual_mobile', 'reopen')
 EVIDENCE_KINDS = ('artifact', 'command', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
 VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command')
 PATH_KEYS = ('paths', 'artifacts', 'files', 'screenshots')
+CARRY_PROFILES = ('smoke', 'targeted')
+EVIDENCE_BUDGET_PER_ITEM = 3
+EVIDENCE_BUDGET_TOTAL = 24
 
 
 def now():
@@ -209,8 +228,14 @@ def load_check_artifact(root, check_id):
     return artifact
 
 
-def validate_evidence(root, item, identifier, current, cache):
-    """Return (evidence, artifacts, problem) for one matrix item."""
+def validate_evidence(root, item, identifier, current, cache, carried=False):
+    """Return (evidence, artifacts, problem) for one matrix item.
+
+    ``carried`` marks an item whose conclusion comes from an earlier round.  Its
+    archived evidence must still exist and be unchanged, but a stored command
+    result is allowed to belong to the earlier source, because the whole point
+    of carrying is that the source has moved on.
+    """
     raw = item.get('evidence')
     if isinstance(raw, dict):
         kind = str(raw.get('kind') or DEFAULT_EVIDENCE_KIND).strip().lower()
@@ -247,13 +272,14 @@ def validate_evidence(root, item, identifier, current, cache):
         if artifact.get('exit_code') != 0:
             problems.append(f'command evidence {check_id!r} exited {artifact.get("exit_code")!r}')
             continue
-        if artifact.get('fingerprint') != current or artifact.get('source_changed'):
+        if not carried and (artifact.get('fingerprint') != current or artifact.get('source_changed')):
             problems.append(f'command evidence {check_id!r} was recorded against different source')
             continue
         entries.append({
             'command_check_id': check_id,
             'command': artifact.get('command'),
             'exit_code': artifact.get('exit_code'),
+            'recorded_fingerprint': artifact.get('fingerprint'),
         })
     if kind == 'artifact' and not any('sha256' in row for row in entries):
         problems.append('artifact evidence names no readable file')
@@ -268,14 +294,104 @@ def validate_evidence(root, item, identifier, current, cache):
     return evidence, entries, problems
 
 
+def derive_profile(consequence, surface):
+    """Return the only check profile the declared risk allows.
+
+    ``consequence`` asks whether a wrong result hurts the user (missed train,
+    lost money, leaked data); ``surface`` asks how far the change reaches.  The
+    mapping is deliberately strict: ``full`` is reserved for high-consequence
+    changes that also reach wide, so low-risk polish cannot buy a full
+    re-verification and high-consequence single facts cannot hide behind smoke.
+    """
+    if consequence == 'high':
+        return 'full' if surface == 'wide' else 'targeted'
+    return 'smoke'
+
+
+def carried_evidence_paths(item):
+    raw = item.get('evidence')
+    if not isinstance(raw, dict):
+        return []
+    return [str(value) for key in PATH_KEYS for value in (raw.get(key) or [])]
+
+
+def normalize_verify_command(raw):
+    """Accept a shell-ish command string or argv list; return a list or None."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        value = raw.strip()
+        return [value] if value else None
+    if isinstance(raw, list):
+        parts = [str(part) for part in raw if str(part).strip()]
+        return parts or None
+    raise ValueError('verify_command must be a string or a list of strings')
+
+
+def validate_carry(root, item, identifier):
+    """Validate a ``carried_from`` reference to an earlier matrix item.
+
+    Carrying is the explicit, disclosed form of incremental re-verification.
+    The tool proves the link: the prior matrix exists and contains this id as a
+    passed item with the same blocking role.  It cannot prove that the change
+    since then left the item untouched, so that relevance judgement stays with
+    the checker and is disclosed in the matrix and the delivery receipt.
+    """
+    prior_id = str(item.get('carried_from') or '').strip()
+    if not prior_id:
+        return None
+    prior = load_check_artifact(root, prior_id)
+    if prior.get('kind') != 'matrix':
+        raise ValueError(f'Matrix item {identifier!r} carried_from {prior_id!r} is not a matrix artifact')
+    matches = [row for row in prior.get('items') or [] if row.get('id') == identifier]
+    if not matches:
+        raise ValueError(f'Matrix item {identifier!r} does not exist in carried_from {prior_id!r}')
+    source = matches[0]
+    if source.get('status') != 'passed':
+        raise ValueError(
+            f'Matrix item {identifier!r} carried_from {prior_id!r} was {source.get("status")!r}, not passed'
+        )
+    if bool(source.get('blocking')) != bool(item.get('blocking')):
+        raise ValueError(
+            f'Matrix item {identifier!r} changes its blocking role relative to carried_from {prior_id!r}'
+        )
+    return {
+        'check_id': prior_id,
+        'fingerprint': prior.get('fingerprint'),
+        'matrix_status': prior.get('status'),
+        'status': source.get('status'),
+        'blocking': bool(source.get('blocking')),
+        'limit': 'The tool verified this link only; that the change left this item unaffected is the checker judgement',
+    }
+
+
 def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
-    payload_profile = payload.get('profile') if isinstance(payload, dict) else None
-    profile = profile or payload_profile or 'full'
-    if profile not in CHECK_PROFILES:
-        raise ValueError(f'Check profile must be one of {CHECK_PROFILES}, got {profile!r}')
-    profile_reason = ''
-    if isinstance(payload, dict):
-        profile_reason = str(payload.get('profile_reason') or '').strip()
+    head = payload if isinstance(payload, dict) else {}
+    consequence = str(head.get('consequence') or '').strip().lower()
+    surface = str(head.get('surface') or '').strip().lower()
+    if consequence not in CHECK_CONSEQUENCES:
+        raise ValueError(
+            f'Check matrix needs "consequence" (one of {CHECK_CONSEQUENCES}): would a wrong result hurt the '
+            'user (missed train, lost money, leaked data) or only look wrong'
+        )
+    if surface not in CHECK_SURFACES:
+        raise ValueError(
+            f'Check matrix needs "surface" (one of {CHECK_SURFACES}): how far does this round\'s change reach'
+        )
+    derived = derive_profile(consequence, surface)
+    declared = profile or head.get('profile')
+    if not declared:
+        raise ValueError('Check matrix needs "profile"; it must equal the profile derived from consequence and surface')
+    declared = str(declared).strip().lower()
+    if declared not in CHECK_PROFILES:
+        raise ValueError(f'Check profile must be one of {CHECK_PROFILES}, got {declared!r}')
+    if declared != derived:
+        raise ValueError(
+            f'consequence={consequence!r} + surface={surface!r} allows only profile {derived!r}, got {declared!r}. '
+            'Raise the declared risk if the higher profile is truly needed; do not spend a wider check than the risk'
+        )
+    profile = derived
+    profile_reason = str(head.get('profile_reason') or '').strip()
     if not profile_reason:
         raise ValueError('Check matrix needs a non-empty profile_reason explaining why this scope was selected')
     items = payload.get('items') if isinstance(payload, dict) else payload
@@ -286,6 +402,8 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
     normalized = []
     artifacts: dict[str, dict] = {}
     failures = []
+    carried_ids = []
+    archived_paths: set[str] = set()
     evidence_dir = root / '.site' / CHECK_ARTIFACT_DIR / 'evidence'
     for index, item in enumerate(items, 1):
         if not isinstance(item, dict):
@@ -306,8 +424,16 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         if not isinstance(axis, str) or not axis.strip():
             raise ValueError(f'Matrix item {identifier!r} needs a non-empty string "axis"')
         axis = axis.strip()
+        carried = validate_carry(root, item, identifier)
+        if carried and profile not in CARRY_PROFILES:
+            raise ValueError(
+                f'Matrix item {identifier!r} uses carried_from under profile {profile!r}. A full check is full: '
+                'run every item again instead of carrying earlier results'
+            )
         try:
-            evidence, entries, problems = validate_evidence(root, item, identifier, before, {})
+            evidence, entries, problems = validate_evidence(
+                root, item, identifier, before, {}, carried=bool(carried)
+            )
         except ValueError as error:
             failures.append({'id': identifier, 'reason': f'unverifiable evidence: {error}'})
             evidence, entries, problems = {'kind': 'declared', 'summary': '', 'items': [], 'verified': False}, [], []
@@ -318,6 +444,13 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
                 'id': identifier,
                 'reason': 'blocking item is passed without verified evidence',
             })
+        paths = carried_evidence_paths(item)
+        if len(paths) > EVIDENCE_BUDGET_PER_ITEM:
+            raise ValueError(
+                f'Matrix item {identifier!r} references {len(paths)} evidence files; the budget is '
+                f'{EVIDENCE_BUDGET_PER_ITEM} per item. Keep the ones that changed a verdict and drop the rest'
+            )
+        archived_paths.update(paths)
         for row in entries:
             if 'sha256' in row:
                 artifacts[row['path']] = row
@@ -327,14 +460,32 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
             'title': str(item.get('title') or identifier),
             'status': status,
             'blocking': item['blocking'],
+            'carried_from': carried,
+            'verify_command': normalize_verify_command(item.get('verify_command')),
             'evidence': evidence,
         })
+        if carried:
+            carried_ids.append({'id': identifier, 'axis': axis, 'check_id': carried['check_id']})
+    if len(archived_paths) > EVIDENCE_BUDGET_TOTAL:
+        raise ValueError(
+            f'This matrix references {len(archived_paths)} evidence files; the budget is {EVIDENCE_BUDGET_TOTAL} '
+            'for the whole round. A folder of screenshots is not a conclusion: keep one that changes each verdict'
+        )
     required_axes = FULL_REQUIRED_AXES if profile == 'full' else ('core_task',)
     covered_axes = {item['axis'] for item in normalized if item['blocking']}
     missing_axes = [axis for axis in required_axes if axis not in covered_axes]
     if missing_axes:
         raise ValueError(
             f'Profile {profile!r} is missing required blocking axes: {", ".join(missing_axes)}'
+        )
+    fresh_axes = {
+        item['axis'] for item in normalized if item['blocking'] and not item.get('carried_from')
+    }
+    unfresh_axes = [axis for axis in required_axes if axis not in fresh_axes]
+    if unfresh_axes and carried_ids:
+        raise ValueError(
+            'Every required axis needs at least one item checked again this round; '
+            f'carried results alone cover: {", ".join(unfresh_axes)}'
         )
     if save_evidence:
         for row in artifacts.values():
@@ -361,11 +512,16 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         'label': label or '',
         'profile': profile,
         'profile_reason': profile_reason,
+        'consequence': consequence,
+        'surface': surface,
+        'derived_profile': derived,
         'input_fingerprint': before,
         'fingerprint': after,
         'source_changed': before != after,
         'items': normalized,
         'artifacts': artifacts,
+        'carried_items': carried_ids,
+        'fresh_item_count': sum(1 for item in normalized if not item.get('carried_from')),
         'evidence_failures': failures,
         'counts': counts,
         'blocking_not_passed': blocking_not_passed,
@@ -374,9 +530,114 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
             'The matrix verifies that declared evidence exists and is unchanged; it does not execute browser, visual or reopening checks by itself',
             'Only artifact and command evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
             'Content-addressed artifacts expose accidental edits but are not signed or hostile-writer-proof',
+            'A carried item proves only that an earlier round passed it; that this change left it unaffected is the checker judgement, and must be told to the user',
         ],
-        'follow_up': ['Fix blocking failures in site-builder', 'Re-run the whole matrix against a newly frozen fingerprint'],
+        'follow_up': [
+            'Fix blocking failures in site-builder',
+            'Re-check affected items and carry the rest, or run the whole matrix again against a newly frozen fingerprint',
+        ],
     }
+
+
+def reverify_check(root, prior_id, label=None, save_evidence=False, timeout=120):
+    """Re-run a passed matrix cheaply: execute its assertions instead of re-deriving them.
+
+    Exploration is expensive and worth it once.  Re-verification should not be,
+    because nothing new is being discovered - the same conclusions just have to
+    be confirmed against new source.  That is only cheap if the conclusions were
+    recorded as *executable* assertions.
+
+    An item carrying ``verify_command`` is re-run for real and counts as freshly
+    checked.  An item without one cannot be re-derived automatically, so it is
+    carried from the earlier round and disclosed as such.  ``full`` refuses:
+    a full check is an exploration, not a replay.
+    """
+    prior = load_check_artifact(root, prior_id)
+    if prior.get('kind') != 'matrix':
+        raise ValueError(f'reverify needs a matrix artifact, {prior_id!r} is a {prior.get("kind")!r}')
+    if prior.get('status') != 'passed':
+        raise ValueError(f'reverify needs a passed matrix; {prior_id!r} is {prior.get("status")!r}')
+    profile = prior.get('profile')
+    if profile == 'full':
+        raise ValueError(
+            'A full check is an exploration, not a replay: re-run it as a full matrix instead of reverify. '
+            'Reverify is for smoke and targeted rounds where most items are known-good'
+        )
+    consequence, surface = prior.get('consequence'), prior.get('surface')
+    if not consequence or not surface:
+        raise ValueError(
+            f'prior matrix {prior_id!r} predates the consequence/surface rule, so its profile cannot be re-derived. '
+            'Record a new matrix that declares both fields, then reverify that'
+        )
+
+    items, rerun, carried = [], [], []
+    for row in prior.get('items') or []:
+        identifier = row.get('id')
+        command = normalize_verify_command(row.get('verify_command'))
+        entry = {
+            'id': identifier,
+            'axis': row.get('axis'),
+            'title': row.get('title'),
+            'blocking': bool(row.get('blocking')),
+        }
+        if command:
+            entry['verify_command'] = command
+            result = finalize(root, run_check(root, command, timeout))
+            entry['evidence'] = {
+                'kind': 'command',
+                'summary': f'复验重跑：{" ".join(command)}',
+                'commands': [result['check_id']],
+            }
+            entry['status'] = 'passed' if result.get('status') == 'passed' else 'failed'
+            if entry['status'] == 'failed':
+                tail = (result.get('stderr') or result.get('stdout') or '').strip().splitlines()[-3:]
+                entry['evidence']['summary'] += '；失败输出：' + ' / '.join(tail)
+            rerun.append(identifier)
+        else:
+            evidence = row.get('evidence') if isinstance(row.get('evidence'), dict) else {}
+            paths = [
+                str(item.get('saved_as') or item.get('path'))
+                for item in (evidence.get('items') or [])
+                if isinstance(item, dict) and (item.get('saved_as') or item.get('path'))
+            ]
+            if evidence.get('kind') in VERIFIABLE_EVIDENCE_KINDS and row.get('status') == 'passed':
+                entry['carried_from'] = prior_id
+                entry['evidence'] = {
+                    'kind': evidence.get('kind'),
+                    'summary': f'沿用上一轮结论（{prior_id[:12]}），本轮未重新检查：{evidence.get("summary", "")}'.strip(),
+                    'commands': [
+                        item.get('command_check_id')
+                        for item in (evidence.get('items') or [])
+                        if isinstance(item, dict) and item.get('command_check_id')
+                    ],
+                    'paths': paths,
+                }
+                entry['status'] = 'passed'
+                carried.append(identifier)
+            else:
+                # Non-passing, non-blocking items (e.g. not_run) cannot be carried;
+                # restate them so the new matrix still discloses the same gap.
+                entry['status'] = row.get('status')
+                entry['evidence'] = {
+                    'kind': evidence.get('kind') or DEFAULT_EVIDENCE_KIND,
+                    'summary': f'沿用上一轮披露：{evidence.get("summary", "")}'.strip(),
+                }
+        items.append(entry)
+
+    payload = {
+        'consequence': consequence,
+        'surface': surface,
+        'profile': profile,
+        'profile_reason': (
+            f'对 {prior_id[:12]} 的增量复验：{len(rerun)} 项重跑可执行断言，'
+            f'{len(carried)} 项沿用上一轮结论且已在矩阵中标明。'
+            + (prior.get('profile_reason') or '')
+        ),
+        'items': items,
+    }
+    output = matrix_check(root, payload, label or f'reverify {prior_id[:12]}', save_evidence)
+    output['reverify_of'] = prior_id
+    return output
 
 
 def css_urls(text):
@@ -583,9 +844,15 @@ def main():
     matrix.add_argument('--input', required=True, help='JSON file with the checked items and their evidence')
     matrix.add_argument('--label')
     matrix.add_argument('--profile', choices=CHECK_PROFILES,
-                        help='scope of this verification: smoke, targeted, or full (default: full)')
+                        help='must equal the profile derived from consequence x surface; a wider profile is refused')
     matrix.add_argument('--save-evidence', action='store_true',
                         help='copy referenced evidence into .site/checks/evidence so re-runs cannot overwrite it')
+    reverify = commands.add_parser('reverify', help='re-run a passed matrix by executing its verify_command assertions')
+    reverify.add_argument('root', type=Path)
+    reverify.add_argument('prior', help='check_id of the passed matrix to re-verify')
+    reverify.add_argument('--label')
+    reverify.add_argument('--timeout', type=int, default=120, help='per-assertion timeout in seconds')
+    reverify.add_argument('--save-evidence', action='store_true')
     args = parser.parse_args()
 
     try:
@@ -596,6 +863,8 @@ def main():
             output = static_check(root, args.offline, args.web_root)
         elif args.action == 'run':
             output = run_check(root, args.command, args.timeout)
+        elif args.action == 'reverify':
+            output = reverify_check(root, args.prior, args.label, args.save_evidence, args.timeout)
         else:
             payload = json.loads(Path(args.input).expanduser().read_text(encoding='utf-8'))
             output = matrix_check(root, payload, args.label, args.save_evidence, args.profile)

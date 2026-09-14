@@ -1,87 +1,77 @@
 # 渐进式建站 Skills
 
-一套面向非技术中文用户、作为整体安装和协作运行的 Coding Agent Skills。用户只需用自然语言描述想法、参考、现有项目或修改目标，不需要记住 Skill 名称和开发阶段。
+一套面向非技术中文用户的 Coding Agent 建站能力。用户只描述目标、参考、现有项目和反馈；四个 Skill 在内部完成首版收敛、设计、正式开发、真实渲染验证和交付。
 
-## 协作结构
-
-```text
-site-builder（默认入口、全部正式修改和实施）
-├── site-brief（调查、首版收敛及协作记录）
-├── site-design（视觉/流程体验稿与只读视觉审查）
-│   └── site-brief（补齐背景、记录确认结果）
-└── site-check（静态、业务、视觉与再次打开验证）
-    └── site-design（只读视觉审查，不重新访谈）
-```
-
-四个 Skill 应一起安装。`site-builder` 在完整建设、修改和修复请求中自动协调其余 Skill；用户明确只要需求梳理、体验稿或验收时，可由 Agent 直接选择对应 Skill。`site-brief` 集中写入 `.site/brief.md` 与 `.site/state.json`，避免多个 Skill 用旧状态覆盖彼此。
-
-`skills.json` 只描述一个 Skill 可能调用的静态能力依赖；子 Skill 把协作回执返回原调用者不构成反向依赖。builder 根据 check 结果修复再复验属于有界工作流，连续两轮无新证据或进展即停止并标记 `blocked`。
-
-## 整套安装
-
-用户侧安装交付**两个东西**，缺一不可：
-
-1. **四个 Skill 目录**——`site-builder`、`site-brief`、`site-design`、`site-check` 必须一起复制，不能只装其中几个。`site-brief` 里放着全部协作状态的门禁脚本 `scripts/state.py`，漏装它整套都会失效；
-2. **一份指令文件**——[`templates/AGENTS.md`](templates/AGENTS.md)。四个 `description` 只提供"被发现"的机会，路由和停位规则靠这份文件"被遵守"；不装它，用户第一句"帮我做个网站"就可能被直接读成"开干"。
-
-按宿主分别放置：
-
-| 宿主 | Skill 目录 | 指令文件 |
-| --- | --- | --- |
-| Claude Code | `~/.claude/skills/`（或项目内 `.claude/skills/`） | `~/.claude/CLAUDE.md` 里**追加一行** `@<绝对路径>/AGENTS.md`；Claude Code 明确不读 `AGENTS.md` |
-| Codex | `~/.agents/skills/`（或仓库根 `.agents/skills/`） | `~/.codex/AGENTS.md`（`AGENTS.override.md` 优先）；正文直接放这里 |
-
-写指令文件时**幂等追加，绝不覆盖**用户已有配置：用带标记的块包裹内容；已有标记就只替换标记内内容（可重复安装、可升级）；无标记且文件已存在就追加到末尾；文件不存在才创建。Claude Code 侧只追加那一行 import，**不要**把正文粘进 `CLAUDE.md`——正文留在本仓库的模板里，升级时只动这一份。逐宿主的差异、体积上限与三层验收方法见 [`templates/hosts/README.md`](templates/hosts/README.md)。
-
-## 维护者工具
-
-`scripts/install.py` 是**开发侧**的装配校验器，**不是用户安装方法**：它只处理上面第 1 项，从不落地 `AGENTS.md`，所以它单独跑完不等于装好了。仓库维护者在自己机器上校验这套 Skill 能否原子装配时使用：
+## 结构
 
 ```text
-python scripts/install.py /absolute/path/to/agent/skills
+site-builder  默认入口、正式源码 Writer、修复与交付
+├── site-brief   事实调查、首版范围、状态门禁
+├── site-design  视觉方向、样式语法、实现模式与体验稿
+└── site-check   冻结后的只读 Checker
 ```
 
-更新整套时使用 `--replace`；脚本先在临时目录复制并校验四个 manifest，成功后才整体替换，拒绝只覆盖其中一个 Skill。
-正式用户仍按上表手动复制 Skill 并幂等追加指令文件；本项目不会自动写入用户的全局 Agent 配置。
+四个目录与根 `AGENTS.md` 应一起安装。普通用户不需要手动选择 Skill，也不会看到“快速/高质量”等模式。
 
-## 关键约束
+## 质量模型
 
-- 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
-- 结构选择、视觉选择与开发授权是三个决定：用户选了页面结构不等于确认了视觉风格；
-- 结构候选前先按任务形成轻量交互合同：`required / recommended / confirm / excluded` 约束对象生命周期、工作区、完整 Flow、本地化和范围；行业经验只能提出建议或待确认项，不能创造首版功能；
-- `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文，再按受众、任务、内容和素材条件匹配 2～3 个适合的风格供用户选择；候选必须在母题层不同而非只换配色，推荐要有依据但不能替用户确认；
-- 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
-- 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须原样保留用户那句原话（`--quote`），规范化摘要只用于识别空白差异下的重复，同一句不能连过两道门禁；每次写状态都追加紧凑的前后摘要与可用的租约 owner；
-- **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
-- `site-check` 独立给出内容寻址的 `check_id` 矩阵凭据；每个档位必须说明 `profile_reason`，`full` 必须覆盖静态/构建、核心任务、桌面视觉、手机视觉与再次打开五个阻断轴，`smoke` / `targeted` 也不得省略受影响核心任务；阻断项必须有截图、结果文件或命令凭据等可核验证据，交付时重新核对摘要与证据哈希；
-- 内容摘要、租约和状态历史用于防漏步骤、误覆盖和状态漂移，属于**可发现误改的工作流记录**，不是防御拥有本地写权限的恶意 Agent 的安全边界；语义、产品、视觉和“证据是否真的支持结论”仍由模型、Checker 与用户判断；
-- 简单修改和 Bug 按影响跳过无关阶段；
-- 系统级安装、费用、账号、密钥、真实敏感数据和公开部署按宿主能力分档拦截，不由状态机记录。
-
-## 能力与支持矩阵
-
-诚实的能力边界，避免把"能记录"读成"能验证"：
-
-| 能力 | 有宿主支持时 | 无宿主支持时 |
-| --- | --- | --- |
-| 用户原话留存 | 始终可用 | 始终可用（`--quote` 必填） |
-| 标注升级为 `quote-matched` | 会话记录可读且能定位到用户消息 | 降级为 `agent-reported`，**不阻塞**；未知格式只降级 |
-| 用户同意的验证 | **任何宿主都不提供** | 靠交付时回放原话 + 用户本人核对 |
-| artifact 误改发现 | 内容寻址 `check_id`、文件名/内部 ID/摘要复核 | 同样可用；不防拥有写权限者重新伪造整套记录 |
-| 不可逆动作拦截 | T1 审批提示 / T2 沙箱边界 | T3 停下来问并等回答，且如实标注 |
-
-**没有任何一档能证明用户同意。** 各道确认门禁在所有宿主上都可执行，因为它们的输入是 Agent 抄录的原话，而不是宿主内部文件；因此不存在"环境不支持导致流程停摆"的分支。
-
-详细需求见 [`REQUIREMENTS.md`](REQUIREMENTS.md)，统一术语见 [`CONTEXT.md`](CONTEXT.md)。
-
-## 维护检查
+设计不再使用单一 `visual_source` 或“命中即停”链，而是三个独立决定：
 
 ```text
-python scripts/verify_skills.py .
-python tests/gate_flow.py
-python site-design/scripts/design.py validate
+direction  为什么这个项目这样表达
+grammar    用哪套颜色、字体和组件语言保持一致
+patterns   复用哪些实现与交互模式，做了什么适配
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 检查 `tokens.json` 每个配方与色板的列出色对、排版下限（字号、正文行高、中文标题字距、字体许可），并在 `gallery.html` 内嵌目录与配置漂移时失败；改过 `tokens.json` 后用 `design.py sync-gallery` 刷新预览。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
+流程先从项目事实形成任务合同和 direction，再用语义索引选择最多三个 grammar/template 候选。行业名称不参与选择；模板只在方向确定后降低实现 token，不替用户决定范围或页面结构。
 
-**这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/design-quality.md`](site-design/references/design-quality.md) 的四条判据核对。
+```sh
+node site-design/tools/select.mjs --profile profile.json --kind style --limit 3
+node site-design/tools/select.mjs --profile profile.json --kind template --limit 3
+node site-design/tools/prepare-design.mjs --profile profile.json --state .site/state.json --output .site/design/packet.json
+python3 site-builder/scripts/site.py list-templates
+python3 site-builder/scripts/site.py inspect-template form
+```
+
+`DesignPacket` 最大 12,000 bytes，builder/checker 直接消费它；只加载最终选中的一份完整规范和实际使用的模板文件。旧 `visual_source` 在读取时映射并标记，不改写旧项目。
+
+## 模板
+
+随包的四个可运行模板是实现模式，不是视觉来源：
+
+| ID | 覆盖 |
+| --- | --- |
+| `static` | 内容主导、连续阅读、响应式重排 |
+| `browse` | 筛选、列表/详情、比较、空状态 |
+| `form` | 错误恢复、草稿、提交前核对、完成状态 |
+| `tool` | 本地 CRUD、持久化、导入导出、删除确认 |
+
+新建项目始终初始化为 `discovering`、`visual_required=true`，模板不会打开快速分支。
+
+## 两层质量闭环
+
+普通生成自动执行轻量闭环：
+
+```text
+生成 → 真实浏览器渲染 → 核心任务/状态/移动端/重开 → 修复 → 复验 → 交付
+```
+
+`check-output.mjs` 是静态规范预检；`check-render.mjs` 才读取 linked CSS、computed style、字体、相邻对比度、溢出、触控尺寸、图片裁剪和减弱动效，并可根据合同执行核心任务与再次打开。
+
+维护者发布 Skill 时运行完整闭环：25 个 SD/MV 固定场景、9 个锁定 `F-*` 夹具、两名真人五维评分以及 token/耗时比较。它不属于普通用户流程。条件不全时只能报告自动冒烟或不完整，不能宣布完整回归通过。
+
+## 验证
+
+```sh
+python3 scripts/verify_skills.py .
+python3 scripts/context_budget.py .
+python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest discover -s site-builder/tests -p 'test_*.py'
+python3 site-design/scripts/design.py validate
+node site-design/tools/catalog.mjs --check
+node site-design/tools/lint.mjs
+node --test --test-concurrency=1 site-design/tools/tests/*.test.mjs
+python3 tests/evaluate.py validate-catalog
+```
+
+完整人工评测见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，设计场景见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。产品不变量见 [`REQUIREMENTS.md`](REQUIREMENTS.md)，统一术语见 [`CONTEXT.md`](CONTEXT.md)。

@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "version": "0.13.0",
+  "version": "0.18.0",
   "name": "site-brief",
   "files": {
-    "SKILL.md": "176ceed11aeabbff03b9d7069011c6bf68b66fefc6c3d6e462cfb104d27fc229",
     "agents/openai.yaml": "438b5bb158643f5fc9ee6da63ff127d83ee290692e3650d2802cbc9fe805daab",
-    "references/brief.md": "8648ac93109ba54837c16061e08399be0aa5bb771ed4e4dea336e5ce6eceaaf4",
-    "references/discovery.md": "6cb292b56cab2f23b2ebb190d3427a6410b99d2f1eed1d5506213ad9e4125e26",
+    "references/brief.md": "db4bd95ba591c81b787ea8b5aeca08188a59403c2b6dc83b6c1572746df54040",
+    "references/discovery.md": "e668e7b2968621fbeb1dbc5c19db4de9ade9a1f66caeca1597aa2621a027290e",
     "references/research.md": "e5ffb0b3ce9298a7a384d1547c708d4959344833cd5bd3e1d2ad2d7464c45378",
-    "references/state.md": "fc2f7d0669a8e2f57ecf7bc51a0b1f50f1e0b9b2d3497a1992c7b091f0db17f5",
-    "scripts/state.py": "19f176ea13254e80cec166b07cda050fb364ef62b2cba77b353fabc59e436e2b"
+    "references/state.md": "8f4e0d8a87a3bcfe52b7ae477863c60bc48f8d73013d9f83db7c2dfc08b7ef17",
+    "scripts/state.py": "44a73000590fac3eae434399c449662a139bd77f20502b82c9cb70fc840a953b",
+    "SKILL.md": "6f30e991304d2a35e04e4200cf9e6abdbf4046733d366ac54b75d45bc39d2752"
   }
 }

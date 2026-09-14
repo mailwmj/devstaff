@@ -4,6 +4,7 @@ const $ = selector => document.querySelector(selector);
 let entries = [];
 let pending = null;
 let writable = true;
+let editingId = null;
 function message(text, error = false) {
   $('#message').textContent = text;
   $('#message').dataset.error = String(error);
@@ -34,7 +35,12 @@ function render() {
     remove.addEventListener('click', () => {
       if (confirm(`删除“${entry.text}”？此操作无法撤销。`) && persist(entries.filter(row => row.id !== entry.id))) message('记录已删除。');
     });
-    li.append(text, time, remove); $('#entries').append(li);
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary'; edit.textContent = '编辑'; edit.setAttribute('aria-label', `编辑记录：${entry.text}`);
+    edit.addEventListener('click', () => {
+      editingId = entry.id; $('#edit-entry').value = entry.text; $('#edit-panel').hidden = false; $('#edit-entry').focus();
+    });
+    const actions = document.createElement('span'); actions.className = 'row-actions'; actions.append(edit, remove);
+    li.append(text, time, actions); $('#entries').append(li);
   }
 }
 try { entries = validate(JSON.parse(localStorage.getItem(key) || '[]')); }
@@ -44,6 +50,17 @@ $('#entry-form').addEventListener('submit', event => {
   event.preventDefault(); const text = $('#entry').value.trim();
   if (!text) { message('请填写记录内容。', true); return; }
   if (persist([...entries, {id: crypto.randomUUID(), text, createdAt: new Date().toISOString()}])) { $('#entry').value = ''; $('#entry').focus(); message('已保存。'); }
+});
+$('#edit-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const text = $('#edit-entry').value.trim();
+  if (!editingId || !text) { message('请填写修改后的内容。', true); return; }
+  if (persist(entries.map(row => row.id === editingId ? {...row, text} : row))) {
+    editingId = null; $('#edit-panel').hidden = true; $('#edit-entry').value = ''; message('修改已保存。');
+  }
+});
+$('#cancel-edit').addEventListener('click', () => {
+  editingId = null; $('#edit-panel').hidden = true; $('#edit-entry').value = '';
 });
 $('#export').addEventListener('click', () => {
   if (!writable) { message('原数据读取异常，请先让助手恢复；不会导出一个假空备份。', true); return; }

@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "dimensions": [
+    "tasks",
+    "content_shapes",
+    "content_subjects",
+    "audiences",
+    "trust_postures",
+    "asset_conditions",
+    "interaction_intensities",
+    "primary_devices"
+  ],
+  "groups": {
+    "precision-workspace": {
+      "ids": [
+        "02-tech-minimal",
+        "05-fintech-clean",
+        "08-corporate-blue",
+        "09-saas-dashboard-light",
+        "10-dark-analytics",
+        "29-material-you",
+        "30-dark-developer",
+        "36-medical-healthcare",
+        "37-legal-professional",
+        "38-education-platform",
+        "41-finance-enterprise"
+      ],
+      "semantic": {
+        "tasks": ["operate", "analyze", "create-edit"],
+        "content_shapes": ["dense-data", "list-detail", "form-flow"],
+        "content_subjects": ["records", "data", "workflow"],
+        "audiences": ["professional", "expert"],
+        "trust_postures": ["technical", "authoritative", "practical"],
+        "asset_conditions": ["none-available", "data-available"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["desktop"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none"
+      },
+      "strengths": ["clear hierarchy for repeated work", "stable data and form surfaces"],
+      "tradeoffs": ["less expressive for image-led storytelling"],
+      "reject_conditions": ["the main value depends on immersive imagery or cultural atmosphere"]
+    },
+    "content-led": {
+      "ids": [
+        "21-editorial-magazine",
+        "22-academic",
+        "24-swiss-international",
+        "31-song-dynasty-ink",
+        "35-zen-wabi-sabi",
+        "45-nonprofit-cause",
+        "49-dark-academia"
+      ],
+      "semantic": {
+        "tasks": ["read", "persuade"],
+        "content_shapes": ["long-form", "editorial", "detail"],
+        "content_subjects": ["text", "research", "story"],
+        "audiences": ["general", "expert"],
+        "trust_postures": ["authoritative", "human", "reflective"],
+        "asset_conditions": ["none-available", "image-optional"],
+        "interaction_intensities": ["low"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none"
+      },
+      "strengths": ["reading rhythm and editorial hierarchy", "works with substantial real text"],
+      "tradeoffs": ["not optimized for dense continuous operations"],
+      "reject_conditions": ["the core task is repeated data entry or monitoring"]
+    },
+    "image-led-premium": {
+      "ids": [
+        "07-luxury-premium",
+        "11-japandi-minimal",
+        "13-health-wellness",
+        "25-nature-organic",
+        "39-real-estate-luxury",
+        "40-restaurant-fine-dining",
+        "43-fashion-editorial",
+        "44-travel-hospitality"
+      ],
+      "semantic": {
+        "tasks": ["persuade", "browse-compare", "transact"],
+        "content_shapes": ["image-gallery", "catalog", "detail"],
+        "content_subjects": ["physical-product", "place", "person"],
+        "audiences": ["consumer", "general"],
+        "trust_postures": ["aspirational", "human"],
+        "asset_conditions": ["image-required"],
+        "interaction_intensities": ["low", "medium"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional"
+      },
+      "strengths": ["lets real photography carry the subject", "supports spacious comparison and detail"],
+      "tradeoffs": ["quality drops sharply with weak or placeholder imagery"],
+      "reject_conditions": ["usable subject imagery is unavailable"]
+    },
+    "conversion-commerce": {
+      "ids": ["06-ecommerce-energetic"],
+      "semantic": {
+        "tasks": ["browse-compare", "transact", "persuade"],
+        "content_shapes": ["catalog", "list-detail", "offer"],
+        "content_subjects": ["physical-product", "price", "promotion"],
+        "audiences": ["consumer"],
+        "trust_postures": ["practical", "energetic"],
+        "asset_conditions": ["image-required"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional"
+      },
+      "strengths": ["clear product scanning and action emphasis"],
+      "tradeoffs": ["promotional energy can reduce calm or institutional trust"],
+      "reject_conditions": ["no product imagery or no confirmed transaction task"]
+    },
+    "expressive-cultural": {
+      "ids": [
+        "14-bauhaus",
+        "15-art-deco",
+        "20-new-chinese-trendy",
+        "32-tang-dynasty-splendor",
+        "33-republican-shanghai",
+        "34-ukiyo-e",
+        "46-islamic-geometric",
+        "47-afrofuturism",
+        "48-pop-art-60s"
+      ],
+      "semantic": {
+        "tasks": ["persuade", "read", "browse-compare"],
+        "content_shapes": ["poster", "gallery", "editorial"],
+        "content_subjects": ["culture", "event", "story"],
+        "audiences": ["general", "consumer", "creative"],
+        "trust_postures": ["expressive", "aspirational"],
+        "asset_conditions": ["image-optional", "image-required"],
+        "interaction_intensities": ["low", "medium"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional"
+      },
+      "strengths": ["distinctive cultural or event expression", "strong graphic composition"],
+      "tradeoffs": ["requires project-specific evidence to avoid costume styling"],
+      "reject_conditions": ["no cultural, material, or content evidence supports the visual language"]
+    },
+    "experimental-digital": {
+      "ids": [
+        "01-glassmorphism-dark",
+        "03-aurora-ui",
+        "12-ai-native",
+        "16-synthwave",
+        "17-cyberpunk",
+        "18-y2k",
+        "19-vaporwave",
+        "23-startup-pitch-dark",
+        "28-pixel-art",
+        "42-esports-gaming"
+      ],
+      "semantic": {
+        "tasks": ["persuade", "communicate", "analyze"],
+        "content_shapes": ["hero-detail", "spatial", "dashboard"],
+        "content_subjects": ["technology", "game", "music"],
+        "audiences": ["consumer", "technical", "creative"],
+        "trust_postures": ["experimental", "technical", "energetic"],
+        "asset_conditions": ["image-optional", "data-available"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["desktop", "mobile"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional"
+      },
+      "strengths": ["strong digital identity and emphasis", "supports immersive or live surfaces"],
+      "tradeoffs": ["effects can compete with reading and accessibility"],
+      "reject_conditions": ["low visual-risk requirement or long uninterrupted reading"]
+    },
+    "playful-interface": {
+      "ids": ["04-neobrutalism", "26-kawaii", "27-claymorphism"],
+      "semantic": {
+        "tasks": ["create-edit", "browse-compare", "persuade"],
+        "content_shapes": ["cards", "form-flow", "catalog"],
+        "content_subjects": ["creative-object", "social-content", "product"],
+        "audiences": ["general", "consumer", "youth"],
+        "trust_postures": ["friendly", "energetic", "experimental"],
+        "asset_conditions": ["none-available", "image-optional"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional"
+      },
+      "strengths": ["clear personality and approachable interaction"],
+      "tradeoffs": ["can undercut formal or high-consequence trust"],
+      "reject_conditions": ["the task requires restrained institutional authority"]
+    },
+    "raw-editorial": {
+      "ids": ["50-brutalist-web"],
+      "semantic": {
+        "tasks": ["read", "persuade"],
+        "content_shapes": ["editorial", "portfolio", "long-form"],
+        "content_subjects": ["text", "creative-work", "culture"],
+        "audiences": ["creative", "expert"],
+        "trust_postures": ["experimental", "direct"],
+        "asset_conditions": ["none-available", "image-optional"],
+        "interaction_intensities": ["low"],
+        "primary_devices": ["desktop", "mobile"]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "none"
+      },
+      "strengths": ["direct content hierarchy with little decorative dependency"],
+      "tradeoffs": ["deliberate rawness is easy to mistake for unfinished work"],
+      "reject_conditions": ["the audience expects polished conventional reassurance"]
+    }
+  },
+  "overrides": {
+    "05-fintech-clean": {
+      "semantic": {"content_subjects": ["financial-data", "price", "records"]}
+    },
+    "10-dark-analytics": {
+      "semantic": {"tasks": ["analyze", "monitor"], "content_shapes": ["dense-data", "dashboard"]},
+      "constraints": {"visual_risk": "medium"}
+    },
+    "22-academic": {
+      "semantic": {"content_subjects": ["research", "data", "text"], "trust_postures": ["authoritative", "technical"]},
+      "constraints": {"visual_risk": "low"}
+    },
+    "36-medical-healthcare": {
+      "semantic": {"content_subjects": ["health-service", "records", "guidance"]},
+      "constraints": {"visual_risk": "low"}
+    },
+    "37-legal-professional": {
+      "semantic": {"content_subjects": ["professional-service", "text", "records"]},
+      "constraints": {"visual_risk": "low"}
+    },
+    "38-education-platform": {
+      "semantic": {"tasks": ["read", "create-edit", "operate"], "content_subjects": ["learning-content", "progress", "records"]}
+    },
+    "41-finance-enterprise": {
+      "semantic": {"tasks": ["analyze", "operate", "monitor"], "content_subjects": ["financial-data", "records", "risk"]}
+    },
+    "45-nonprofit-cause": {
+      "semantic": {"tasks": ["persuade", "read", "transact"], "content_subjects": ["impact-story", "evidence", "donation"]}
+    }
+  }
+}

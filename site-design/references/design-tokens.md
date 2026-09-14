@@ -47,7 +47,7 @@ python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace -
 
 输出目录须为新目录或空目录，已有内容拒绝覆盖。输出 `tokens.css`、`selection.json` 与 `intent.md`；后两者分别记录工具配置和待补充的人类设计意图。它们不是设计方向或用户选稿凭证；确认结果按 [体验流程](prototype.md) 交给 `site-brief` 写入 `.site/brief.md`，正式实现约束由 `site-builder` 写入 `.site/implementation-plan.md`。
 
-`validate` 检查每个配方与每套色板的**列出色对**和**排版下限**（字号、正文行高、中文标题字距、字体许可），并会把不合格的配方判为失败——它守的是目录默认值，不是你的页面。`sync-gallery` 在 `tokens.json` 变化后重新注入 gallery 的内嵌目录，避免预览与配置漂移。
+`validate` 检查每个配方与每套色板的**列出色对**和**排版下限**（字号、正文行高、中文标题字距），并会把不合格的配方判为失败——它守的是目录默认值，不是你的页面。`sync-gallery` 在 `tokens.json` 变化后重新注入 gallery 的内嵌目录，避免预览与配置漂移。
 
 制作体验稿时只把 CSS 和按需使用的 `primitives.css` 复制到隔离的体验稿目录；把选定 token 和文件路径交给 `site-builder`，由它按项目结构应用到正式工程。最终运行不能依赖 Skill 安装路径。工具只生成 token，不替换现有页面、存储或业务逻辑。
 

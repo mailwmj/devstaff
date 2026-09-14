@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "templates": [
+    {
+      "id": "static",
+      "name": "Content-led page",
+      "file": "assets/templates/static",
+      "semantic": {
+        "tasks": ["read", "persuade"],
+        "content_shapes": ["long-form", "editorial", "detail"],
+        "content_subjects": ["text", "story", "guidance"],
+        "audiences": ["general", "consumer", "expert"],
+        "trust_postures": ["human", "authoritative", "practical"],
+        "asset_conditions": ["none-available", "image-optional"],
+        "interaction_intensities": ["low"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "color_schemes": ["light"],
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none"
+      },
+      "patterns": ["content-led", "responsive-reflow"],
+      "states": ["default", "focus"],
+      "strengths": ["semantic reading structure", "small implementation surface"],
+      "tradeoffs": ["does not include application state or persistence"],
+      "reject_conditions": ["the core task requires repeated operations, filtering, or form recovery"],
+      "validation_commands": [
+        "python3 site-check/scripts/check.py static <project-root>",
+        "node site-design/tools/check-render.mjs --entry <project-root>/web/index.html --contract site-builder/tests/contracts/static.json --output <evidence-dir>"
+      ]
+    },
+    {
+      "id": "browse",
+      "name": "Browse, filter, compare",
+      "file": "assets/templates/browse",
+      "semantic": {
+        "tasks": ["browse-compare", "analyze"],
+        "content_shapes": ["catalog", "list-detail", "comparison"],
+        "content_subjects": ["records", "physical-product", "options"],
+        "audiences": ["general", "consumer", "professional"],
+        "trust_postures": ["practical", "technical"],
+        "asset_conditions": ["none-available", "image-optional", "data-available"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "color_schemes": ["light"],
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none"
+      },
+      "patterns": ["browse-filter-compare", "list-detail", "empty-state", "responsive-reflow"],
+      "states": ["default", "filtered", "empty", "detail", "comparison", "focus"],
+      "strengths": ["complete filter-to-detail path", "comparison remains available on narrow screens"],
+      "tradeoffs": ["sample fields must be replaced with the real comparison model"],
+      "reject_conditions": ["there are too few options to require filtering or comparison"],
+      "validation_commands": [
+        "python3 site-check/scripts/check.py static <project-root>",
+        "node site-design/tools/check-render.mjs --entry <project-root>/web/index.html --contract site-builder/tests/contracts/browse.json --output <evidence-dir>"
+      ]
+    },
+    {
+      "id": "form",
+      "name": "Form with recovery",
+      "file": "assets/templates/form",
+      "semantic": {
+        "tasks": ["transact", "create-edit"],
+        "content_shapes": ["form-flow", "wizard", "confirmation"],
+        "content_subjects": ["application", "record", "request"],
+        "audiences": ["general", "consumer", "professional"],
+        "trust_postures": ["practical", "authoritative", "human"],
+        "asset_conditions": ["none-available"],
+        "interaction_intensities": ["medium"],
+        "primary_devices": ["mobile", "desktop"]
+      },
+      "constraints": {
+        "color_schemes": ["light"],
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none"
+      },
+      "patterns": ["form-flow", "inline-error", "error-summary", "draft-persistence", "confirmation", "responsive-reflow"],
+      "states": ["default", "invalid", "draft-saved", "review", "submitted", "focus"],
+      "strengths": ["preserves input through errors and reopening", "review before final submission"],
+      "tradeoffs": ["field schema and risk language must be adapted to the real transaction"],
+      "reject_conditions": ["the action is immediate and has no meaningful data-entry or review step"],
+      "validation_commands": [
+        "python3 site-check/scripts/check.py static <project-root>",
+        "node site-design/tools/check-render.mjs --entry <project-root>/web/index.html --contract site-builder/tests/contracts/form.json --output <evidence-dir>"
+      ]
+    },
+    {
+      "id": "tool",
+      "name": "Local CRUD tool",
+      "file": "assets/templates/tool",
+      "semantic": {
+        "tasks": ["operate", "create-edit"],
+        "content_shapes": ["list-detail", "form-flow", "workspace"],
+        "content_subjects": ["records", "workflow", "notes"],
+        "audiences": ["general", "professional"],
+        "trust_postures": ["practical", "technical"],
+        "asset_conditions": ["none-available", "data-available"],
+        "interaction_intensities": ["medium", "high"],
+        "primary_devices": ["desktop", "mobile"]
+      },
+      "constraints": {
+        "color_schemes": ["light"],
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none"
+      },
+      "patterns": ["existing-local-crud", "local-persistence", "import-export", "empty-state", "error-recovery", "confirmation", "responsive-reflow"],
+      "states": ["default", "empty", "saved", "editing", "error", "import-review", "focus"],
+      "strengths": ["complete local record lifecycle", "safe import and export path"],
+      "tradeoffs": ["browser-local storage is not multi-device or multi-user data"],
+      "reject_conditions": ["the confirmed task requires accounts, shared cloud state, or concurrent editing"],
+      "validation_commands": [
+        "python3 site-check/scripts/check.py static <project-root>",
+        "node site-design/tools/check-render.mjs --entry <project-root>/web/index.html --contract site-builder/tests/contracts/tool.json --output <evidence-dir>"
+      ]
+    }
+  ]
+}

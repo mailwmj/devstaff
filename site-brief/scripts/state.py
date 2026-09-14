@@ -6,6 +6,8 @@ tool.  It replaces "remember the rules" with mechanical checks:
 
 * gate commands refuse a transition whose basis is missing;
 * the writer/checker lease makes concurrent Writer and Checker impossible;
+* ``plan-delivery`` separates local preview, files, reachable URLs and offline use;
+* ``start-build`` records how the selected prototype becomes the production entry;
 * ``handoff`` records stopped PIDs, freed ports and the frozen fingerprint;
 * ``start-verify`` refuses unless the source still matches that frozen fingerprint;
 * ``deliver`` only accepts a ``site-check`` matrix artifact (``check_id``) whose
@@ -14,7 +16,7 @@ tool.  It replaces "remember the rules" with mechanical checks:
 * exact confirmation wording and compact before/after state summaries stay in the
   audit history, while normalized quote hashes are used only for duplicate checks.
 
-A page has two separate decisions, and this tool keeps them apart:
+A page can expose two separate decisions, and this tool keeps them apart when both occurred:
 
 * ``confirm-structure`` records which structure the creator picked;
 * ``confirm-visual`` records the style they picked on top of that structure.
@@ -32,9 +34,8 @@ What this tool can and cannot guarantee
 
 Nothing this tool writes can prove that the creator agreed to anything.  The
 creator's judgement lives in their head, and every file here is writable by the
-agent the gate is supposed to be restraining.  So the four confirmation gates
-(``confirm-concept``, ``confirm-structure``, ``confirm-visual``,
-``authorize-build``) are **records of what the agent says the creator said**,
+agent the gate is supposed to be restraining.  So confirmation gates are
+**records of what the agent says the creator said**,
 not verified facts:
 
 * the caller must pass ``--quote`` with the creator's own words, verbatim;
@@ -46,8 +47,9 @@ not verified facts:
 The gate makes accidental drift visible: records are verbatim, timestamped,
 revisioned and content-addressed where appropriate. A writer with project access
 can still rebuild all local files consistently, so the tool does not, and must not
-claim to, keep a hostile agent honest. The verification that matters happens when
-the creator is shown their own words again at delivery time.
+claim to, keep a hostile agent honest. High-risk delivery replays the creator's
+words; low-risk reversible work summarizes the current scope without forcing a
+second confirmation round.
 """
 from __future__ import annotations
 
@@ -56,11 +58,17 @@ import gzip
 import hashlib
 import json
 import os
-from pathlib import Path
 import socket
 import sys
 import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlsplit
+
+# Below this much re-verification time, an unfavourable ratio is noise rather
+# than a process problem, so the budget guard stays quiet.
+REVERIFY_ALARM_MINUTES = 10
+SCHEMA_VERSION = 3
 
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
 STAGES = (
@@ -77,6 +85,11 @@ STAGES = (
 CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
 CONSENT_FIELDS = ('concept_consent', 'structure_consent', 'visual_consent', 'authorization_consent')
+DELIVERY_CHANNELS = ('local', 'file', 'url', 'installed')
+DELIVERY_SHARING = ('required', 'not_required')
+DELIVERY_OFFLINE = ('not_required', 'downloaded_file', 'after_first_visit', 'installed')
+DELIVERY_RISKS = ('low', 'high')
+PROTOTYPE_STRATEGIES = ('evolve', 'rebuild')
 
 # Consent labels.  Neither is a proof; they are honesty levels, ordered.
 BASIS_REPORTED = 'agent-reported'
@@ -174,8 +187,10 @@ def load_state(root):
         raise ValueError('Damaged project state; preserve it and inspect project files')
     schema = state.get('schema_version')
     if schema == 1:
-        state = migrate_v1(state)
-    elif schema != 2:
+        state = migrate_v2(migrate_v1(state))
+    elif schema == 2:
+        state = migrate_v2(state)
+    elif schema != SCHEMA_VERSION:
         raise ValueError('Unsupported project state; preserve it and inspect project files')
     if not isinstance(state.get('project_id'), str) or not state['project_id']:
         raise ValueError('Damaged project state; preserve it and inspect project files')
@@ -202,6 +217,15 @@ def migrate_v1(state):
     return upgraded
 
 
+def migrate_v2(state):
+    upgraded = dict(state)
+    upgraded['schema_version'] = SCHEMA_VERSION
+    upgraded.setdefault('delivery_contract', None)
+    upgraded.setdefault('delivery_readiness', {'status': 'not_planned'})
+    upgraded.setdefault('prototype_handoff', None)
+    return upgraded
+
+
 def state_summary(state):
     release = state.get('writer_release') if isinstance(state.get('writer_release'), dict) else {}
     delivery = state.get('delivery') if isinstance(state.get('delivery'), dict) else {}
@@ -213,6 +237,12 @@ def state_summary(state):
         'structure_confirmed': bool(state.get('structure_confirmed')),
         'visual_confirmed': bool(state.get('visual_confirmed')),
         'development_authorized': bool(state.get('development_authorized')),
+        'delivery_contract': state.get('delivery_contract'),
+        'delivery_readiness': state.get('delivery_readiness'),
+        'prototype_strategy': (
+            state.get('prototype_handoff', {}).get('strategy')
+            if isinstance(state.get('prototype_handoff'), dict) else None
+        ),
         'writer_release_fingerprint': release.get('fingerprint'),
         'delivery_check_id': delivery.get('check_id'),
     }
@@ -228,7 +258,7 @@ def save_state(root, state, action, expect_revision=None):
     if before_state.get('schema_version') == 1:
         before_state = migrate_v1(before_state)
     before = state_summary(before_state)
-    state['schema_version'] = 2
+    state['schema_version'] = SCHEMA_VERSION
     if 'status' in state:
         state['status'] = state['stage']
     state['revision'] = int(state.get('revision') or 0) + 1
@@ -430,6 +460,32 @@ def regular_file(root, raw, option):
         if parent.resolve() == root:
             break
         parent = parent.parent
+    return resolved
+
+
+def project_path(root, raw, option, must_exist=False):
+    """Resolve a present or planned regular file path inside the project."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f'{option} needs a project-relative file path')
+    candidate = Path(raw.strip()).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    if candidate.is_symlink():
+        raise ValueError(f'{option} must not be a symlink: {raw}')
+    resolved = candidate.resolve(strict=False)
+    if not resolved.is_relative_to(root):
+        raise ValueError(f'{option} must stay inside the project: {raw}')
+    parent = candidate.absolute().parent
+    while parent != parent.parent:
+        if parent.is_symlink():
+            raise ValueError(f'{option} parent directory must not be a symlink: {raw}')
+        if parent.resolve(strict=False) == root:
+            break
+        parent = parent.parent
+    if must_exist and (not resolved.is_file() or resolved.is_symlink()):
+        raise ValueError(f'{option} must be a regular file inside the project: {raw}')
+    if resolved.exists() and not resolved.is_file():
+        raise ValueError(f'{option} must identify a file, not a directory: {raw}')
     return resolved
 
 
@@ -665,6 +721,43 @@ def gate_reasons(state, visual_required):
     return reasons
 
 
+def prototype_handoff_from_args(root, state, args):
+    """Build or reuse the trace from the selected prototype to production."""
+    selected = state.get('visual_prototype')
+    existing = state.get('prototype_handoff')
+    strategy = getattr(args, 'prototype_strategy', None)
+    if not strategy:
+        if isinstance(existing, dict) and existing.get('source') == selected:
+            return existing
+        raise ValueError(
+            'This build has a selected visual prototype. start-build needs --prototype-strategy and '
+            '--production-entry so the creator can see whether production evolves or rewrites that prototype'
+        )
+    if not selected:
+        raise ValueError('No selected visual prototype is recorded for this build')
+    source = regular_file(root, selected, 'selected visual prototype')
+    production = project_path(root, args.production_entry, '--production-entry')
+    reused = [value.strip() for value in (args.reused or []) if value.strip()]
+    replaced = [value.strip() for value in (args.replaced or []) if value.strip()]
+    removed = [value.strip() for value in (args.removed or []) if value.strip()]
+    reason = (args.prototype_reason or '').strip()
+    if strategy == 'evolve' and not reused:
+        raise ValueError('--prototype-strategy evolve needs at least one --reused item')
+    if strategy == 'rebuild' and not reason:
+        raise ValueError('--prototype-strategy rebuild needs --prototype-reason explaining why evolution is unsuitable')
+    return {
+        'source': str(source),
+        'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+        'strategy': strategy,
+        'production_entry': production.relative_to(root).as_posix(),
+        'reused': reused,
+        'replaced': replaced,
+        'removed': removed,
+        'reason': reason,
+        'recorded_at': now(),
+    }
+
+
 def parse_services(raw_items):
     services = []
     for raw in raw_items or []:
@@ -712,6 +805,9 @@ def action_show(root, args):
         'writer_release': release or None,
         'release_matches_current_source': bool(release) and release.get('fingerprint') == current,
         'delivery': state.get('delivery'),
+        'delivery_contract': state.get('delivery_contract'),
+        'delivery_readiness': state.get('delivery_readiness'),
+        'prototype_handoff': state.get('prototype_handoff'),
         # Two separate decisions, surfaced separately: a recorded structure choice
         # must never read as a visual confirmation just because the page has one
         # direction flag.
@@ -739,6 +835,65 @@ def action_show(root, args):
             dict(row, matches_current_source=row.get('fingerprint') == current)
             for row in check_artifacts(root)
         ],
+    }
+
+
+def action_plan_delivery(root, args):
+    """Record how the finished result reaches its actual user before build starts."""
+    state = load_state(root)
+    if not state.get('concept_confirmed'):
+        raise ValueError('Confirm the first-version scope before planning how it will reach the user')
+    if state.get('stage') in ('building', 'verifying', 'delivered', 'blocked'):
+        raise ValueError(
+            f"plan-delivery cannot change the delivery route at stage {state.get('stage')!r}; "
+            'reopen --scope-changed first so implementation and verification cannot keep the old route'
+        )
+    channel = args.channel
+    sharing = args.sharing
+    offline = args.offline
+    audience = args.audience.strip()
+    if not audience:
+        raise ValueError('--audience must name the actual user or recipient context')
+    if channel == 'local' and sharing == 'required':
+        raise ValueError('A local-only preview cannot satisfy required sharing; choose file, url or installed')
+    expected_offline = {
+        'downloaded_file': 'file',
+        'after_first_visit': 'url',
+        'installed': 'installed',
+    }
+    required_channel = expected_offline.get(offline)
+    if required_channel and channel != required_channel:
+        raise ValueError(
+            f'offline={offline!r} requires channel={required_channel!r}, got channel={channel!r}'
+        )
+    state['delivery_contract'] = {
+        'channel': channel,
+        'audience': audience,
+        'sharing': sharing,
+        'offline': offline,
+        'risk': args.risk,
+        'note': (args.note or '').strip(),
+        'planned_at': now(),
+    }
+    state['delivery_readiness'] = {
+        'status': 'planned',
+        'preview_ready': False,
+        'share_ready': None if sharing == 'not_required' else False,
+        'offline_ready': None if offline == 'not_required' else False,
+    }
+    state.pop('delivery', None)
+    state['next_action'] = (
+        'Confirm the selected visual direction and development authorization, then record how the prototype '
+        'will become the production entry when starting the build'
+    )
+    save_state(root, state, 'plan-delivery', args.expect_revision)
+    return {
+        'action': 'plan-delivery',
+        'root': str(root),
+        'stage': state['stage'],
+        'revision': state['revision'],
+        'delivery_contract': state['delivery_contract'],
+        'delivery_readiness': state['delivery_readiness'],
     }
 
 
@@ -844,6 +999,9 @@ def action_confirm_concept(root, args):
         state['visual_confirmed'] = False
         state['development_authorized'] = False
         state['delegated'] = False
+        state['delivery_contract'] = None
+        state['delivery_readiness'] = {'status': 'not_planned'}
+        state['prototype_handoff'] = None
         state.pop('delivery', None)
     record_consent(state, 'concept_consent', consent, 'concept')
     state['concept_confirmed'] = True
@@ -861,6 +1019,7 @@ def action_confirm_concept(root, args):
         ]
         state['structure_confirmed'] = False
         state['visual_confirmed'] = False
+        state['prototype_handoff'] = None
     elif not structure_required and state.get('structure_confirmed'):
         voided = ['structure']
         state['structure_confirmed'] = False
@@ -929,6 +1088,7 @@ def action_confirm_structure(root, args):
     state['structure_basis'] = consent['quote'][:200]
     state['structure_confirmed_at'] = now()
     state['structure_prototype'] = str(resolved)
+    state['prototype_handoff'] = None
     if stale_visual:
         state['visual_confirmed'] = False
         state['development_authorized'] = False
@@ -980,17 +1140,42 @@ def action_confirm_visual(root, args):
     state['visual_basis'] = consent['quote'][:200]
     state['visual_confirmed_at'] = now()
     state['visual_prototype'] = str(resolved)
+    state['prototype_handoff'] = None
     if stale_authorization:
         # The authorization was given for the previous style; it does not carry over.
         state['development_authorized'] = False
         state['delegated'] = False
         state.pop('delivery', None)
-    if state.get('stage') in ('discovering', 'concept_review', 'visual_drafting', 'visual_review', None):
-        state['stage'] = 'visual_review'
-    state['next_action'] = (
-        'Re-obtain explicit development authorization for the new style'
-        if stale_authorization else 'Obtain explicit development authorization or record a requested change'
-    )
+    combined_authorization = bool(args.authorize_build)
+    if args.delegated and not combined_authorization:
+        raise ValueError('--delegated only applies when --authorize-build is also present')
+    if combined_authorization:
+        shared = dict(consent)
+        shared['shared_with'] = 'visual'
+        state['visual_consent']['shared_with'] = 'authorization'
+        state['authorization_consent'] = shared
+        state['consent_history'] = as_list(state.get('consent_history')) + [{
+            'gate': 'authorization',
+            'quote': consent['quote'],
+            'quote_sha256': consent['quote_sha256'],
+            'quote_normalized_sha256': consent['quote_normalized_sha256'],
+            'basis': consent['basis'],
+            'recorded_at': consent['recorded_at'],
+            'shared_with': 'visual',
+        }]
+        state['development_authorized'] = True
+        state['authorization_basis'] = consent['quote'][:200]
+        state['authorized_at'] = now()
+        state['delegated'] = bool(args.delegated)
+        state['stage'] = 'ready_to_build'
+        state['next_action'] = 'Plan the delivery route if needed, then claim the writer lease and start building'
+    else:
+        if state.get('stage') in ('discovering', 'concept_review', 'visual_drafting', 'visual_review', None):
+            state['stage'] = 'visual_review'
+        state['next_action'] = (
+            'Re-obtain explicit development authorization for the new style'
+            if stale_authorization else 'Obtain explicit development authorization or record a requested change'
+        )
     save_state(root, state, 'confirm-visual', args.expect_revision)
     return {
         'action': 'confirm-visual',
@@ -998,6 +1183,8 @@ def action_confirm_visual(root, args):
         'stage': state['stage'],
         'revision': state['revision'],
         'visual_confirmed': True,
+        'development_authorized': bool(state.get('development_authorized')),
+        'combined_authorization': combined_authorization,
         'invalidated_stale_authorization': stale_authorization,
         'prototype': str(resolved),
         'prototype_inside_project': inside,
@@ -1026,7 +1213,11 @@ def action_authorize_build(root, args):
     if args.delegated:
         state['delegated'] = True
     state['stage'] = 'ready_to_build'
-    state['next_action'] = 'Claim the writer lease and start building the current scope'
+    state['next_action'] = (
+        'Record the delivery route, then claim the writer lease and start building'
+        if not isinstance(state.get('delivery_contract'), dict)
+        else 'Claim the writer lease and start building the current scope'
+    )
     save_state(root, state, 'authorize-build', args.expect_revision)
     return {
         'action': 'authorize-build',
@@ -1047,9 +1238,19 @@ def action_start_build(root, args):
         raise ValueError('Gate not satisfied: ' + '; '.join(reasons))
     if state.get('stage') == 'delivered':
         raise ValueError('Project is delivered; run reopen before building again')
+    if not isinstance(state.get('delivery_contract'), dict):
+        raise ValueError(
+            'No delivery contract is recorded. Run plan-delivery before building so local preview, file sharing, '
+            'a public URL and offline use cannot be mistaken for one another'
+        )
+    if state.get('visual_required') is not False:
+        state['prototype_handoff'] = prototype_handoff_from_args(root, state, args)
+    elif args.prototype_strategy or args.production_entry:
+        raise ValueError('This scope declared no visual prototype; drop the prototype handoff arguments')
     state['stage'] = 'building'
     state['writer_release'] = None
-    state['next_action'] = 'Implement the confirmed slices, then hand off to the checker'
+    state['delivery_readiness'] = dict(state.get('delivery_readiness') or {}, status='planned')
+    state['next_action'] = 'Implement the confirmed slices from the recorded prototype handoff, then hand off'
     save_state(root, state, 'start-build', args.expect_revision)
     return {
         'action': 'start-build',
@@ -1057,6 +1258,8 @@ def action_start_build(root, args):
         'stage': state['stage'],
         'revision': state['revision'],
         'lease_owner': lease.get('owner'),
+        'delivery_contract': state.get('delivery_contract'),
+        'prototype_handoff': state.get('prototype_handoff'),
     }
 
 
@@ -1084,6 +1287,15 @@ def action_handoff(root, args):
     outside = [item['root'] for item in services if not Path(item['root']).is_relative_to(root)]
     if outside:
         raise ValueError(f'Registered service roots must live inside the project: {outside}')
+    prototype_handoff = state.get('prototype_handoff')
+    if isinstance(prototype_handoff, dict):
+        production = project_path(
+            root, prototype_handoff.get('production_entry'), 'prototype production entry', must_exist=True
+        )
+        prototype_handoff = dict(prototype_handoff)
+        prototype_handoff['production_sha256'] = hashlib.sha256(production.read_bytes()).hexdigest()
+        prototype_handoff['validated_at'] = now()
+        state['prototype_handoff'] = prototype_handoff
     state['writer_release'] = {
         'at': now(),
         'fingerprint': fingerprint(root),
@@ -1091,6 +1303,7 @@ def action_handoff(root, args):
         'freed_ports': list(args.freed_port),
         'services': services,
         'note': args.note or '',
+        'prototype_handoff': prototype_handoff,
     }
     state['next_action'] = 'Run start-verify, then dispatch the independent checker against the registered entry'
     save_state(root, state, 'handoff', args.expect_revision)
@@ -1168,6 +1381,7 @@ def verify_delivery_evidence(root, artifact):
             blocking_artifacts += len(as_list(evidence.get('items')))
         collect(evidence.get('items'), f'item {identifier}')
         if evidence.get('kind') == 'command':
+            carried = item.get('carried_from') if isinstance(item.get('carried_from'), dict) else None
             for entry in as_list(evidence.get('items')):
                 check_id = entry.get('command_check_id') if isinstance(entry, dict) else None
                 if not check_id:
@@ -1179,6 +1393,13 @@ def verify_delivery_evidence(root, artifact):
                     continue
                 if command.get('kind') != 'command' or command.get('status') != 'passed':
                     problems.append(f'command evidence {check_id}: stored result is not a passing command')
+                elif carried:
+                    # A carried item intentionally reports a result recorded against an
+                    # earlier source, but it must be the same round it was carried from.
+                    if command.get('fingerprint') != carried.get('fingerprint'):
+                        problems.append(
+                            f'command evidence {check_id}: carried result does not belong to the round it cites'
+                        )
                 elif command.get('fingerprint') != artifact.get('fingerprint') or command.get('source_changed'):
                     problems.append(f'command evidence {check_id}: stored result belongs to different source')
     if blocking_artifacts == 0 and any(
@@ -1201,6 +1422,64 @@ def verify_delivery_evidence(root, artifact):
     return problems
 
 
+def phase_budget(state):
+    """Split the recorded timeline into production and re-verification time.
+
+    The state machine already timestamps every transition, so the ratio between
+    building and re-checking is measurable instead of a matter of opinion.  The
+    first check round is exploration - it is meant to find unknown problems and
+    is allowed to cost real time.  Every later round is re-verification, which
+    should be cheap because it confirms known conclusions rather than deriving
+    them again.  When re-verification costs more than the production it is
+    checking, something structural is wrong.
+    """
+    events = []
+    for entry in as_list(state.get('transition_history')):
+        if not isinstance(entry, dict):
+            continue
+        stamp = entry.get('at')
+        if not stamp:
+            continue
+        try:
+            events.append((datetime.fromisoformat(stamp), str(entry.get('action') or '')))
+        except ValueError:
+            continue
+    if not events:
+        return None
+    events.sort(key=lambda row: row[0])
+    first_build = next((stamp for stamp, action in events if action == 'start-build'), None)
+    if first_build is None:
+        return None
+
+    # Walk the timeline: a build->verify interval and every reopen->handoff gap is
+    # production; every verify->(deliver|reopen) interval is checking.
+    production = 0.0
+    cycles = []
+    segment = first_build            # start of the current production segment
+    open_cycle = None                # start of the current checking cycle
+    for stamp, action in events:
+        if stamp < first_build:
+            continue
+        if action == 'start-verify':
+            production += (stamp - segment).total_seconds() / 60
+            open_cycle = stamp
+        elif action in ('deliver', 'reopen') and open_cycle is not None:
+            cycles.append({'minutes': round((stamp - open_cycle).total_seconds() / 60, 1), 'ended': action})
+            open_cycle = None
+            segment = stamp          # a fix may start here (reopen) or never (deliver)
+
+    exploration = cycles[0]['minutes'] if cycles else 0.0
+    reverify = sum(row['minutes'] for row in cycles[1:])
+    return {
+        'production_minutes': round(production, 1),
+        'exploration_minutes': exploration,
+        'reverify_minutes': round(reverify, 1),
+        'cycles': cycles,
+        'cycle_count': len(cycles),
+        'reverify_vs_production': round(reverify / production, 2) if production else None,
+    }
+
+
 def action_deliver(root, args):
     state = load_state(root)
     require_lease(root, 'checker')
@@ -1212,6 +1491,9 @@ def action_deliver(root, args):
             'The consent gates are not satisfied, so a stage record alone cannot deliver: ' + '; '.join(reasons) +
             '. If the project lost its confirmations, reopen instead of delivering without them'
         )
+    contract = state.get('delivery_contract')
+    if not isinstance(contract, dict):
+        raise ValueError('deliver needs the delivery contract recorded before build; reopen and run plan-delivery')
     artifact = load_artifact(root, args.check)
     if artifact.get('kind') != 'matrix':
         raise ValueError('deliver needs a site-check matrix artifact, not a single static or command check')
@@ -1247,16 +1529,109 @@ def action_deliver(root, args):
             'Blocking items lack verified evidence: ' + '; '.join(unverified) +
             '. Rewrite the matrix through check.py; a hand-written matrix is not acceptance evidence'
         )
+    blocking_axes = {
+        item.get('axis')
+        for item in as_list(artifact.get('items'))
+        if isinstance(item, dict) and item.get('blocking') and item.get('status') == 'passed'
+    }
+    required_outcomes = []
+    if contract.get('sharing') == 'required':
+        required_outcomes.append(('share', 'the agreed recipient can open the actual file or URL'))
+    if contract.get('offline') != 'not_required':
+        required_outcomes.append(('offline', 'the agreed offline scenario was reopened successfully'))
+    if isinstance(state.get('prototype_handoff'), dict):
+        required_outcomes.append(('prototype_lineage', 'the production result matches the selected prototype handoff'))
+    missing_outcomes = [f'{axis} ({description})' for axis, description in required_outcomes if axis not in blocking_axes]
+    if missing_outcomes:
+        raise ValueError(
+            'The check matrix does not prove the delivery contract: ' + '; '.join(missing_outcomes)
+        )
     tampered = verify_delivery_evidence(root, artifact)
     if tampered:
         raise ValueError('Acceptance evidence no longer holds: ' + '; '.join(tampered))
+    # Delivery is defined by what the creator can do now.  A matrix that only
+    # proves the page is correct has not delivered anything the creator can use.
+    user_action = str(getattr(args, 'user_action', '') or '').strip()
+    if not user_action:
+        raise ValueError(
+            'deliver needs --user-action: the concrete thing the creator can now do. Blocking items passing is not '
+            'a delivery until the creator can actually use the result'
+        )
+    remaining = [str(value).strip() for value in (getattr(args, 'remaining', None) or []) if str(value).strip()]
+    shareable = str(getattr(args, 'shareable', '') or '').strip()
+    shareable_relative = ''
+    if shareable:
+        candidate = Path(shareable)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        candidate = candidate.resolve()
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            raise ValueError('--shareable must point inside the project root')
+        if candidate.is_symlink() or not candidate.is_file():
+            raise ValueError(f'--shareable {shareable!r} is not a regular file inside the project')
+        shareable_relative = relative.as_posix()
+    delivery_url = str(getattr(args, 'delivery_url', '') or '').strip()
+    if delivery_url:
+        parsed = urlsplit(delivery_url)
+        host = (parsed.hostname or '').lower()
+        if parsed.scheme not in ('http', 'https') or not host:
+            raise ValueError('--delivery-url must be an absolute http(s) URL')
+        if host in ('localhost', '0.0.0.0', '::1') or host.startswith('127.'):
+            raise ValueError('--delivery-url cannot be a loopback preview address')
+    channel = contract.get('channel')
+    if channel == 'file' and not shareable_relative:
+        raise ValueError('The delivery contract says channel=file, so --shareable is required')
+    if channel == 'url' and not delivery_url:
+        raise ValueError('The delivery contract says channel=url, so --delivery-url is required')
+    if channel == 'installed' and not (shareable_relative or delivery_url):
+        raise ValueError('The delivery contract says channel=installed; provide its installer file or delivery URL')
+    carried = as_list(artifact.get('carried_items'))
+    # Re-verification must stay cheaper than the work it re-checks.  The first
+    # round is exploration and may cost real time; every later round should be
+    # replaying known conclusions.  When it is not, the process is spending more
+    # on proving than on producing, and that has to be said out loud rather than
+    # absorbed silently.
+    budget = phase_budget(state)
+    overrun_reason = str(getattr(args, 'overrun_reason', '') or '').strip()
+    # Only speak up when the overrun is material.  On a project that takes
+    # seconds end to end, a ratio above 1 is noise, not a process problem;
+    # nagging there would just train everyone to pass the escape hatch.
+    budget_material = budget and budget['reverify_minutes'] >= REVERIFY_ALARM_MINUTES
+    if budget_material and budget['cycle_count'] > 1 and budget['reverify_vs_production'] is not None:
+        if budget['reverify_vs_production'] > 1 and not overrun_reason:
+            raise ValueError(
+                f"Re-verification took {budget['reverify_minutes']:.0f} min against {budget['production_minutes']:.0f} min "
+                f"of production ({budget['reverify_vs_production']:.1f}x) over {budget['cycle_count']} rounds. "
+                'Re-checking should be cheaper than building: re-run the assertions with `check.py reverify` instead of '
+                're-deriving every conclusion, or explain the overrun with --overrun-reason'
+            )
+    readiness = {
+        'status': 'delivered',
+        'preview_ready': True,
+        'share_ready': True if contract.get('sharing') == 'required' else None,
+        'offline_ready': True if contract.get('offline') != 'not_required' else None,
+        'verified_at': now(),
+        'check_id': args.check,
+    }
     state['stage'] = 'delivered'
+    state['delivery_readiness'] = readiness
     state['delivery'] = {
         'at': now(),
         'check_id': args.check,
         'fingerprint': current,
         'item_count': len(as_list(artifact.get('items'))),
         'artifact': f'.site/{CHECK_ARTIFACT_DIR}/{args.check}.json',
+        'user_action': user_action,
+        'remaining': remaining,
+        'shareable': shareable_relative,
+        'delivery_url': delivery_url,
+        'entry': delivery_url or shareable_relative or 'local runtime',
+        'contract': contract,
+        'readiness': readiness,
+        'carried_items': carried,
+        'phase_budget': budget,
     }
     state['next_action'] = 'Deliver in plain language; reopen before any further scope change'
     replay = consent_replay(state)
@@ -1274,8 +1649,27 @@ def action_deliver(root, args):
         # can, and this is where they are asked to.
         'consent_replay': replay,
         'consent_replay_instruction': (
-            'Quote each line back to the creator verbatim and ask them to correct it. '
-            'Any line they disown must be reopened before the delivery stands.'
+            'Quote each line back and ask the creator to confirm it before delivery; reopen any line they disown.'
+            if contract.get('risk') == 'high'
+            else 'Summarize the current scope once without asking for another confirmation. Reopen only if the '
+                 'creator corrects it or the scope changed.'
+        ),
+        # The receipt leads with the action, not the audit trail: lead the creator
+        # with what they can do now, then the gaps they still own, then the evidence.
+        'tell_the_creator': (
+            f'You can now: {user_action}'
+            + (f' (shareable file: {shareable_relative})' if shareable_relative else '')
+        ),
+        'still_yours_to_do': remaining,
+        'delivery_entry': delivery_url or shareable_relative or 'local runtime',
+        'delivery_readiness': readiness,
+        'carried_items': carried,
+        'phase_budget': budget,
+        'overrun_reason': overrun_reason,
+        'receipt_instruction': (
+            'Lead with tell_the_creator in the creator\'s own language, then list still_yours_to_do as a short '
+            'checklist. Do not lead with check ids, profiles, blocking counts or other process terms. If some '
+            'items were carried from an earlier round, say in one plain sentence which ones were not re-checked.'
         ),
     }
 
@@ -1300,6 +1694,7 @@ def consent_replay(state):
         'authorization_consent': 'development_authorized',
     }
     replay = []
+    by_quote = {}
     for field in CONSENT_FIELDS:
         record = state.get(field)
         if not isinstance(record, dict):
@@ -1309,13 +1704,21 @@ def consent_replay(state):
         # A project already in flight under the older schema stored the wording in
         # "text". Keep replaying it rather than handing the creator a blank line.
         quote = record.get('quote') or record.get('text') or ''
-        replay.append({
+        digest = normalized_quote_digest(record) or hashlib.sha256(str(quote).encode('utf-8')).hexdigest()
+        if digest in by_quote:
+            existing = by_quote[digest]
+            existing['gate'] += '+' + field.replace('_consent', '')
+            existing['label'] += ' + ' + labels[field]
+            continue
+        entry = {
             'gate': field.replace('_consent', ''),
             'label': labels[field],
             'quote': quote,
             'basis': record.get('basis', BASIS_REPORTED),
             'recorded_at': record.get('recorded_at') or record.get('confirmed_at'),
-        })
+        }
+        replay.append(entry)
+        by_quote[digest] = entry
     return replay
 
 
@@ -1352,6 +1755,13 @@ def action_reopen(root, args):
     previous = state.get('stage')
     state['stage'] = 'building'
     state.pop('delivery', None)
+    readiness = dict(state.get('delivery_readiness') or {})
+    readiness.update({'status': 'planned', 'preview_ready': False})
+    if readiness.get('share_ready') is not None:
+        readiness['share_ready'] = False
+    if readiness.get('offline_ready') is not None:
+        readiness['offline_ready'] = False
+    state['delivery_readiness'] = readiness
     state['writer_release'] = None
     if args.scope_changed:
         # The core scope changed, so the first-version concept itself no longer
@@ -1361,6 +1771,9 @@ def action_reopen(root, args):
         state['visual_confirmed'] = False
         state['development_authorized'] = False
         state['delegated'] = False
+        state['delivery_contract'] = None
+        state['delivery_readiness'] = {'status': 'not_planned'}
+        state['prototype_handoff'] = None
         state['stage'] = 'visual_drafting' if state.get('visual_required', True) else 'concept_review'
     state['reopen_basis'] = args.reason.strip()
     state['reopen_check_id'] = args.check if failed_check else None
@@ -1451,6 +1864,16 @@ def build_parser():
              'there is no separate structure decision; 2 or more, or omitting the flag, arms the structure gate '
              'and confirm-structure must record the creator\'s choice before any style choice',
     )
+    delivery = add('plan-delivery', 'record the real user, channel, sharing and offline boundary before build')
+    delivery.add_argument('--channel', choices=DELIVERY_CHANNELS, required=True)
+    delivery.add_argument('--audience', required=True, help='who must be able to use the delivered result')
+    delivery.add_argument('--sharing', choices=DELIVERY_SHARING, required=True)
+    delivery.add_argument('--offline', choices=DELIVERY_OFFLINE, default='not_required')
+    delivery.add_argument(
+        '--risk', choices=DELIVERY_RISKS, default='low',
+        help='high for sensitive, paid, public or otherwise hard-to-reverse outcomes',
+    )
+    delivery.add_argument('--note')
     structure = add('confirm-structure', 'record the chosen page structure as the creator\'s verbatim quote')
     structure.add_argument('--quote', required=True)
     structure.add_argument('--anchor')
@@ -1459,11 +1882,22 @@ def build_parser():
     visual.add_argument('--quote', required=True)
     visual.add_argument('--anchor')
     visual.add_argument('--prototype', required=True)
+    visual.add_argument(
+        '--authorize-build', action='store_true',
+        help='use only when this same creator sentence both selects the shown direction and explicitly says to build it',
+    )
+    visual.add_argument('--delegated', action='store_true')
     authorize = add('authorize-build', 'record explicit development authorization as the creator\'s verbatim quote')
     authorize.add_argument('--quote', required=True)
     authorize.add_argument('--anchor')
     authorize.add_argument('--delegated', action='store_true')
-    add('start-build', 'enter building after all gates pass')
+    start = add('start-build', 'enter building after all gates pass and record prototype lineage')
+    start.add_argument('--prototype-strategy', choices=PROTOTYPE_STRATEGIES)
+    start.add_argument('--production-entry')
+    start.add_argument('--reused', action='append', default=[])
+    start.add_argument('--replaced', action='append', default=[])
+    start.add_argument('--removed', action='append', default=[])
+    start.add_argument('--prototype-reason')
     handoff = add('handoff', 'freeze the source after the writer services stopped')
     handoff.add_argument('--stopped-pid', type=int, action='append', default=[])
     handoff.add_argument('--freed-port', type=int, action='append', default=[])
@@ -1472,6 +1906,27 @@ def build_parser():
     add('start-verify', 'hand the frozen source to the independent checker')
     deliver = add('deliver', 'accept a fingerprint-bound check matrix as delivered')
     deliver.add_argument('--check', required=True, help='check_id produced by site-check')
+    deliver.add_argument(
+        '--user-action', required=True,
+        help='the concrete thing the creator can now do, in their words (e.g. "send the Desktop file to WeChat"). '
+             'Delivery is defined by what the creator can do next, not by the check passing',
+    )
+    deliver.add_argument(
+        '--remaining', action='append', default=[],
+        help='something the creator still has to do themselves; repeat for each item',
+    )
+    deliver.add_argument(
+        '--shareable',
+        help='path to the artifact the creator can hand to someone else, relative to the project root',
+    )
+    deliver.add_argument(
+        '--delivery-url',
+        help='public or otherwise recipient-reachable http(s) URL; loopback preview addresses are refused',
+    )
+    deliver.add_argument(
+        '--overrun-reason',
+        help='required when re-verification cost more than the production it re-checked; recorded in the receipt',
+    )
     reopen = add('reopen', 'void verification or delivery before changing source again')
     reopen.add_argument('--reason', required=True)
     reopen.add_argument('--owner', default='reopen')
@@ -1488,6 +1943,7 @@ ACTIONS = {
     'claim': action_claim,
     'release': action_release,
     'confirm-concept': action_confirm_concept,
+    'plan-delivery': action_plan_delivery,
     'confirm-structure': action_confirm_structure,
     'confirm-visual': action_confirm_visual,
     'authorize-build': action_authorize_build,

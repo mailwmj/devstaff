@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="./">{{TITLE}}</a>
+    <span>事项申报</span>
+  </header>
+  <main>
+    <header class="page-heading">
+      <p class="eyebrow">新建申报</p>
+      <h1>提交一项需要处理的事项</h1>
+      <p>填写内容后先核对，再完成提交。</p>
+    </header>
+
+    <ol class="steps" aria-label="申报进度">
+      <li data-step="1" aria-current="step"><span>1</span>填写内容</li>
+      <li data-step="2"><span>2</span>核对提交</li>
+    </ol>
+
+    <div id="error-summary" class="error-summary" role="alert" tabindex="-1" hidden>
+      <h2>请检查以下内容</h2>
+      <ul id="error-list"></ul>
+    </div>
+
+    <form id="request-form" novalidate>
+      <section id="entry-step" aria-labelledby="entry-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">第一步</p>
+            <h2 id="entry-title">事项内容</h2>
+          </div>
+          <span id="draft-status" role="status" aria-live="polite"></span>
+        </div>
+        <div class="fields">
+          <label for="title">事项名称 <span aria-hidden="true">*</span></label>
+          <input id="title" name="title" required maxlength="80" autocomplete="off">
+          <p class="field-error" id="title-error"></p>
+
+          <label for="category">事项类别 <span aria-hidden="true">*</span></label>
+          <select id="category" name="category" required>
+            <option value="">请选择</option>
+            <option>日常服务</option>
+            <option>设施维护</option>
+            <option>意见建议</option>
+          </select>
+          <p class="field-error" id="category-error"></p>
+
+          <label for="description">详细说明 <span aria-hidden="true">*</span></label>
+          <textarea id="description" name="description" required minlength="10" maxlength="600" rows="7" aria-describedby="description-help"></textarea>
+          <p id="description-help" class="help">请说明发生了什么、地点和希望的处理结果。</p>
+          <p class="field-error" id="description-error"></p>
+        </div>
+      </section>
+
+      <section id="review-step" aria-labelledby="review-title" hidden>
+        <p class="eyebrow">第二步</p>
+        <h2 id="review-title">核对申报内容</h2>
+        <dl class="review-list">
+          <div><dt>事项名称</dt><dd id="review-title-value"></dd></div>
+          <div><dt>事项类别</dt><dd id="review-category-value"></dd></div>
+          <div><dt>详细说明</dt><dd id="review-description-value"></dd></div>
+        </dl>
+        <p class="notice">提交后，本示例只显示完成状态；正式项目需要按真实业务接入处理渠道。</p>
+      </section>
+
+      <div class="actions">
+        <button id="back" type="button" class="secondary" hidden>返回修改</button>
+        <button id="next" type="button">继续核对</button>
+        <button id="submit" type="submit" hidden>确认提交</button>
+      </div>
+    </form>
+
+    <section id="success" class="success" aria-labelledby="success-title" tabindex="-1" hidden>
+      <p class="success-mark" aria-hidden="true">✓</p>
+      <p class="eyebrow">提交完成</p>
+      <h2 id="success-title">事项已经记录</h2>
+      <p>参考编号：<strong id="reference"></strong></p>
+      <button id="new-request" type="button" class="secondary">再提交一项</button>
+    </section>
+  </main>
+</body>
+</html>

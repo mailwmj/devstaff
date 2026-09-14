@@ -1,0 +1,9 @@
+{
+  "locations": [
+    {"id": "A-01", "expected": 12, "actual": 12},
+    {"id": "A-02", "expected": 8, "actual": 7},
+    {"id": "A-03", "expected": 20, "actual": null}
+  ],
+  "states": ["not_started", "checking", "difference_recorded", "paused", "resumed", "ready_to_submit", "submitted"],
+  "failure_recovery": ["输入无效不清空当前货位", "退出前保存当前进度", "提交前可返回修改差异"]
+}

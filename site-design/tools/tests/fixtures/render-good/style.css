@@ -1,0 +1,9 @@
+:root { font: 16px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #202020; }
+main { width: min(680px, calc(100% - 32px)); margin: auto; padding: 32px 0; }
+label { display: block; }
+input, button { min-height: 44px; margin: 8px 8px 8px 0; padding: 8px 14px; font: inherit; }
+button { border: 2px solid #165b4d; background: #165b4d; color: #fff; }
+button:hover { background: #0d4439; }
+button:focus-visible, input:focus-visible { outline: 3px solid #a64b00; outline-offset: 3px; }

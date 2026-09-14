@@ -1,0 +1,20 @@
+{
+  "core_task": {
+    "name": "filter, inspect and compare records",
+    "steps": [
+      {"action": "fill", "selector": "#query", "value": "移动"},
+      {"assert": "text", "selector": "#result-count", "value": "找到 1 项"},
+      {"action": "click", "selector": ".result button"},
+      {"assert": "visible", "selector": "#detail-dialog"},
+      {"action": "click", "selector": "#close-detail"},
+      {"action": "fill", "selector": "#query", "value": ""},
+      {"action": "check", "selector": "#results .result:nth-child(1) .compare-control input"},
+      {"action": "check", "selector": "#results .result:nth-child(2) .compare-control input"},
+      {"assert": "visible", "selector": "#comparison"},
+      {"assert": "count", "selector": "#compare-head th", "value": 3}
+    ]
+  },
+  "state_probes": [
+    {"name": "search keyboard focus", "kind": "focus", "selector": "#query"}
+  ]
+}

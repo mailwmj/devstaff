@@ -32,6 +32,17 @@
       <p id="empty">还没有内容。添加第一条记录。</p>
       <ul id="entries"></ul>
     </section>
+    <section id="edit-panel" aria-labelledby="edit-title" hidden>
+      <h2 id="edit-title">编辑记录</h2>
+      <form id="edit-form">
+        <label for="edit-entry">内容</label>
+        <div class="entry-row">
+          <input id="edit-entry" name="edit-entry" required maxlength="200" autocomplete="off">
+          <button type="submit">保存修改</button>
+          <button id="cancel-edit" type="button" class="secondary">取消</button>
+        </div>
+      </form>
+    </section>
     <section aria-labelledby="backup-title">
       <h2 id="backup-title">数据备份</h2>
       <p>记录仅保存在当前浏览器和网址下。导出文件可以备份或转移记录。</p>

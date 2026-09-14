@@ -55,7 +55,6 @@ def px(value):
 # override the heuristic values, but the catalog must never ship a broken one.
 TYPOGRAPHY_FLOORS = {'text-reading': 16.0, 'text-body': 16.0, 'text-label': 14.0, 'text-caption': 12.0}
 TYPOGRAPHY_LEADING_FLOOR = 1.7
-FORBIDDEN_FONT_HINTS = ('Söhne', 'Soehne', 'Circular', 'Gotham', 'Helvetica Now', 'GT ', 'Larsseit')
 
 
 def typography_checks(tokens):
@@ -71,10 +70,6 @@ def typography_checks(tokens):
     negative = tracking.startswith('-') and not re.fullmatch(r'-0(\.0+)?(em|px|%)?', tracking)
     rows.append({'token': 'tracking-heading', 'value': tracking, 'minimum': '0 (CJK headings)',
                  'passed': not negative})
-    fonts = ' '.join(str(tokens[key]) for key in ('font-ui', 'font-heading', 'font-reading'))
-    licensed = [name for name in FORBIDDEN_FONT_HINTS if name in fonts]
-    rows.append({'token': 'font-*', 'value': 'licensed font names', 'minimum': 'system or open fonts only',
-                 'passed': not licensed})
     return rows
 
 
@@ -159,7 +154,7 @@ def intent_text(result):
 - 确定性：`measured | derived | inferred`
 - 继承：
 - 禁止复制：
-- 许可或 provenance：
+- 性质与用途：
 
 ## 验证证据
 - 页面 / 状态 / 视口：

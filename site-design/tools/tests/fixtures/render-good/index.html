@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Render positive control</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>真实渲染正对照</h1>
+    <label for="name">姓名</label>
+    <input id="name">
+    <button id="save" type="button">保存</button>
+    <button id="disabled" type="button" disabled>处理中</button>
+    <p id="status" role="status"></p>
+    <p id="error" role="alert" hidden>保存失败</p>
+    <p id="loading" aria-busy="true" hidden>正在加载</p>
+  </main>
+</body>
+</html>

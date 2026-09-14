@@ -1,0 +1,27 @@
+{
+  "core_task": {
+    "name": "save a name",
+    "steps": [
+      {"action": "fill", "selector": "#name", "value": "小林"},
+      {"action": "click", "selector": "#save"},
+      {"assert": "text", "selector": "#status", "value": "已保存：小林"}
+    ]
+  },
+  "state_probes": [
+    {"name": "keyboard focus", "kind": "focus", "selector": "#save"},
+    {"name": "pointer hover", "kind": "hover", "selector": "#save"},
+    {"name": "disabled action", "kind": "disabled", "selector": "#disabled"},
+    {"name": "error is absent", "kind": "error", "selector": "#error", "expected": "hidden"},
+    {"name": "loading is absent", "kind": "loading", "selector": "#loading", "expected": "hidden"}
+  ],
+  "reopen": {
+    "name": "saved value survives reopening",
+    "before": [
+      {"action": "fill", "selector": "#name", "value": "小林"},
+      {"action": "click", "selector": "#save"}
+    ],
+    "after": [
+      {"assert": "text", "selector": "#status", "value": "已保存：小林"}
+    ]
+  }
+}

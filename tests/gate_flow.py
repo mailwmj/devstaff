@@ -55,6 +55,7 @@ STRUCTURE_LINE = '结构就按 A 吧，我要左边列表右边详情那种。'
 VISUAL_LINE = '第二个挺好看，颜色也不错。'
 STYLE_LINE = '那就用第二套配色和字体吧。'
 AUTHORIZE_LINE = '就按第二个和刚才说的第一版做吧，开始做。'
+USER_ACTION = '现在可以打开并使用网站。'
 # Only ever spoken by the agent, never by the creator.
 AGENT_ONLY_LINE = '我建议用第二个方向，你看行不行。'
 
@@ -115,7 +116,12 @@ def dead_pid():
 
 def matrix_file(folder, items, profile='full', profile_reason='完整发布验收'):
     path = Path(folder) / 'matrix.json'
-    payload = {'items': items}
+    consequence, surface = {
+        'full': ('high', 'wide'),
+        'targeted': ('high', 'narrow'),
+        'smoke': ('low', 'narrow'),
+    }[profile]
+    payload = {'items': items, 'consequence': consequence, 'surface': surface}
     payload['profile'] = profile
     payload['profile_reason'] = profile_reason
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
@@ -210,7 +216,7 @@ def main():
     refused(STATE_TOOL, 'start-build', root)
     refused(STATE_TOOL, 'claim', root, '--owner', 'builder-a', '--force')
     refused(STATE_TOOL, 'handoff', root)
-    refused(STATE_TOOL, 'deliver', root, '--check', 'missing')
+    refused(STATE_TOOL, 'deliver', root, '--check', 'missing', '--user-action', USER_ACTION)
 
     # 2b. The basis is the creator's words. The tool records them; it cannot verify them.
     no_quote = call(STATE_TOOL, 'confirm-concept', root)
@@ -308,9 +314,23 @@ def main():
     assert 'run reopen' in refused(
         STATE_TOOL, 'confirm-visual', root, '--quote', '还是换成另一套配色吧。',
         '--prototype', root / 'prototype.html')
+    assert 'No delivery contract' in refused(
+        STATE_TOOL, 'start-build', root
+    ), 'build must know how the result reaches its user before implementation starts'
+    delivery_plan = ok(
+        STATE_TOOL, 'plan-delivery', root,
+        '--channel', 'local', '--audience', '当前设备的创建者',
+        '--sharing', 'not_required', '--offline', 'not_required', '--risk', 'low',
+    )
+    assert delivery_plan['delivery_contract']['channel'] == 'local'
 
     # 4. Writer and Checker cannot hold the project at the same time.
-    ok(STATE_TOOL, 'start-build', root)
+    started = ok(
+        STATE_TOOL, 'start-build', root,
+        '--prototype-strategy', 'evolve', '--production-entry', 'web/index.html',
+        '--reused', '已确认的页面结构', '--replaced', '原型模拟内容',
+    )
+    assert started['prototype_handoff']['strategy'] == 'evolve'
     assert stage_of(root) == 'building'
     refused(STATE_TOOL, 'claim', root, '--owner', 'builder-b', '--force')  # --force without --reason stays auditable
 
@@ -392,6 +412,7 @@ def main():
             {'id': 'static', 'axis': 'static_build', 'title': '静态引用', 'status': 'passed', 'blocking': True,
              'evidence': {'kind': 'command', 'summary': 'check.py run 退出 0', 'commands': [command['check_id']]}},
             {'id': 'core-task', 'axis': 'core_task', 'title': '核心任务', 'status': 'passed', 'blocking': True,
+             'verify_command': [PY, '-c', 'print("core task ok")'],
              'evidence': artifact_evidence(['evidence/desktop.png', 'evidence/clipboard.json'])},
             {'id': 'visual-desktop', 'axis': 'visual_desktop', 'title': '桌面视觉',
              'status': 'passed', 'blocking': True,
@@ -401,6 +422,9 @@ def main():
              'evidence': artifact_evidence(['evidence/desktop.png'])},
             {'id': 'reopen', 'axis': 'reopen', 'title': '再次打开', 'status': 'passed', 'blocking': True,
              'evidence': artifact_evidence(['evidence/clipboard.json'])},
+            {'id': 'prototype-lineage', 'axis': 'prototype_lineage', 'title': '原型交接',
+             'status': 'passed', 'blocking': True,
+             'evidence': artifact_evidence(['evidence/desktop.png'])},
             {'id': 'favicon', 'axis': 'static_build', 'title': 'favicon', 'status': 'failed', 'blocking': False,
              'evidence': {'kind': 'declared', 'summary': '冷启动 404'}},
         ]
@@ -450,7 +474,7 @@ def main():
     prose_result = json.loads(prose_matrix.stdout)
     assert prose_result['status'] == 'failed' and prose_result['evidence_failures']
     assert any('declared' in row['reason'] for row in prose_result['evidence_failures'])
-    refused(STATE_TOOL, 'deliver', root, '--check', prose_result['check_id'])
+    refused(STATE_TOOL, 'deliver', root, '--check', prose_result['check_id'], '--user-action', USER_ACTION)
     PASSED += 3
 
     # 7b. Naming a screenshot that does not exist fails instead of passing.
@@ -460,7 +484,7 @@ def main():
     assert ghost_matrix.returncode == 1, 'a missing artifact must not pass'
     ghost_result = json.loads(ghost_matrix.stdout)
     assert 'does not exist' in ghost_result['evidence_failures'][0]['reason']
-    refused(STATE_TOOL, 'deliver', root, '--check', ghost_result['check_id'])
+    refused(STATE_TOOL, 'deliver', root, '--check', ghost_result['check_id'], '--user-action', USER_ACTION)
     # Evidence may not point outside the project either.
     outside = temp / 'outside.png'
     outside.write_bytes(b'x')
@@ -477,6 +501,9 @@ def main():
     assert check_artifact(root, first['check_id']).is_file()
     assert first['evidence_failures'] == []
     assert all(row['evidence']['verified'] for row in first['items'] if row['blocking'])
+    assert 'full check' in refused(
+        CHECK_TOOL, 'reverify', root, first['check_id']
+    ), 'a full release check must be rerun in full instead of carrying earlier conclusions'
     assert 'failed check matrix' in refused(
         STATE_TOOL, 'reopen', root, '--reason', '不能拿通过结果返工', '--check', first['check_id']
     ), 'reopen must not use a passing matrix to take back the Checker lease'
@@ -486,7 +513,7 @@ def main():
     edited_first['label'] = 'edited after the check'
     first_path.write_text(json.dumps(edited_first, ensure_ascii=False), encoding='utf-8')
     assert 'content digest' in refused(
-        STATE_TOOL, 'deliver', root, '--check', first['check_id']
+        STATE_TOOL, 'deliver', root, '--check', first['check_id'], '--user-action', USER_ACTION
     ), 'editing a stored matrix must invalidate its content-addressed check_id'
     first_path.write_bytes(first_bytes)
     command_id = first['items'][0]['evidence']['items'][0]['command_check_id']
@@ -496,7 +523,7 @@ def main():
     edited_command['stdout'] = 'edited after the matrix referenced it'
     command_path.write_text(json.dumps(edited_command, ensure_ascii=False), encoding='utf-8')
     assert 'content digest' in refused(
-        STATE_TOOL, 'deliver', root, '--check', first['check_id']
+        STATE_TOOL, 'deliver', root, '--check', first['check_id'], '--user-action', USER_ACTION
     ), 'editing referenced command evidence must invalidate delivery'
     command_path.write_bytes(command_bytes)
     targeted = ok(
@@ -505,6 +532,11 @@ def main():
     )
     assert targeted['profile'] == 'targeted'
     assert targeted['profile_reason'] == '只验证导出交互'
+    reverified = ok(CHECK_TOOL, 'reverify', root, targeted['check_id'])
+    assert reverified['status'] == 'passed' and reverified['reverify_of'] == targeted['check_id']
+    rerun_core = next(item for item in reverified['items'] if item['id'] == 'core-task')
+    assert rerun_core['carried_from'] is None and rerun_core['evidence']['kind'] == 'command'
+    assert any(item['axis'] == 'static_build' for item in reverified['carried_items'])
     archived = root / '.site' / 'checks' / 'evidence' / 'desktop.png'
     assert archived.is_file(), 'save-evidence must archive the screenshot delivery re-checks'
 
@@ -518,7 +550,7 @@ def main():
     assert second.returncode == 1, 'a blocked matrix must exit non-zero'
     second = json.loads(second.stdout)
     assert second['status'] == 'failed' and second['blocking_not_passed'] == ['contrast']
-    refused(STATE_TOOL, 'deliver', root, '--check', second['check_id'])
+    refused(STATE_TOOL, 'deliver', root, '--check', second['check_id'], '--user-action', USER_ACTION)
     assert stage_of(root) == 'verifying', 'a blocking failure must not reach delivered'
     PASSED += 2
 
@@ -547,7 +579,7 @@ def main():
     (root / 'web' / 'style.css').write_text(
         (root / 'web' / 'style.css').read_text(encoding='utf-8') + '\n/* late */\n', encoding='utf-8'
     )
-    error = refused(STATE_TOOL, 'deliver', root, '--check', third['check_id'])
+    error = refused(STATE_TOOL, 'deliver', root, '--check', third['check_id'], '--user-action', USER_ACTION)
     assert 'Source changed' in error
     assert stage_of(root) == 'verifying'
 
@@ -556,10 +588,12 @@ def main():
     tampered = root / '.site' / 'checks' / 'evidence' / 'desktop.png'
     original = tampered.read_bytes()
     tampered.write_bytes(b'\x89PNG\r\n\x1a\nedited later')
-    error = refused(STATE_TOOL, 'deliver', root, '--check', fourth['check_id'])
+    error = refused(STATE_TOOL, 'deliver', root, '--check', fourth['check_id'], '--user-action', USER_ACTION)
     assert 'evidence changed after the check' in error, error
     tampered.write_bytes(original)
-    assert ok(STATE_TOOL, 'deliver', root, '--check', fourth['check_id'])['stage'] == 'delivered'
+    assert ok(
+        STATE_TOOL, 'deliver', root, '--check', fourth['check_id'], '--user-action', USER_ACTION
+    )['stage'] == 'delivered'
 
     # 7d. A hand-written matrix that reuses a real fingerprint is not acceptance.
     ok(STATE_TOOL, 'reopen', root, '--reason', '下一轮修复')
@@ -572,7 +606,7 @@ def main():
         'fingerprint': forged['fingerprint'],
         'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True, 'evidence': '我说通过了'}],
     }, ensure_ascii=False), encoding='utf-8')
-    error = refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
+    error = refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'], '--user-action', USER_ACTION)
     assert 'content digest' in error, error
     # An emptied artifact map is equally refused instead of passing on nothing.
     (forged_path).write_text(json.dumps({
@@ -581,7 +615,9 @@ def main():
         'items': [{'id': 'core-task', 'status': 'passed', 'blocking': True,
                    'evidence': {'kind': 'artifact', 'summary': 'x', 'items': [], 'verified': True}}],
     }, ensure_ascii=False), encoding='utf-8')
-    assert 'content digest' in refused(STATE_TOOL, 'deliver', root, '--check', forged['check_id'])
+    assert 'content digest' in refused(
+        STATE_TOOL, 'deliver', root, '--check', forged['check_id'], '--user-action', USER_ACTION
+    )
 
     # 8. Delivery through the frozen matrix, then reopen for the next round.
     recovery = call(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items() + [
@@ -599,7 +635,9 @@ def main():
     ok(STATE_TOOL, 'handoff', root, '--stopped-pid', dead_pid(), '--freed-port', free_port())
     ok(STATE_TOOL, 'start-verify', root)
     final = ok(CHECK_TOOL, 'matrix', root, '--input', matrix_file(temp, passing_items()), '--save-evidence')
-    delivered = ok(STATE_TOOL, 'deliver', root, '--check', final['check_id'])
+    delivered = ok(
+        STATE_TOOL, 'deliver', root, '--check', final['check_id'], '--user-action', USER_ACTION
+    )
     assert delivered['stage'] == 'delivered' and delivered['delivery']['check_id'] == final['check_id']
     # Delivery hands the creator their own words back: the only real check on consent.
     assert [entry['quote'] for entry in delivered['consent_replay']] == [
@@ -680,7 +718,7 @@ def main():
     }), encoding='utf-8')
     ok(STATE_TOOL, 'confirm-concept', legacy, '--quote', CONCEPT_LINE, '--no-visual')
     migrated = json.loads((legacy / '.site' / 'state.json').read_text(encoding='utf-8'))
-    assert migrated['schema_version'] == 2 and migrated['stage'] == 'concept_review'
+    assert migrated['schema_version'] == 3 and migrated['stage'] == 'concept_review'
     assert migrated['concept_confirmed'] is True and migrated['runtime']['port'] == 8765
     assert migrated['custom_legacy_field'] == 'keep me'
     assert migrated['development_authorized'] is False and migrated['visual_confirmed'] is False

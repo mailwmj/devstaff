@@ -1,0 +1,31 @@
+{
+  "core_task": {
+    "name": "create, edit and delete a local record",
+    "steps": [
+      {"action": "fill", "selector": "#entry", "value": "第一条值班记录"},
+      {"action": "click", "selector": "#entry-form button[type='submit']"},
+      {"action": "fill", "selector": "#entry", "value": "保留到重开后的记录"},
+      {"action": "click", "selector": "#entry-form button[type='submit']"},
+      {"assert": "count", "selector": "#entries li", "value": 2},
+      {"action": "click", "selector": "#entries li:first-child .row-actions button:first-child"},
+      {"action": "fill", "selector": "#edit-entry", "value": "已修改的值班记录"},
+      {"action": "click", "selector": "#edit-form button[type='submit']"},
+      {"assert": "text", "selector": "#entries li:first-child > span:first-child", "value": "已修改的值班记录"},
+      {"action": "click_confirm", "selector": "#entries li:first-child .row-actions button:last-child"},
+      {"assert": "count", "selector": "#entries li", "value": 1}
+    ]
+  },
+  "state_probes": [
+    {"name": "new record field keyboard focus", "kind": "focus", "selector": "#entry"}
+  ],
+  "reopen": {
+    "name": "records survive reopening",
+    "before": [
+      {"assert": "text", "selector": "#entries", "value": "保留到重开后的记录"}
+    ],
+    "after": [
+      {"assert": "count", "selector": "#entries li", "value": 1},
+      {"assert": "text", "selector": "#entries", "value": "保留到重开后的记录"}
+    ]
+  }
+}

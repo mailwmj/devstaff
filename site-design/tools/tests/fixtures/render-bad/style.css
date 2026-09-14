@@ -1,0 +1,4 @@
+:root { font: 16px/1.4 "Missing Latin Only"; }
+body { margin: 0; background: #fff; color: #ccc; }
+button { width: 32px; height: 24px; overflow: hidden; padding: 0; }
+.too-wide { width: 900px; }

@@ -4,14 +4,16 @@ import hashlib
 import html
 import json
 import os
-from pathlib import Path
 import shutil
 import sys
 import tempfile
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+TEMPLATE_ROOT = SKILL_ROOT / 'assets' / 'templates'
 
 
 def now():
@@ -73,11 +75,39 @@ def read_state(root):
     if folder.is_symlink() or path.is_symlink():
         raise ValueError('Project state must not be a symlink')
     state = json.loads(path.read_text(encoding='utf-8'))
-    if state.get('schema_version') not in (1, 2):
+    if state.get('schema_version') not in (1, 2, 3):
         raise ValueError('Unsupported project state; preserve it and inspect project files')
     if not isinstance(state.get('project_id'), str) or not state['project_id']:
         raise ValueError('Damaged project state; preserve it and inspect project files')
     return state
+
+
+def template_catalog():
+    path = TEMPLATE_ROOT / 'catalog.json'
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if data.get('schema_version') != 1 or not isinstance(data.get('templates'), list):
+        raise ValueError('Unsupported template catalog; reinstall the complete site Skill suite')
+    required = ('id', 'semantic', 'patterns', 'states', 'strengths', 'tradeoffs',
+                'reject_conditions', 'validation_commands')
+    seen = set()
+    for item in data['templates']:
+        if any(not item.get(field) for field in required):
+            raise ValueError(f'Damaged template metadata: {item.get("id", "unknown")}')
+        identifier = item['id']
+        if identifier in seen or not identifier.replace('-', '').isalnum():
+            raise ValueError(f'Invalid or duplicate template id: {identifier}')
+        seen.add(identifier)
+        folder = TEMPLATE_ROOT / identifier
+        if folder.is_symlink() or not (folder / 'web' / 'index.html').is_file():
+            raise ValueError(f'Template files are missing: {identifier}')
+    return data
+
+
+def template_by_id(identifier):
+    matches = [item for item in template_catalog()['templates'] if item['id'] == identifier]
+    if not matches:
+        raise ValueError(f'Unknown template: {identifier}')
+    return matches[0]
 
 
 def init_project(destination, template, title, port):
@@ -90,7 +120,8 @@ def init_project(destination, template, title, port):
         metadata = destination / '.site'
         if metadata.exists() and (not metadata.is_dir() or metadata.is_symlink()):
             raise ValueError('Existing .site metadata must be a regular directory')
-    source = Path(__file__).resolve().parent.parent / 'assets' / 'templates' / template
+    template_by_id(template)
+    source = TEMPLATE_ROOT / template
     if not source.is_dir():
         raise ValueError('Template not installed; reinstall the complete site skill suite')
 
@@ -120,7 +151,7 @@ def init_project(destination, template, title, port):
     }
     if state is None:
         state = {
-            'schema_version': 2,
+            'schema_version': 3,
             'project_id': str(uuid.uuid4()),
             'revision': 1,
             'stage': 'discovering',
@@ -132,6 +163,9 @@ def init_project(destination, template, title, port):
             'development_authorized': False,
             'delegated': False,
             'runtime': runtime,
+            'delivery_contract': None,
+            'delivery_readiness': {'status': 'not_planned'},
+            'prototype_handoff': None,
             'next_action': 'Clarify the core user, task and first verifiable version',
             'updated_at': now(),
         }
@@ -180,19 +214,27 @@ def init_project(destination, template, title, port):
 
 
 def main():
+    templates = [item['id'] for item in template_catalog()['templates']]
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     init = commands.add_parser('init')
     init.add_argument('root', type=Path)
-    init.add_argument('--template', choices=['static', 'tool'], default='static')
+    init.add_argument('--template', choices=templates, default='static')
     init.add_argument('--title', default='我的网站')
     init.add_argument('--port', type=int, default=8765)
     inspect = commands.add_parser('inspect')
     inspect.add_argument('root', type=Path)
+    commands.add_parser('list-templates')
+    inspect_template = commands.add_parser('inspect-template')
+    inspect_template.add_argument('template', choices=templates)
     args = parser.parse_args()
 
     try:
-        if args.action == 'init':
+        if args.action == 'list-templates':
+            output = template_catalog()
+        elif args.action == 'inspect-template':
+            output = template_by_id(args.template)
+        elif args.action == 'init':
             if not 1 <= args.port <= 65535:
                 raise ValueError('Port must be 1..65535')
             output = init_project(args.root.absolute(), args.template, args.title, args.port)

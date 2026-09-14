@@ -1,0 +1,13 @@
+{
+  "core_task": {
+    "name": "follow the primary reading path",
+    "steps": [
+      {"action": "click", "selector": "a[href='#next']"},
+      {"assert": "url", "value": "#next"},
+      {"assert": "visible", "selector": "#next"}
+    ]
+  },
+  "state_probes": [
+    {"name": "primary link keyboard focus", "kind": "focus", "selector": "a[href='#next']"}
+  ]
+}

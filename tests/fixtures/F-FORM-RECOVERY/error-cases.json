@@ -1,0 +1,7 @@
+{
+  "cases": [
+    {"id": "empty", "input": {}, "expected": ["地点必填", "问题类别必填", "详细说明必填", "联系电话必填"]},
+    {"id": "bad-phone", "input": {"phone": "123"}, "expected": ["联系电话格式不正确", "保留其他输入"]},
+    {"id": "reload-draft", "input": {"place": "东门", "description": "路灯连续两晚不亮"}, "expected": ["重新打开后恢复草稿"]}
+  ]
+}

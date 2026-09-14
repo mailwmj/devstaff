@@ -1,0 +1,8 @@
+{
+  "fixture_version": "1.0.0",
+  "kind": "empty-project",
+  "creator_request": "帮我做一个网站，但我还没有确定具体做什么。",
+  "confirmed_facts": [],
+  "excluded": ["未经确认直接生成正式网站"],
+  "expected_core_task": "先帮助创作者收敛首个可验证版本"
+}

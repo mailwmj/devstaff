@@ -26,11 +26,23 @@ jobs:
       - name: Verify manifests and collaboration graph
         run: python3 scripts/verify_skills.py .
 
+      - name: Enforce new-project context budget
+        run: python3 scripts/context_budget.py .
+
       - name: Run state-gate regression
         run: python3 tests/gate_flow.py
 
       - name: Validate design assets
-        run: python3 site-design/scripts/design.py validate
+        run: |
+          python3 site-design/scripts/design.py validate
+          node site-design/tools/catalog.mjs --check
+          node site-design/tools/lint.mjs
+
+      - name: Run automated regressions
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          python3 -m unittest discover -s site-builder/tests -p 'test_*.py'
+          node --test --test-concurrency=1 site-design/tools/tests/*.test.mjs
 
       - name: Verify installation from a clean release archive
         shell: bash

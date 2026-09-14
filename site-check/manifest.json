@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "0.13.0",
+  "version": "0.18.0",
   "name": "site-check",
   "files": {
-    "SKILL.md": "e3c61357ee23ea3b47697516e08ec10b780a4eb5f671f706b67e1f53dcf6d959",
     "agents/openai.yaml": "607b1a7b728339471ec6a08eee93cee5c506168e38323b3140d4e851d5cf3cce",
-    "references/verification.md": "10272762551fca961e3407ba06a7fabba411894d66982abd543a35c0b109e676",
-    "scripts/check.py": "1de8a751b3e63bd56aa2b9d086c3213065a1929822c7dd982a52154d62f3892a"
+    "references/verification.md": "84bb65ce75f58df495f2bcc2298a327da3160f631170b4226eb935aeb22fa1d9",
+    "scripts/check.py": "779a43a54c6123685fdbf48e7233872f4a588b4c1c96945f11a7c763f26a9bcb",
+    "SKILL.md": "3c7610f726b7273b6981005f2e626c3891db2aad9e9a1cc2ce0705af34d34d5b"
   }
 }

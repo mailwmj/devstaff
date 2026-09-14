@@ -1,0 +1,33 @@
+{
+  "core_task": {
+    "name": "recover from errors, review and submit",
+    "steps": [
+      {"action": "click", "selector": "#next"},
+      {"assert": "visible", "selector": "#error-summary"},
+      {"action": "fill", "selector": "#title", "value": "楼道照明故障"},
+      {"action": "select", "selector": "#category", "value": "设施维护"},
+      {"action": "fill", "selector": "#description", "value": "三号楼二层楼道照明无法开启，请安排检查。"},
+      {"action": "click", "selector": "#next"},
+      {"assert": "visible", "selector": "#review-step"},
+      {"assert": "text", "selector": "#review-title-value", "value": "楼道照明故障"},
+      {"action": "click", "selector": "#submit"},
+      {"assert": "visible", "selector": "#success"}
+    ]
+  },
+  "state_probes": [
+    {"name": "new request button keyboard focus", "kind": "focus", "selector": "#new-request"}
+  ],
+  "reopen": {
+    "name": "draft survives reopening",
+    "before": [
+      {"action": "click", "selector": "#new-request"},
+      {"action": "fill", "selector": "#title", "value": "重开后恢复"},
+      {"action": "select", "selector": "#category", "value": "意见建议"},
+      {"action": "fill", "selector": "#description", "value": "这是一段用于验证浏览器重开后仍能恢复的草稿内容。"}
+    ],
+    "after": [
+      {"assert": "value", "selector": "#title", "value": "重开后恢复"},
+      {"assert": "value", "selector": "#category", "value": "意见建议"}
+    ]
+  }
+}

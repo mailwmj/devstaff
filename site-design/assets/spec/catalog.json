@@ -1,0 +1,5858 @@
+{
+  "schema_version": 2,
+  "source": {
+    "repo": "https://github.com/xdx888999/xdx-lab-design-skill",
+    "vendored_at": "assets/spec/"
+  },
+  "selection_dimensions": [
+    "tasks",
+    "content_shapes",
+    "content_subjects",
+    "audiences",
+    "trust_postures",
+    "asset_conditions",
+    "interaction_intensities",
+    "primary_devices"
+  ],
+  "counts": {
+    "styles": 50,
+    "methods": 20,
+    "dark": 15,
+    "light": 55,
+    "unknown_mode": 0,
+    "multi_theme": 10,
+    "cjk_ready": 8
+  },
+  "issue_counts": {
+    "no-cjk-font": 62,
+    "declared-fail-pairs": 45,
+    "multi-theme-frontmatter": 10
+  },
+  "font_frequency": [
+    {
+      "family": "Inter",
+      "count": 30
+    },
+    {
+      "family": "Noto Serif SC",
+      "count": 6
+    },
+    {
+      "family": "Helvetica Neue",
+      "count": 6
+    },
+    {
+      "family": "JetBrains Mono",
+      "count": 4
+    },
+    {
+      "family": "Avenir",
+      "count": 4
+    },
+    {
+      "family": "DM Sans",
+      "count": 3
+    },
+    {
+      "family": "Nunito",
+      "count": 3
+    },
+    {
+      "family": "Noto Sans SC",
+      "count": 3
+    },
+    {
+      "family": "Space Grotesk",
+      "count": 2
+    },
+    {
+      "family": "Cormorant Garamond",
+      "count": 2
+    },
+    {
+      "family": "Jost",
+      "count": 2
+    },
+    {
+      "family": "IBM Plex Sans",
+      "count": 2
+    },
+    {
+      "family": "Rajdhani",
+      "count": 2
+    },
+    {
+      "family": "Source Serif 4",
+      "count": 2
+    },
+    {
+      "family": "EB Garamond",
+      "count": 2
+    },
+    {
+      "family": "Noto Serif JP",
+      "count": 2
+    },
+    {
+      "family": "Futura",
+      "count": 2
+    },
+    {
+      "family": "Cal Sans",
+      "count": 1
+    },
+    {
+      "family": "Roboto",
+      "count": 1
+    },
+    {
+      "family": "Playfair Display",
+      "count": 1
+    },
+    {
+      "family": "rgba(240",
+      "count": 1
+    },
+    {
+      "family": "rgba(232",
+      "count": 1
+    },
+    {
+      "family": "Futura PT",
+      "count": 1
+    },
+    {
+      "family": "Orbitron",
+      "count": 1
+    },
+    {
+      "family": "Audiowide",
+      "count": 1
+    },
+    {
+      "family": "Comfortaa",
+      "count": 1
+    },
+    {
+      "family": "ZCOOL QingKe HuangYou",
+      "count": 1
+    },
+    {
+      "family": "Press Start 2P",
+      "count": 1
+    },
+    {
+      "family": "Share Tech Mono",
+      "count": 1
+    },
+    {
+      "family": "Roboto Flex",
+      "count": 1
+    },
+    {
+      "family": "Georgia",
+      "count": 1
+    },
+    {
+      "family": "Plus Jakarta Sans",
+      "count": 1
+    },
+    {
+      "family": "Bodoni Moda",
+      "count": 1
+    },
+    {
+      "family": "Lora",
+      "count": 1
+    },
+    {
+      "family": "Arial Black",
+      "count": 1
+    },
+    {
+      "family": "Arial",
+      "count": 1
+    },
+    {
+      "family": "Oswald",
+      "count": 1
+    },
+    {
+      "family": "Rotis",
+      "count": 1
+    },
+    {
+      "family": "Cooper Black",
+      "count": 1
+    },
+    {
+      "family": "Archivo Narrow",
+      "count": 1
+    },
+    {
+      "family": "Chicago",
+      "count": 1
+    }
+  ],
+  "specs": [
+    {
+      "id": "01-glassmorphism-dark",
+      "kind": "style",
+      "file": "assets/spec/styles/01-glassmorphism-dark-DESIGN.md",
+      "name": "Glassmorphism Dark",
+      "name_zh": "玻璃拟态（暗色版）",
+      "surface": "#0D0D1A",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0D0D1A",
+        "surface-variant": "#13131F",
+        "on-surface": "#FFFFFF",
+        "primary": "#8B5CF6",
+        "on-primary": "#111111",
+        "accent": "#0891B2",
+        "error": "#EF4444",
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "elevated-surface": "#1A1A2E",
+        "blob-purple": "#7C3AED",
+        "blob-blue": "#2563EB",
+        "blob-magenta": "#DB2777",
+        "primary-cyan": "#22D3EE",
+        "primary-pink": "#EC4899",
+        "text-accent": "#A78BFA"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Cal Sans",
+        "Inter",
+        "JetBrains Mono"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=6px",
+        "sm=10px",
+        "md=12px",
+        "lg=16px",
+        "base=8px",
+        "card-padding=24px",
+        "card-gap=16px",
+        "max-width=1200px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "02-tech-minimal",
+      "kind": "style",
+      "file": "assets/spec/styles/02-tech-minimal-DESIGN.md",
+      "name": "Tech Minimal",
+      "name_zh": "科技极简风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#0A0A0A",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#FFFFFF",
+        "surface-variant": "#FAFAFA",
+        "on-surface": "#0A0A0A",
+        "primary": "#0060D0",
+        "on-primary": "#FFFFFF",
+        "surface-raised": "#F5F5F5",
+        "surface-border": "#E5E5E5",
+        "body": "#404040",
+        "muted": "#737373",
+        "faint": "#A3A3A3",
+        "heading": "#EDEDED",
+        "electric-blue": "#0070F3",
+        "pure-purple": "#7C3AED",
+        "vivid-green": "#16A34A",
+        "sharp-orange": "#F97316",
+        "minimal-red": "#DC2626"
+      },
+      "colors_dark": {
+        "surface": "#111111",
+        "surface-raised": "#1A1A1A",
+        "surface-border": "#262626",
+        "muted": "#525252"
+      },
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=6px",
+        "sm=8px",
+        "md=10px",
+        "base=4px",
+        "card-padding=24px",
+        "section-padding=80px",
+        "max-width=1080px",
+        "gutter=24px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface+surface-raised+surface-border+muted",
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "03-aurora-ui",
+      "kind": "style",
+      "file": "assets/spec/styles/03-aurora-ui-DESIGN.md",
+      "name": "Aurora UI",
+      "name_zh": "极光界面风格",
+      "surface": "#06061A",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#06061A",
+        "on-surface": "#FFFFFF",
+        "primary": "#818CF8",
+        "on-primary": "#111111",
+        "accent": "#0891B2",
+        "success": "#34D399",
+        "warning": "#FBBF24",
+        "cosmos": "#0A0A1F",
+        "void": "#04040F",
+        "aurora-violet": "#7C3AED",
+        "aurora-indigo": "#4338CA",
+        "aurora-magenta": "#BE185D",
+        "aurora-rose": "#E11D48",
+        "aurora-emerald": "#059669",
+        "primary-bright": "#6366F1",
+        "secondary": "#22D3EE",
+        "highlight": "#F472B6",
+        "text-accent": "#A5B4FC"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=12px",
+        "sm=16px",
+        "md=20px",
+        "lg=100px",
+        "base=8px",
+        "card-padding=28px",
+        "card-gap=16px",
+        "max-width=1200px",
+        "gutter=24px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "04-neobrutalism",
+      "kind": "style",
+      "file": "assets/spec/styles/04-neobrutalism-DESIGN.md",
+      "name": "Neo-Brutalism",
+      "name_zh": "新野兽主义风格",
+      "surface": "#FFFEF5",
+      "on_surface": "#000000",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFEF5",
+        "surface-variant": "#FFFFFF",
+        "on-surface": "#000000",
+        "primary": "#FFDD00",
+        "on-primary": "#111111",
+        "deep-black": "#1A1A1A",
+        "brutal-coral": "#FF5733",
+        "brutal-lime": "#AAFF00",
+        "brutal-pink": "#FF3E9D",
+        "brutal-blue": "#0055FF",
+        "brutal-mint": "#00E5CC",
+        "brutal-orange": "#FF8C00",
+        "link": "#0000FF",
+        "visited": "#800080",
+        "placeholder": "#888888",
+        "secondary-text": "#555555"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Space Grotesk"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=4px",
+        "base=8px",
+        "card-padding=24px",
+        "card-gap=20px",
+        "section-padding=64px",
+        "max-width=1100px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "playful-interface",
+      "semantic": {
+        "tasks": [
+          "create-edit",
+          "browse-compare",
+          "persuade"
+        ],
+        "content_shapes": [
+          "cards",
+          "form-flow",
+          "catalog"
+        ],
+        "content_subjects": [
+          "creative-object",
+          "social-content",
+          "product"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "youth"
+        ],
+        "trust_postures": [
+          "friendly",
+          "energetic",
+          "experimental"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear personality and approachable interaction"
+      ],
+      "tradeoffs": [
+        "can undercut formal or high-consequence trust"
+      ],
+      "reject_conditions": [
+        "the task requires restrained institutional authority"
+      ]
+    },
+    {
+      "id": "05-fintech-clean",
+      "kind": "style",
+      "file": "assets/spec/styles/05-fintech-clean-DESIGN.md",
+      "name": "FinTech Clean",
+      "name_zh": "金融科技极简风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#0F172A",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#FFFFFF",
+        "surface-variant": "#F8FAFC",
+        "on-surface": "#0F172A",
+        "primary": "#4338CA",
+        "on-primary": "#FFFFFF",
+        "error": "#DC2626",
+        "success": "#059669",
+        "warning": "#D97706",
+        "surface-raised": "#F1F5F9",
+        "body": "#475569",
+        "muted": "#94A3B8",
+        "faint": "#CBD5E1",
+        "border-default": "#E2E8F0",
+        "neutral": "#64748B",
+        "background": "#6366F1"
+      },
+      "colors_dark": {
+        "surface": "#1E293B",
+        "surface-raised": "#334155"
+      },
+      "fonts": [
+        "Inter",
+        "JetBrains Mono"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=6px",
+        "sm=8px",
+        "base=8px",
+        "card-padding=24px",
+        "max-width=1080px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface+surface-raised",
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "financial-data",
+          "price",
+          "records"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "06-ecommerce-energetic",
+      "kind": "style",
+      "file": "assets/spec/styles/06-ecommerce-energetic-DESIGN.md",
+      "name": "E-Commerce Energetic",
+      "name_zh": "电商促销风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#212121",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#212121",
+        "primary": "#FF3D00",
+        "on-primary": "#111111",
+        "success": "#2E7D32",
+        "border": "#E0E0E0",
+        "primary-hover": "#E53500",
+        "secondary-cta": "#FF6D00",
+        "sale-red": "#E53935",
+        "deal-orange": "#F57C00",
+        "success-light": "#E8F5E9",
+        "rating-yellow": "#FFC107",
+        "platform-blue": "#1976D2",
+        "marketplace-orange": "#FF6600",
+        "commerce-purple": "#7B1FA2",
+        "body": "#424242",
+        "muted": "#757575",
+        "original-price": "#9E9E9E"
+      },
+      "colors_dark": {
+        "surface": "#F5F5F5"
+      },
+      "fonts": [
+        "Roboto"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=4px",
+        "sm=8px",
+        "md=100px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface",
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "conversion-commerce",
+      "semantic": {
+        "tasks": [
+          "browse-compare",
+          "transact",
+          "persuade"
+        ],
+        "content_shapes": [
+          "catalog",
+          "list-detail",
+          "offer"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "price",
+          "promotion"
+        ],
+        "audiences": [
+          "consumer"
+        ],
+        "trust_postures": [
+          "practical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "clear product scanning and action emphasis"
+      ],
+      "tradeoffs": [
+        "promotional energy can reduce calm or institutional trust"
+      ],
+      "reject_conditions": [
+        "no product imagery or no confirmed transaction task"
+      ]
+    },
+    {
+      "id": "07-luxury-premium",
+      "kind": "style",
+      "file": "assets/spec/styles/07-luxury-premium-DESIGN.md",
+      "name": "Luxury Premium",
+      "name_zh": "奢华高端风格",
+      "surface": "#FAFAF8",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAFAF8",
+        "surface-variant": "#FFFFFF",
+        "on-surface": "#111111",
+        "primary": "#B8973A",
+        "on-primary": "#111111",
+        "deep-charcoal": "#1A1A1A",
+        "medium-gray": "#6B6B6B",
+        "light-gray": "#ABABAB",
+        "faint-gray": "#E8E8E4",
+        "champagne-gold": "#C9A96E",
+        "warm-nude": "#D4B896",
+        "muted-rose": "#C4917A",
+        "platinum": "#C8C8C8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Playfair Display",
+        "Cormorant Garamond",
+        "Jost"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "base=8px",
+        "section-padding=120px",
+        "max-width=1400px",
+        "gutter=32px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "08-corporate-blue",
+      "kind": "style",
+      "file": "assets/spec/styles/08-corporate-blue-DESIGN.md",
+      "name": "Corporate Blue",
+      "name_zh": "企业标准蓝风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#001F4E",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "surface-variant": "#EEF0F3",
+        "on-surface": "#001F4E",
+        "primary": "#0055A5",
+        "on-primary": "#FFFFFF",
+        "accent": "#5C9EEB",
+        "error": "#C7000B",
+        "success": "#006B3C",
+        "warning": "#9E5C00",
+        "off-white": "#F4F6F8",
+        "mid-gray": "#D0D5DC",
+        "blue-700": "#003B7A",
+        "blue-500": "#0F62FE",
+        "blue-100": "#E8F1FB",
+        "heading": "#1A2332",
+        "body": "#3D4F61",
+        "secondary": "#6B7A8D",
+        "muted": "#9BA8B5"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "IBM Plex Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=4px",
+        "base=8px",
+        "card-padding=24px",
+        "section-padding=64px",
+        "max-width=1200px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "09-saas-dashboard-light",
+      "kind": "style",
+      "file": "assets/spec/styles/09-saas-dashboard-light-DESIGN.md",
+      "name": "SaaS Dashboard Light",
+      "name_zh": "SaaS 看板浅色风格",
+      "surface": "#F9FAFB",
+      "on_surface": "#111827",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F9FAFB",
+        "surface-variant": "#FFFFFF",
+        "on-surface": "#111827",
+        "primary": "#D97706",
+        "on-primary": "#111111",
+        "error": "#DC2626",
+        "success": "#16A34A",
+        "warning": "#FFFBEB",
+        "surface-raised": "#F3F4F6",
+        "border-subtle": "#E5E7EB",
+        "border-default": "#D1D5DB",
+        "body": "#374151",
+        "secondary": "#6B7280",
+        "muted": "#9CA3AF",
+        "indigo": "#4F46E5",
+        "blue": "#2563EB",
+        "violet": "#7C3AED",
+        "teal": "#0D9488",
+        "success-bg": "#F0FDF4",
+        "error-bg": "#FEF2F2"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=6px",
+        "sm=8px",
+        "md=100px",
+        "card-padding=20px",
+        "card-gap=16px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "10-dark-analytics",
+      "kind": "style",
+      "file": "assets/spec/styles/10-dark-analytics-DESIGN.md",
+      "name": "Dark Analytics Dashboard",
+      "name_zh": "暗色数据分析看板风格",
+      "surface": "#0F1117",
+      "on_surface": "#E6EDF3",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0F1117",
+        "surface-variant": "#161B22",
+        "on-surface": "#E6EDF3",
+        "primary": "#D29922",
+        "on-primary": "#111111",
+        "accent": "#39C5CF",
+        "deepest": "#0A0B0F",
+        "surface-raised": "#1C2333",
+        "surface-high": "#21262D",
+        "border": "#30363D",
+        "border-strong": "#484F58",
+        "text-secondary": "#8B949E",
+        "text-muted": "#6E7681",
+        "data-green": "#3FB950",
+        "data-red": "#F85149",
+        "data-blue": "#388BFD",
+        "data-purple": "#BC8CFF",
+        "data-yellow": "#E3B341"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "JetBrains Mono",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=4px",
+        "sm=6px",
+        "md=8px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "analyze",
+          "monitor"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "11-japandi-minimal",
+      "kind": "style",
+      "file": "assets/spec/styles/11-japandi-minimal-DESIGN.md",
+      "name": "Japandi Minimal",
+      "name_zh": "日式极简风格（侘寂美学）",
+      "surface": "#FAF8F3",
+      "on_surface": "#2C2C2C",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAF8F3",
+        "surface-variant": "#F2EEE6",
+        "on-surface": "#2C2C2C",
+        "primary": "#9C6B52",
+        "on-primary": "#111111",
+        "sand": "#E8E2D5",
+        "warm-border": "#D5CDBD",
+        "graphite": "#4A4A4A",
+        "stone": "#7A7068",
+        "dust": "#A89F91",
+        "matcha": "#6B7C5A",
+        "indigo": "#4A5568",
+        "ash": "#8C8178"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "DM Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=120px",
+        "max-width=960px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "12-ai-native",
+      "kind": "style",
+      "file": "assets/spec/styles/12-ai-native-DESIGN.md",
+      "name": "AI-Native Product",
+      "name_zh": "AI 产品风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#0D0B1A",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#0D0B1A",
+        "primary": "#6D28D9",
+        "on-primary": "#FFFFFF",
+        "heading": "#1A1033",
+        "border": "#E5E1F5"
+      },
+      "colors_dark": {
+        "surface": "#F8F7FF",
+        "primary": "#9B72F5",
+        "heading": "#F0EEFF"
+      },
+      "fonts": [
+        "rgba(240"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=12px",
+        "sm=16px",
+        "max-width=1100px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface+primary+heading",
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "13-health-wellness",
+      "kind": "style",
+      "file": "assets/spec/styles/13-health-wellness-DESIGN.md",
+      "name": "Health & Wellness",
+      "name_zh": "健康 Wellness 风格",
+      "surface": "#FAF8F5",
+      "on_surface": "#0D1B2A",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 3,
+      "colors": {
+        "surface": "#FAF8F5",
+        "on-surface": "#0D1B2A",
+        "primary": "#7BAE7F",
+        "on-primary": "#111111",
+        "accent-teal": "#4A9E9E",
+        "heading": "#2D3436",
+        "body": "#636E72",
+        "border": "#DDD8CF",
+        "accent-indigo": "#6C8EBF",
+        "accent-lavender": "#9B8EC4",
+        "sunrise-gold": "#E8A87C",
+        "mint-fresh": "#A8D8C2",
+        "color": "#FFFFFF"
+      },
+      "colors_dark": {
+        "surface": "#F2EDE4",
+        "heading": "#E8EEF4"
+      },
+      "fonts": [
+        "rgba(232"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=12px",
+        "sm=20px",
+        "md=100px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface+heading",
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "14-bauhaus",
+      "kind": "style",
+      "file": "assets/spec/styles/14-bauhaus-DESIGN.md",
+      "name": "Bauhaus",
+      "name_zh": "包豪斯风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#000000",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#000000",
+        "primary": "#1B5FA0",
+        "on-primary": "#FFFFFF",
+        "bauhaus-red": "#E63329",
+        "bauhaus-yellow": "#F7C948",
+        "orange": "#F08030",
+        "green": "#2D7A3A",
+        "violet": "#6B3A8C"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Futura PT"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=64px",
+        "max-width=1200px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "15-art-deco",
+      "kind": "style",
+      "file": "assets/spec/styles/15-art-deco-DESIGN.md",
+      "name": "Art Deco",
+      "name_zh": "装饰艺术风格",
+      "surface": "#0A0A0A",
+      "on_surface": "#F5F0E8",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0A0A0A",
+        "surface-variant": "#111111",
+        "on-surface": "#F5F0E8",
+        "primary": "#8B6914",
+        "on-primary": "#FFFFFF",
+        "accent": "#C9A84C",
+        "charcoal": "#1E1E1E",
+        "bright-gold": "#D4AF37",
+        "pale-gold": "#E8C97A",
+        "champagne": "#F0E4C4",
+        "deep-teal": "#0D3B3E",
+        "deep-burgundy": "#5C1A1A"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Jost"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "card-padding=40px",
+        "section-padding=80px",
+        "max-width=960px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "16-synthwave",
+      "kind": "style",
+      "file": "assets/spec/styles/16-synthwave-DESIGN.md",
+      "name": "Synthwave / Retrowave",
+      "name_zh": "合成波/复古波风格",
+      "surface": "#0D0221",
+      "on_surface": "#FFE640",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0D0221",
+        "surface-variant": "#280845",
+        "on-surface": "#FFE640",
+        "primary": "#FF2D7F",
+        "on-primary": "#111111",
+        "accent": "#00F5FF",
+        "night": "#1A0533",
+        "mid": "#3D1266",
+        "purple-beam": "#B44BFF",
+        "chrome-white": "#E8E0FF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Orbitron",
+        "Audiowide",
+        "Rajdhani"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=4px",
+        "sm=8px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "17-cyberpunk",
+      "kind": "style",
+      "file": "assets/spec/styles/17-cyberpunk-DESIGN.md",
+      "name": "Cyberpunk",
+      "name_zh": "赛博朋克风格",
+      "surface": "#0A0A0F",
+      "on_surface": "#E0E0F0",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0A0A0F",
+        "surface-variant": "#1A1A24",
+        "on-surface": "#E0E0F0",
+        "primary": "#FFE000",
+        "on-primary": "#111111",
+        "accent": "#00FFD1",
+        "error": "#FF003C",
+        "urban-dark": "#111118",
+        "grid": "#22222E",
+        "neon-orange": "#FF6B00"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Rajdhani"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "18-y2k",
+      "kind": "style",
+      "file": "assets/spec/styles/18-y2k-DESIGN.md",
+      "name": "Y2K / 2000s Revival",
+      "name_zh": "Y2K 千禧复古风格",
+      "surface": "#F0F4FF",
+      "on_surface": "#0A0A1A",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F0F4FF",
+        "on-surface": "#0A0A1A",
+        "primary": "#00CED1",
+        "on-primary": "#111111",
+        "silver": "#C8D0E0",
+        "baby-blue": "#7EC8E3",
+        "hot-pink": "#FF69B4",
+        "lime": "#ADFF2F",
+        "lavender": "#E6B3FF",
+        "butter-yellow": "#FFD700",
+        "chrome-light": "#E8EEF8",
+        "chrome-mid": "#B8C4D4",
+        "chrome-dark": "#8090A8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Nunito"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=20px",
+        "sm=100px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "19-vaporwave",
+      "kind": "style",
+      "file": "assets/spec/styles/19-vaporwave-DESIGN.md",
+      "name": "Vaporwave / Aesthetic",
+      "name_zh": "蒸汽波/复古赛博风格",
+      "surface": "#1A0533",
+      "on_surface": "#FFFB96",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#1A0533",
+        "surface-variant": "#280845",
+        "on-surface": "#FFFB96",
+        "primary": "#01CDFE",
+        "on-primary": "#111111",
+        "accent": "#B967FF",
+        "deep-teal": "#0D2137",
+        "hot-pink": "#FF71CE",
+        "mint": "#05FFA1"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Comfortaa"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=4px",
+        "sm=8px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "20-new-chinese-trendy",
+      "kind": "style",
+      "file": "assets/spec/styles/20-new-chinese-trendy-DESIGN.md",
+      "name": "New Chinese Trendy / 国潮风格",
+      "name_zh": "国潮新中式设计风格",
+      "surface": "#F5F0E8",
+      "on_surface": "#1A1008",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F5F0E8",
+        "on-surface": "#1A1008",
+        "primary": "#FFE000",
+        "on-primary": "#111111",
+        "accent": "#A8C5A0",
+        "vermillion": "#C8372D",
+        "vermillion-light": "#E85545",
+        "emperor-yellow": "#E8A020",
+        "gold": "#C9A84C",
+        "stone": "#7A7060",
+        "jade": "#4A7C59",
+        "ochre": "#C4832A",
+        "neon-red": "#FF2D2D",
+        "body-text": "#3D3020"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC",
+        "Noto Sans SC",
+        "ZCOOL QingKe HuangYou"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=2px",
+        "sm=4px"
+      ],
+      "issues": [],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "21-editorial-magazine",
+      "kind": "style",
+      "file": "assets/spec/styles/21-editorial-magazine-DESIGN.md",
+      "name": "Editorial Magazine",
+      "name_zh": "编辑杂志风格",
+      "surface": "#FAF9F7",
+      "on_surface": "#0A0A0A",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAF9F7",
+        "on-surface": "#0A0A0A",
+        "primary": "#B5121B",
+        "on-primary": "#FFFFFF",
+        "ink": "#121212",
+        "mid-gray": "#6B6B6B",
+        "light-gray": "#E5E5E5",
+        "mid": "#555555"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Source Serif 4"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "max-width=720px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "text",
+          "research",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "22-academic",
+      "kind": "style",
+      "file": "assets/spec/styles/22-academic-DESIGN.md",
+      "name": "Academic / Research",
+      "name_zh": "学术研究风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#212529",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#212529",
+        "primary": "#0D4EA6",
+        "on-primary": "#FFFFFF",
+        "light-gray": "#F8F9FA",
+        "border": "#DEE2E6",
+        "secondary": "#495057",
+        "muted": "#6C757D",
+        "nature-green": "#1D7348",
+        "physics-teal": "#0D6E6E",
+        "medical-burgundy": "#8B1A35"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "EB Garamond"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=4px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "research",
+          "data",
+          "text"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "technical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "23-startup-pitch-dark",
+      "kind": "style",
+      "file": "assets/spec/styles/23-startup-pitch-dark-DESIGN.md",
+      "name": "Startup Pitch Deck Dark",
+      "name_zh": "暗色创业路演 PPT 风格",
+      "surface": "#0F1117",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0F1117",
+        "surface-variant": "#161B22",
+        "on-surface": "#FFFFFF",
+        "primary": "#F59E0B",
+        "on-primary": "#111111",
+        "border": "#30363D",
+        "secondary": "#94A3B8",
+        "muted": "#64748B",
+        "blue": "#3B82F6",
+        "purple": "#8B5CF6",
+        "emerald": "#10B981"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=4px",
+        "margin=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "24-swiss-international",
+      "kind": "style",
+      "file": "assets/spec/styles/24-swiss-international-DESIGN.md",
+      "name": "Swiss International Style / International Typographic Style",
+      "name_zh": "国际主义排版风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#000000",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#000000",
+        "primary": "#E3001B",
+        "on-primary": "#FFFFFF",
+        "accent": "#0047AB",
+        "mid-gray": "#777777",
+        "light-gray": "#CCCCCC",
+        "very-light": "#F5F5F5"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Helvetica Neue"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "text",
+          "research",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "25-nature-organic",
+      "kind": "style",
+      "file": "assets/spec/styles/25-nature-organic-DESIGN.md",
+      "name": "Nature Organic",
+      "name_zh": "自然有机风格",
+      "surface": "#FAF6F0",
+      "on_surface": "#2A2218",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAF6F0",
+        "surface-variant": "#E2D5C0",
+        "on-surface": "#2A2218",
+        "primary": "#4A8B3A",
+        "on-primary": "#111111",
+        "linen": "#F0E8D8",
+        "border-warm": "#CBBFA8",
+        "forest": "#2D5A27",
+        "sage": "#8FAE8A",
+        "mint-light": "#C8DFC4",
+        "ochre": "#C4832A",
+        "clay": "#9C5A3C",
+        "terracotta": "#C4614A",
+        "bark": "#6B4226",
+        "body": "#4A3B2A",
+        "muted": "#7A6B55",
+        "color": "#FFFFFF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Source Serif 4"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=16px",
+        "sm=100px",
+        "section-padding=24px",
+        "max-width=1200px",
+        "gutter=24px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "26-kawaii",
+      "kind": "style",
+      "file": "assets/spec/styles/26-kawaii-DESIGN.md",
+      "name": "Kawaii / Cute UI",
+      "name_zh": "可爱/卡哇伊风格",
+      "surface": "#B8F0E0",
+      "on_surface": "#3D2B1F",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#B8F0E0",
+        "on-surface": "#3D2B1F",
+        "primary": "#6B4C3B",
+        "on-primary": "#FFFFFF",
+        "bubblegum-pink": "#FFB3D1",
+        "baby-lavender": "#D4B8FF",
+        "peach": "#FFD4B8",
+        "sky-baby": "#B8E0FF",
+        "butter": "#FFF4B8",
+        "cream-white": "#FFFBF9",
+        "blush": "#FFF0F5",
+        "pale-lavender": "#F5F0FF",
+        "rose-muted": "#9B7080",
+        "placeholder": "#C8A8B8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Nunito"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=16px",
+        "sm=24px",
+        "md=100px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:4"
+      ],
+      "profile_group": "playful-interface",
+      "semantic": {
+        "tasks": [
+          "create-edit",
+          "browse-compare",
+          "persuade"
+        ],
+        "content_shapes": [
+          "cards",
+          "form-flow",
+          "catalog"
+        ],
+        "content_subjects": [
+          "creative-object",
+          "social-content",
+          "product"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "youth"
+        ],
+        "trust_postures": [
+          "friendly",
+          "energetic",
+          "experimental"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear personality and approachable interaction"
+      ],
+      "tradeoffs": [
+        "can undercut formal or high-consequence trust"
+      ],
+      "reject_conditions": [
+        "the task requires restrained institutional authority"
+      ]
+    },
+    {
+      "id": "27-claymorphism",
+      "kind": "style",
+      "file": "assets/spec/styles/27-claymorphism-DESIGN.md",
+      "name": "Claymorphism / Clay UI",
+      "name_zh": "黏土形态主义风格",
+      "surface": "#F7F5FF",
+      "on_surface": "#1A1A2E",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F7F5FF",
+        "on-surface": "#1A1A2E",
+        "primary": "#3D8EFF",
+        "on-primary": "#111111",
+        "accent": "#FF4D8F",
+        "success": "#2DCA72",
+        "clay-purple": "#8B5CF6",
+        "clay-orange": "#FF7A3D",
+        "clay-yellow": "#FFD600",
+        "clay-teal": "#00C9B8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Nunito"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=16px",
+        "sm=20px",
+        "md=28px",
+        "lg=100px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "profile_group": "playful-interface",
+      "semantic": {
+        "tasks": [
+          "create-edit",
+          "browse-compare",
+          "persuade"
+        ],
+        "content_shapes": [
+          "cards",
+          "form-flow",
+          "catalog"
+        ],
+        "content_subjects": [
+          "creative-object",
+          "social-content",
+          "product"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "youth"
+        ],
+        "trust_postures": [
+          "friendly",
+          "energetic",
+          "experimental"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear personality and approachable interaction"
+      ],
+      "tradeoffs": [
+        "can undercut formal or high-consequence trust"
+      ],
+      "reject_conditions": [
+        "the task requires restrained institutional authority"
+      ]
+    },
+    {
+      "id": "28-pixel-art",
+      "kind": "style",
+      "file": "assets/spec/styles/28-pixel-art-DESIGN.md",
+      "name": "Pixel Art / Retro Gaming",
+      "name_zh": "像素艺术/复古游戏风格",
+      "surface": "#0D0D0D",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0D0D0D",
+        "on-surface": "#FFFFFF",
+        "primary": "#00FF41",
+        "on-primary": "#111111",
+        "error": "#FF2020",
+        "dark-screen": "#1A1A2E",
+        "nes-black": "#000000",
+        "pixel-blue": "#0074FF",
+        "coin-yellow": "#FFD700"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Press Start 2P",
+        "Share Tech Mono"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "29-material-you",
+      "kind": "style",
+      "file": "assets/spec/styles/29-material-you-DESIGN.md",
+      "name": "Material You / Material Design 3",
+      "name_zh": "Material You 动态色彩风格",
+      "surface": "#E8DEF8",
+      "on_surface": "#21005D",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#E8DEF8",
+        "on-surface": "#21005D",
+        "primary": "#6750A4",
+        "on-primary": "#FFFFFF",
+        "primary-container": "#EADDFF",
+        "secondary": "#625B71",
+        "on-secondary-container": "#1D192B",
+        "tertiary": "#7D5260",
+        "tertiary-container": "#FFD8E4",
+        "background": "#FFFBFE",
+        "surface-variant": "#E7E0EC",
+        "surface-container-low": "#F7F2FA",
+        "surface-container-high": "#ECE6F0",
+        "on-background": "#1C1B1F",
+        "on-surface-variant": "#49454F",
+        "outline": "#79747E",
+        "outline-variant": "#CAC4D0",
+        "surface-container": "#F3EDF7"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Roboto Flex"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=8px",
+        "sm=12px",
+        "md=16px",
+        "lg=28px",
+        "xl=100px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "30-dark-developer",
+      "kind": "style",
+      "file": "assets/spec/styles/30-dark-developer-DESIGN.md",
+      "name": "Dark Developer / Terminal Aesthetic",
+      "name_zh": "暗色开发者/终端风格",
+      "surface": "#0D1117",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#0D1117",
+        "surface-variant": "#161B22",
+        "on-surface": "#FFFFFF",
+        "primary": "#58A6FF",
+        "on-primary": "#111111",
+        "accent": "#A5D6FF",
+        "error": "#FF7B72",
+        "success": "#238636",
+        "warning": "#E3B341",
+        "overlay": "#1C2333",
+        "subtle": "#21262D",
+        "inset": "#010409",
+        "default": "#E6EDF3",
+        "muted": "#8B949E",
+        "syntax-green": "#3FB950",
+        "syntax-blue": "#79C0FF",
+        "syntax-purple": "#D2A8FF",
+        "syntax-orange": "#FFA657",
+        "blue-hover": "#388BFD",
+        "levels": "#0E4429",
+        "background": "#1F6FEB"
+      },
+      "colors_dark": {
+        "subtle": "#6E7681",
+        "default": "#30363D"
+      },
+      "fonts": [
+        "JetBrains Mono",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=2px",
+        "sm=6px",
+        "md=8px",
+        "lg=100px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:subtle+default",
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "records",
+          "data",
+          "workflow"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light",
+          "dark"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "31-song-dynasty-ink",
+      "kind": "style",
+      "file": "assets/spec/styles/31-song-dynasty-ink-DESIGN.md",
+      "name": "Song Dynasty Ink",
+      "name_zh": "宋代水墨美学风格",
+      "surface": "#F7F3EC",
+      "on_surface": "#1C1C1C",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F7F3EC",
+        "surface-variant": "#EEE8DB",
+        "on-surface": "#1C1C1C",
+        "primary": "#8BB5B0",
+        "on-primary": "#111111",
+        "accent": "#C8DEDD",
+        "ink-wash-tint": "#E8E2D6",
+        "medium-ink": "#4A4A46",
+        "light-ink": "#8A8A84",
+        "ghost-ink": "#BCBAB4",
+        "ink-wash": "#D8D5CF",
+        "seal-vermillion": "#C43B2A",
+        "ochre": "#9A6B4B"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px",
+        "section-padding=120px",
+        "max-width=720px",
+        "margin=80px"
+      ],
+      "issues": [
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "text",
+          "research",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "32-tang-dynasty-splendor",
+      "kind": "style",
+      "file": "assets/spec/styles/32-tang-dynasty-splendor-DESIGN.md",
+      "name": "Tang Dynasty Splendor",
+      "name_zh": "唐代华彩风格",
+      "surface": "#F0DFA0",
+      "on_surface": "#0D0805",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F0DFA0",
+        "on-surface": "#0D0805",
+        "primary": "#3D1200",
+        "on-primary": "#FFFFFF",
+        "accent": "#E8C456",
+        "error": "#C43B2A",
+        "midnight-jade": "#0A1A15",
+        "imperial-gold": "#C9A84C",
+        "dark-gold": "#8B6B2A",
+        "lapis-blue": "#2B5BA8",
+        "malachite": "#2D7A5A",
+        "jadeite-white": "#E8EDE5"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "33-republican-shanghai",
+      "kind": "style",
+      "file": "assets/spec/styles/33-republican-shanghai-DESIGN.md",
+      "name": "Republican Era Shanghai",
+      "name_zh": "民国海报风格",
+      "surface": "#F5EDD8",
+      "on_surface": "#1A1410",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F5EDD8",
+        "surface-variant": "#EDE0C0",
+        "on-surface": "#1A1410",
+        "primary": "#C41E3A",
+        "on-primary": "#FFFFFF",
+        "deep-night": "#1A0D0D",
+        "poster-gold": "#D4A847",
+        "blush-rose": "#D4927A",
+        "jade-green": "#3D7A5A",
+        "cobalt": "#2A4B8A",
+        "warm-gray": "#9A8F82"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "34-ukiyo-e",
+      "kind": "style",
+      "file": "assets/spec/styles/34-ukiyo-e-DESIGN.md",
+      "name": "Ukiyo-e Woodblock",
+      "name_zh": "浮世绘版画风格",
+      "surface": "#F5F0E6",
+      "on_surface": "#1A1614",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F5F0E6",
+        "surface-variant": "#EDE6D4",
+        "on-surface": "#1A1614",
+        "primary": "#1A4B7A",
+        "on-primary": "#FFFFFF",
+        "deep-indigo": "#1E2A5E",
+        "cerulean": "#4A88C0",
+        "sky-pale": "#A8C8D8",
+        "terracotta": "#D4603A",
+        "vermillion": "#C43B2A",
+        "sap-green": "#4A7A3A"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif JP"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "35-zen-wabi-sabi",
+      "kind": "style",
+      "file": "assets/spec/styles/35-zen-wabi-sabi-DESIGN.md",
+      "name": "Zen Wabi-Sabi",
+      "name_zh": "禅意侘寂风格",
+      "surface": "#F4F1EC",
+      "on_surface": "#1A1714",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F4F1EC",
+        "surface-variant": "#EAE5DC",
+        "on-surface": "#1A1714",
+        "primary": "#8B5E3C",
+        "on-primary": "#FFFFFF",
+        "stone-mid": "#C8C0B8",
+        "soot": "#2A2520",
+        "ash": "#3D3830",
+        "moss": "#6B7B5A",
+        "storm-cloud": "#6A7080",
+        "bamboo": "#B8A870",
+        "stone-gray": "#6A6560",
+        "muted-stone": "#9A9590"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif JP"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px",
+        "default=2px",
+        "section-padding=680px"
+      ],
+      "issues": [
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "text",
+          "research",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "36-medical-healthcare",
+      "kind": "style",
+      "file": "assets/spec/styles/36-medical-healthcare-DESIGN.md",
+      "name": "Medical & Healthcare",
+      "name_zh": "医疗健康风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#111827",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "surface-variant": "#EFF6FF",
+        "on-surface": "#111827",
+        "primary": "#D97706",
+        "on-primary": "#111111",
+        "accent": "#67E8F9",
+        "error": "#DC2626",
+        "success": "#059669",
+        "soft-blue-gray": "#F8FAFB",
+        "medical-teal": "#0891B2",
+        "teal-dark": "#0E7490",
+        "teal-tint": "#E0F7FC",
+        "green-tint": "#ECFDF5",
+        "info-blue": "#2563EB",
+        "text-secondary": "#374151",
+        "text-muted": "#6B7280",
+        "border": "#E5E7EB"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "DM Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=6px",
+        "sm=8px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "health-service",
+          "records",
+          "guidance"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "37-legal-professional",
+      "kind": "style",
+      "file": "assets/spec/styles/37-legal-professional-DESIGN.md",
+      "name": "Legal & Professional Authority",
+      "name_zh": "法律专业权威风格",
+      "surface": "#FAFAF8",
+      "on_surface": "#0D1421",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAFAF8",
+        "surface-variant": "#0D2040",
+        "on-surface": "#0D1421",
+        "primary": "#2E5E9A",
+        "on-primary": "#FFFFFF",
+        "accent": "#B8962E",
+        "light-gray": "#F5F5F4",
+        "navy-mid": "#1A3660",
+        "navy-tint": "#EBF0F8",
+        "gold-light": "#D4AE52",
+        "gold-tint": "#FBF5E6",
+        "text-body": "#374151",
+        "text-muted": "#6B7280",
+        "border": "#E2E0DC"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Georgia"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "sm=2px",
+        "section-padding=96px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "operate",
+          "analyze",
+          "create-edit"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "professional-service",
+          "text",
+          "records"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "38-education-platform",
+      "kind": "style",
+      "file": "assets/spec/styles/38-education-platform-DESIGN.md",
+      "name": "Education Platform",
+      "name_zh": "在线教育平台风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#111827",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#111827",
+        "primary": "#4F46E5",
+        "on-primary": "#FFFFFF",
+        "accent": "#818CF8",
+        "success": "#ECFDF5",
+        "learning-gray": "#F9FAFB",
+        "active-surface": "#F5F3FF",
+        "indigo-dark": "#3730A3",
+        "indigo-tint": "#EEF2FF",
+        "achievement-gold": "#F59E0B",
+        "gold-tint": "#FFFBEB",
+        "complete-green": "#10B981",
+        "text-body": "#374151",
+        "text-muted": "#6B7280",
+        "border": "#E5E7EB"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Plus Jakarta Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=8px",
+        "sm=12px",
+        "md=999px",
+        "section-padding=64px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "read",
+          "create-edit",
+          "operate"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "learning-content",
+          "progress",
+          "records"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "39-real-estate-luxury",
+      "kind": "style",
+      "file": "assets/spec/styles/39-real-estate-luxury-DESIGN.md",
+      "name": "Real Estate Luxury",
+      "name_zh": "豪宅地产风格",
+      "surface": "#FAFAF8",
+      "on_surface": "#1A1614",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAFAF8",
+        "surface-variant": "#F0EDEA",
+        "on-surface": "#1A1614",
+        "primary": "#B8962E",
+        "on-primary": "#111111",
+        "accent": "#D4AE52",
+        "charcoal": "#1A1A1A",
+        "warm-dark": "#2C2720",
+        "gold-tint": "#FBF5E6",
+        "text-body": "#4A4540",
+        "text-muted": "#8A8580",
+        "border": "#E0DCD8",
+        "reverse-text": "#F5F0EA"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=120px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "40-restaurant-fine-dining",
+      "kind": "style",
+      "file": "assets/spec/styles/40-restaurant-fine-dining-DESIGN.md",
+      "name": "Restaurant Fine Dining",
+      "name_zh": "高端餐饮风格",
+      "surface": "#FAF7F0",
+      "on_surface": "#0F0F0E",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAF7F0",
+        "surface-variant": "#F2EDE4",
+        "on-surface": "#0F0F0E",
+        "primary": "#1A1614",
+        "on-primary": "#FFFFFF",
+        "aged-cream": "#E8E0D4",
+        "charcoal": "#1C1A18",
+        "deep-warm-dark": "#2A2520",
+        "gold-ochre": "#B8902A",
+        "terracotta": "#C0654A",
+        "champagne": "#D4B896",
+        "sage": "#6B7B5A",
+        "body": "#4A4540",
+        "muted": "#8A8580",
+        "reverse": "#F5F0EA"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "EB Garamond"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=120px",
+        "margin=120px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "41-finance-enterprise",
+      "kind": "style",
+      "file": "assets/spec/styles/41-finance-enterprise-DESIGN.md",
+      "name": "Finance Enterprise",
+      "name_zh": "金融企业级风格",
+      "surface": "#F8F9FA",
+      "on_surface": "#0D1B2E",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F8F9FA",
+        "surface-variant": "#F1F3F5",
+        "on-surface": "#0D1B2E",
+        "primary": "#3B6BB5",
+        "on-primary": "#FFFFFF",
+        "navy": "#0A1628",
+        "navy-mid": "#1A3A6A",
+        "navy-tint": "#E8EEF8",
+        "positive": "#0F6B4A",
+        "positive-muted": "#D1FAE5",
+        "negative": "#C0392B",
+        "negative-muted": "#FEE2E2",
+        "neutral": "#6B7280",
+        "text-body": "#374151",
+        "border": "#DEE2E6"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "IBM Plex Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=4px",
+        "section-padding=40px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:4"
+      ],
+      "profile_group": "precision-workspace",
+      "semantic": {
+        "tasks": [
+          "analyze",
+          "operate",
+          "monitor"
+        ],
+        "content_shapes": [
+          "dense-data",
+          "list-detail",
+          "form-flow"
+        ],
+        "content_subjects": [
+          "financial-data",
+          "records",
+          "risk"
+        ],
+        "audiences": [
+          "professional",
+          "expert"
+        ],
+        "trust_postures": [
+          "technical",
+          "authoritative",
+          "practical"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "low",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "clear hierarchy for repeated work",
+        "stable data and form surfaces"
+      ],
+      "tradeoffs": [
+        "less expressive for image-led storytelling"
+      ],
+      "reject_conditions": [
+        "the main value depends on immersive imagery or cultural atmosphere"
+      ]
+    },
+    {
+      "id": "42-esports-gaming",
+      "kind": "style",
+      "file": "assets/spec/styles/42-esports-gaming-DESIGN.md",
+      "name": "Esports & Gaming",
+      "name_zh": "电竞赛事风格",
+      "surface": "#0A0C14",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0A0C14",
+        "surface-variant": "#0D1120",
+        "on-surface": "#FFFFFF",
+        "primary": "#00D4FF",
+        "on-primary": "#111111",
+        "surface-raised": "#141929",
+        "venom-green": "#39FF14",
+        "electric-purple": "#8B5CF6",
+        "plasma-orange": "#FF6B00",
+        "kill-red": "#FF2D55",
+        "gold-rank": "#F5A623",
+        "secondary": "#94A3B8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "experimental-digital",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "communicate",
+          "analyze"
+        ],
+        "content_shapes": [
+          "hero-detail",
+          "spatial",
+          "dashboard"
+        ],
+        "content_subjects": [
+          "technology",
+          "game",
+          "music"
+        ],
+        "audiences": [
+          "consumer",
+          "technical",
+          "creative"
+        ],
+        "trust_postures": [
+          "experimental",
+          "technical",
+          "energetic"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "data-available"
+        ],
+        "interaction_intensities": [
+          "medium",
+          "high"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "strong digital identity and emphasis",
+        "supports immersive or live surfaces"
+      ],
+      "tradeoffs": [
+        "effects can compete with reading and accessibility"
+      ],
+      "reject_conditions": [
+        "low visual-risk requirement or long uninterrupted reading"
+      ]
+    },
+    {
+      "id": "43-fashion-editorial",
+      "kind": "style",
+      "file": "assets/spec/styles/43-fashion-editorial-DESIGN.md",
+      "name": "Fashion Editorial",
+      "name_zh": "时尚编辑风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#000000",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#000000",
+        "primary": "#C41E3A",
+        "on-primary": "#FFFFFF",
+        "off-black": "#0A0A0A",
+        "light-gray": "#F5F5F5",
+        "medium-gray": "#9B9B9B",
+        "dark-gray": "#3A3A3A",
+        "powder-blue": "#A8C8D8",
+        "acid-yellow": "#F5E642"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Bodoni Moda",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "44-travel-hospitality",
+      "kind": "style",
+      "file": "assets/spec/styles/44-travel-hospitality-DESIGN.md",
+      "name": "Travel & Hospitality",
+      "name_zh": "旅行酒店风格",
+      "surface": "#FAFAF8",
+      "on_surface": "#1A1614",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAFAF8",
+        "on-surface": "#1A1614",
+        "primary": "#059669",
+        "on-primary": "#111111",
+        "accent": "#E8724A",
+        "sand": "#F5EFE6",
+        "light-teal": "#E0F7F7",
+        "coral-dark": "#C85A35",
+        "coral-tint": "#FEF0EB",
+        "ocean": "#0891B2",
+        "ocean-light": "#BAE6F5",
+        "gold-star": "#F5A623",
+        "text-body": "#374151",
+        "text-muted": "#6B7280",
+        "border": "#E5E0D8",
+        "background": "#FFFFFF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Lora",
+        "DM Sans"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=8px",
+        "sm=10px",
+        "md=12px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "image-led-premium",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "browse-compare",
+          "transact"
+        ],
+        "content_shapes": [
+          "image-gallery",
+          "catalog",
+          "detail"
+        ],
+        "content_subjects": [
+          "physical-product",
+          "place",
+          "person"
+        ],
+        "audiences": [
+          "consumer",
+          "general"
+        ],
+        "trust_postures": [
+          "aspirational",
+          "human"
+        ],
+        "asset_conditions": [
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": true,
+        "visual_risk": "medium",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "lets real photography carry the subject",
+        "supports spacious comparison and detail"
+      ],
+      "tradeoffs": [
+        "quality drops sharply with weak or placeholder imagery"
+      ],
+      "reject_conditions": [
+        "usable subject imagery is unavailable"
+      ]
+    },
+    {
+      "id": "45-nonprofit-cause",
+      "kind": "style",
+      "file": "assets/spec/styles/45-nonprofit-cause-DESIGN.md",
+      "name": "Nonprofit & Cause",
+      "name_zh": "公益/NGO 风格",
+      "surface": "#FAFAF8",
+      "on_surface": "#111827",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FAFAF8",
+        "on-surface": "#111827",
+        "primary": "#D97706",
+        "on-primary": "#111111",
+        "success": "#ECFDF5",
+        "light-gray": "#F3F4F6",
+        "hope-tint": "#FFF7ED",
+        "trust-blue": "#2563EB",
+        "blue-dark": "#1D4ED8",
+        "blue-tint": "#EFF6FF",
+        "hope-amber": "#F59E0B",
+        "amber-tint": "#FFFBEB",
+        "impact-green": "#059669",
+        "text-body": "#374151",
+        "text-muted": "#6B7280",
+        "border": "#E5E7EB",
+        "background": "#FFFFFF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=8px",
+        "sm=10px",
+        "md=12px",
+        "lg=999px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "transact"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "impact-story",
+          "evidence",
+          "donation"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "46-islamic-geometric",
+      "kind": "style",
+      "file": "assets/spec/styles/46-islamic-geometric-DESIGN.md",
+      "name": "Islamic Geometric",
+      "name_zh": "伊斯兰几何风格",
+      "surface": "#0D3340",
+      "on_surface": "#FAF6EE",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#0D3340",
+        "on-surface": "#FAF6EE",
+        "primary": "#0D4858",
+        "on-primary": "#FFFFFF",
+        "accent": "#E8C456",
+        "warm-white": "#F5F0E8",
+        "iznik-teal": "#1B6B7B",
+        "moroccan-blue": "#2E4E7E",
+        "sky-tile": "#5B9BB5",
+        "tile-tint": "#E0F0F5",
+        "mosque-gold": "#C9A84C",
+        "gold-tint": "#FAF2DC",
+        "terracotta": "#C0562A",
+        "rose": "#C4547A",
+        "emerald": "#2A7A5A",
+        "dark": "#1A2830",
+        "muted": "#8A9AAA"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:3"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "47-afrofuturism",
+      "kind": "style",
+      "file": "assets/spec/styles/47-afrofuturism-DESIGN.md",
+      "name": "Afrofuturism",
+      "name_zh": "非洲未来主义风格",
+      "surface": "#050505",
+      "on_surface": "#F5EDE0",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#050505",
+        "surface-variant": "#1A1008",
+        "on-surface": "#F5EDE0",
+        "primary": "#A03A1A",
+        "on-primary": "#FFFFFF",
+        "deep-earth": "#0F0A06",
+        "terracotta": "#C05A2A",
+        "ochre": "#D4862A",
+        "kente-green": "#2A7A3A",
+        "electric-gold": "#E8B830",
+        "deep-violet": "#5B2D8A",
+        "cosmic-blue": "#1A3A8A",
+        "muted-earth": "#8A7060",
+        "background": "#0A0A0F"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "default=2px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "48-pop-art-60s",
+      "kind": "style",
+      "file": "assets/spec/styles/48-pop-art-60s-DESIGN.md",
+      "name": "Pop Art 60s",
+      "name_zh": "60年代波普艺术风格",
+      "surface": "#FFFEF5",
+      "on_surface": "#0A0A0A",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFEF5",
+        "surface-variant": "#F5F0E0",
+        "on-surface": "#0A0A0A",
+        "primary": "#E8002A",
+        "on-primary": "#FFFFFF",
+        "accent": "#00ADEF",
+        "pop-yellow": "#FFD700",
+        "pop-green": "#00A550",
+        "pop-orange": "#FF6900",
+        "pink": "#FF69B4"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "sm=8px",
+        "section-padding=80px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:2"
+      ],
+      "profile_group": "expressive-cultural",
+      "semantic": {
+        "tasks": [
+          "persuade",
+          "read",
+          "browse-compare"
+        ],
+        "content_shapes": [
+          "poster",
+          "gallery",
+          "editorial"
+        ],
+        "content_subjects": [
+          "culture",
+          "event",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "consumer",
+          "creative"
+        ],
+        "trust_postures": [
+          "expressive",
+          "aspirational"
+        ],
+        "asset_conditions": [
+          "image-optional",
+          "image-required"
+        ],
+        "interaction_intensities": [
+          "low",
+          "medium"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "optional",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "distinctive cultural or event expression",
+        "strong graphic composition"
+      ],
+      "tradeoffs": [
+        "requires project-specific evidence to avoid costume styling"
+      ],
+      "reject_conditions": [
+        "no cultural, material, or content evidence supports the visual language"
+      ]
+    },
+    {
+      "id": "49-dark-academia",
+      "kind": "style",
+      "file": "assets/spec/styles/49-dark-academia-DESIGN.md",
+      "name": "Dark Academia",
+      "name_zh": "暗系学院派风格",
+      "surface": "#1A1208",
+      "on_surface": "#FAF0DC",
+      "is_dark": true,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#1A1208",
+        "surface-variant": "#2C1F0E",
+        "on-surface": "#FAF0DC",
+        "primary": "#8B1A1A",
+        "on-primary": "#FFFFFF",
+        "accent": "#E0B860",
+        "oak": "#3D2E1A",
+        "parchment": "#F5EDD8",
+        "cream": "#EDE3CC",
+        "scholar-gold": "#C8A050",
+        "gold-dim": "#8A6C30",
+        "crimson-light": "#C43A3A",
+        "faded-parchment": "#C8B89A",
+        "muted-scholar": "#8A7858"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Cormorant Garamond"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px",
+        "section-padding=100px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "content-led",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "long-form",
+          "editorial",
+          "detail"
+        ],
+        "content_subjects": [
+          "text",
+          "research",
+          "story"
+        ],
+        "audiences": [
+          "general",
+          "expert"
+        ],
+        "trust_postures": [
+          "authoritative",
+          "human",
+          "reflective"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "mobile",
+          "desktop"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "medium",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "dark"
+        ]
+      },
+      "strengths": [
+        "reading rhythm and editorial hierarchy",
+        "works with substantial real text"
+      ],
+      "tradeoffs": [
+        "not optimized for dense continuous operations"
+      ],
+      "reject_conditions": [
+        "the core task is repeated data entry or monitoring"
+      ]
+    },
+    {
+      "id": "50-brutalist-web",
+      "kind": "style",
+      "file": "assets/spec/styles/50-brutalist-web-DESIGN.md",
+      "name": "Brutalist Web",
+      "name_zh": "网页野蛮主义风格",
+      "surface": "#FFFFFF",
+      "on_surface": "#000000",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#000000",
+        "primary": "#FF0000",
+        "on-primary": "#111111",
+        "accent": "#FFFF00",
+        "link-blue": "#0000EE",
+        "neon-green": "#00FF00",
+        "hot-magenta": "#FF00FF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Arial Black",
+        "Arial"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font",
+        "declared-fail-pairs:1"
+      ],
+      "profile_group": "raw-editorial",
+      "semantic": {
+        "tasks": [
+          "read",
+          "persuade"
+        ],
+        "content_shapes": [
+          "editorial",
+          "portfolio",
+          "long-form"
+        ],
+        "content_subjects": [
+          "text",
+          "creative-work",
+          "culture"
+        ],
+        "audiences": [
+          "creative",
+          "expert"
+        ],
+        "trust_postures": [
+          "experimental",
+          "direct"
+        ],
+        "asset_conditions": [
+          "none-available",
+          "image-optional"
+        ],
+        "interaction_intensities": [
+          "low"
+        ],
+        "primary_devices": [
+          "desktop",
+          "mobile"
+        ]
+      },
+      "constraints": {
+        "requires_images": false,
+        "visual_risk": "high",
+        "motion_dependency": "none",
+        "color_schemes": [
+          "light"
+        ]
+      },
+      "strengths": [
+        "direct content hierarchy with little decorative dependency"
+      ],
+      "tradeoffs": [
+        "deliberate rawness is easy to mistake for unfinished work"
+      ],
+      "reject_conditions": [
+        "the audience expects polished conventional reassurance"
+      ]
+    },
+    {
+      "id": "01-dieter-rams",
+      "kind": "method",
+      "file": "assets/spec/masters/01-dieter-rams-DESIGN.md",
+      "name": "Dieter Rams Method",
+      "name_zh": "迪特·拉姆斯设计方法",
+      "surface": "#F5F3EE",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#F5F3EE",
+        "on-surface": "#111111",
+        "primary": "#E53935",
+        "on-primary": "#111111",
+        "success": "#2F6F4E",
+        "text-muted": "#6F6F68",
+        "line": "#D8D6CF"
+      },
+      "colors_dark": {
+        "surface": "#FFFFFF"
+      },
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface",
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "02-massimo-vignelli",
+      "kind": "method",
+      "file": "assets/spec/masters/02-massimo-vignelli-DESIGN.md",
+      "name": "Massimo Vignelli Method",
+      "name_zh": "马西莫·维涅利设计方法",
+      "surface": "#FFFFFF",
+      "on_surface": "#0A0A0A",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#0A0A0A",
+        "primary": "#E31B23",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#666666",
+        "rule": "#CFCFCB",
+        "accent-blue": "#0057B8"
+      },
+      "colors_dark": {
+        "surface": "#F4F4F2"
+      },
+      "fonts": [
+        "Helvetica Neue"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface",
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "03-paul-rand",
+      "kind": "method",
+      "file": "assets/spec/masters/03-paul-rand-DESIGN.md",
+      "name": "Paul Rand Method",
+      "name_zh": "保罗·兰德设计方法",
+      "surface": "#F7F2E7",
+      "on_surface": "#111827",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F7F2E7",
+        "on-surface": "#111827",
+        "primary": "#1D4ED8",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#6B5F52",
+        "red": "#E63946",
+        "yellow": "#F7C948",
+        "black": "#111111"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Avenir",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "04-saul-bass",
+      "kind": "method",
+      "file": "assets/spec/masters/04-saul-bass-DESIGN.md",
+      "name": "Saul Bass Method",
+      "name_zh": "索尔·巴斯设计方法",
+      "surface": "#F4E5CF",
+      "on_surface": "#0B0B0B",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F4E5CF",
+        "on-surface": "#0B0B0B",
+        "primary": "#F2B705",
+        "on-primary": "#111111",
+        "text-muted": "#5B5248",
+        "red": "#D7261E",
+        "green": "#2F5D50",
+        "cream": "#FFF3D8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Oswald",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "05-josef-muller-brockmann",
+      "kind": "method",
+      "file": "assets/spec/masters/05-josef-muller-brockmann-DESIGN.md",
+      "name": "Josef Mueller-Brockmann Method",
+      "name_zh": "约瑟夫·穆勒-布罗克曼设计方法",
+      "surface": "#FFFFFF",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#111111",
+        "primary": "#E3001B",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#666666",
+        "grid-line": "#D9D9D9",
+        "accent-blue": "#0057A6",
+        "accent-gray": "#F2F2F2"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Helvetica Neue"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "06-armin-hofmann",
+      "kind": "method",
+      "file": "assets/spec/masters/06-armin-hofmann-DESIGN.md",
+      "name": "Armin Hofmann Method",
+      "name_zh": "阿明·霍夫曼设计方法",
+      "surface": "#F5F5F2",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F5F5F2",
+        "on-surface": "#111111",
+        "primary": "#CC0000",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#5F5F59",
+        "mid-gray": "#8A8A84",
+        "light-gray": "#D6D6D0"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Helvetica Neue"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "07-otl-aicher",
+      "kind": "method",
+      "file": "assets/spec/masters/07-otl-aicher-DESIGN.md",
+      "name": "Otl Aicher Method",
+      "name_zh": "奥托·艾舍设计方法",
+      "surface": "#F8F7F1",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F8F7F1",
+        "on-surface": "#111111",
+        "primary": "#00A3E0",
+        "on-primary": "#111111",
+        "text-muted": "#5E625D",
+        "grass-green": "#78BE20",
+        "warm-orange": "#F05A28",
+        "line": "#D7D8D2"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Rotis",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "08-laszlo-moholy-nagy",
+      "kind": "method",
+      "file": "assets/spec/masters/08-laszlo-moholy-nagy-DESIGN.md",
+      "name": "Laszlo Moholy-Nagy Method",
+      "name_zh": "拉斯洛·莫霍利-纳吉设计方法",
+      "surface": "#FFFFFF",
+      "on_surface": "#0A0A0A",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#0A0A0A",
+        "primary": "#0057B8",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#666666",
+        "red": "#E31B23",
+        "yellow": "#FFD100",
+        "metal": "#C0C0C0",
+        "shadow": "#1F2937"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Futura",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "09-charles-ray-eames",
+      "kind": "method",
+      "file": "assets/spec/masters/09-charles-ray-eames-DESIGN.md",
+      "name": "Charles & Ray Eames Method",
+      "name_zh": "查尔斯与雷·伊姆斯设计方法",
+      "surface": "#F7E7C6",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#F7E7C6",
+        "on-surface": "#111111",
+        "primary": "#1E5AA8",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#6D6258",
+        "orange": "#E65A2E",
+        "yellow": "#F5C542",
+        "green": "#2E6B4F",
+        "wood": "#B9824A"
+      },
+      "colors_dark": {
+        "surface": "#FFF7E8"
+      },
+      "fonts": [
+        "Avenir",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface",
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "10-raymond-loewy",
+      "kind": "method",
+      "file": "assets/spec/masters/10-raymond-loewy-DESIGN.md",
+      "name": "Raymond Loewy Method",
+      "name_zh": "雷蒙德·洛维设计方法",
+      "surface": "#F7F4EC",
+      "on_surface": "#101820",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F7F4EC",
+        "on-surface": "#101820",
+        "primary": "#B91C1C",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#5E6670",
+        "chrome": "#C8D2D9",
+        "gold": "#C7A24B",
+        "line": "#DCD8CE"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Avenir",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "11-ettore-sottsass",
+      "kind": "method",
+      "file": "assets/spec/masters/11-ettore-sottsass-DESIGN.md",
+      "name": "Ettore Sottsass Method",
+      "name_zh": "埃托雷·索特萨斯设计方法",
+      "surface": "#F8E9D2",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F8E9D2",
+        "on-surface": "#111111",
+        "primary": "#00A6A6",
+        "on-primary": "#111111",
+        "text-muted": "#5B5148",
+        "pink": "#EF476F",
+        "yellow": "#FFD166",
+        "purple": "#5A189A"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Futura",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "12-milton-glaser",
+      "kind": "method",
+      "file": "assets/spec/masters/12-milton-glaser-DESIGN.md",
+      "name": "Milton Glaser Method",
+      "name_zh": "米尔顿·格雷泽设计方法",
+      "surface": "#F5E6C8",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F5E6C8",
+        "on-surface": "#111111",
+        "primary": "#E63946",
+        "on-primary": "#111111",
+        "text-muted": "#665A4A",
+        "blue": "#1D3557",
+        "teal": "#2A9D8F",
+        "orange": "#F4A261",
+        "cream": "#FFF6E3"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Cooper Black",
+        "Avenir",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "13-ikko-tanaka",
+      "kind": "method",
+      "file": "assets/spec/masters/13-ikko-tanaka-DESIGN.md",
+      "name": "Ikko Tanaka Method",
+      "name_zh": "田中一光设计方法",
+      "surface": "#F7F2E8",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F7F2E8",
+        "on-surface": "#111111",
+        "primary": "#E60012",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#6B6258",
+        "indigo": "#005BAC",
+        "gold": "#F5B400",
+        "purple": "#6F2DA8",
+        "paper-line": "#D8CBB8"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC",
+        "Noto Sans SC"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "14-shigeo-fukuda",
+      "kind": "method",
+      "file": "assets/spec/masters/14-shigeo-fukuda-DESIGN.md",
+      "name": "Shigeo Fukuda Method",
+      "name_zh": "福田繁雄设计方法",
+      "surface": "#FFFFFF",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#111111",
+        "primary": "#0057B8",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#606060",
+        "red": "#E31B23",
+        "soft-gray": "#F2F2F2",
+        "line": "#D6D6D6"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Helvetica Neue",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "15-kenya-hara",
+      "kind": "method",
+      "file": "assets/spec/masters/15-kenya-hara-DESIGN.md",
+      "name": "Kenya Hara Method",
+      "name_zh": "原研哉设计方法",
+      "surface": "#FBFAF5",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FBFAF5",
+        "on-surface": "#111111",
+        "primary": "#2F2A24",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#7A7166",
+        "paper": "#E8E1D2",
+        "warm-gray": "#C7B299"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Noto Serif SC",
+        "Noto Sans SC"
+      ],
+      "cjk_font": true,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "16-paula-scher",
+      "kind": "method",
+      "file": "assets/spec/masters/16-paula-scher-DESIGN.md",
+      "name": "Paula Scher Method",
+      "name_zh": "宝拉·谢尔设计方法",
+      "surface": "#FFFFFF",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#FFFFFF",
+        "on-surface": "#111111",
+        "primary": "#FFD100",
+        "on-primary": "#111111",
+        "red": "#E31B23",
+        "blue": "#0057B8",
+        "orange": "#FF5A1F",
+        "gray": "#EDEDED"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Archivo Narrow",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "17-david-carson",
+      "kind": "method",
+      "file": "assets/spec/masters/17-david-carson-DESIGN.md",
+      "name": "David Carson Method",
+      "name_zh": "大卫·卡森设计方法",
+      "surface": "#EAE1D0",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#EAE1D0",
+        "on-surface": "#111111",
+        "primary": "#C2410C",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#6B7280",
+        "dust": "#A08B73",
+        "deep-gray": "#394150",
+        "paper": "#F7F2E7"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "18-neville-brody",
+      "kind": "method",
+      "file": "assets/spec/masters/18-neville-brody-DESIGN.md",
+      "name": "Neville Brody Method",
+      "name_zh": "内维尔·布罗迪设计方法",
+      "surface": "#0A0A0A",
+      "on_surface": "#FFFFFF",
+      "is_dark": true,
+      "multi_theme": true,
+      "theme_blocks": 2,
+      "colors": {
+        "surface": "#0A0A0A",
+        "on-surface": "#FFFFFF",
+        "primary": "#B9FF00",
+        "on-primary": "#111111",
+        "text-muted": "#A6A6A6",
+        "red": "#FF3B30",
+        "steel": "#7A7F87"
+      },
+      "colors_dark": {
+        "surface": "#1F1F1F"
+      },
+      "fonts": [
+        "Space Grotesk",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "multi-theme-frontmatter:surface",
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "19-susan-kare",
+      "kind": "method",
+      "file": "assets/spec/masters/19-susan-kare-DESIGN.md",
+      "name": "Susan Kare Method",
+      "name_zh": "苏珊·凯尔设计方法",
+      "surface": "#F4F4F0",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F4F4F0",
+        "on-surface": "#111111",
+        "primary": "#0066FF",
+        "on-primary": "#FFFFFF",
+        "text-muted": "#5E5E58",
+        "pixel-black": "#000000",
+        "yellow": "#FFCC00",
+        "red": "#FF3B30",
+        "green": "#34C759"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Chicago",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    },
+    {
+      "id": "20-april-greiman",
+      "kind": "method",
+      "file": "assets/spec/masters/20-april-greiman-DESIGN.md",
+      "name": "April Greiman Method",
+      "name_zh": "艾普丽尔·格雷曼设计方法",
+      "surface": "#F3E8FF",
+      "on_surface": "#111111",
+      "is_dark": false,
+      "multi_theme": false,
+      "theme_blocks": 1,
+      "colors": {
+        "surface": "#F3E8FF",
+        "on-surface": "#111111",
+        "primary": "#00AEEF",
+        "on-primary": "#111111",
+        "text-muted": "#5B5266",
+        "magenta": "#FF2D95",
+        "yellow": "#FFD100",
+        "purple": "#8E44AD",
+        "white": "#FFFFFF"
+      },
+      "colors_dark": {},
+      "fonts": [
+        "Helvetica Neue",
+        "Inter"
+      ],
+      "cjk_font": false,
+      "rounded": [
+        "none=0px"
+      ],
+      "issues": [
+        "no-cjk-font"
+      ],
+      "role": "optional-design-method",
+      "note": "Methods may inform critique or craft; they are not grammar candidates."
+    }
+  ]
+}

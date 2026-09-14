@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">{{TITLE}}</a>
+    <span class="context">方案目录</span>
+  </header>
+  <main>
+    <section class="heading" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">本期可选方案</p>
+        <h1 id="page-title">找到适合当前任务的一项</h1>
+      </div>
+      <p>按真实业务字段替换筛选项、摘要和比较维度。</p>
+    </section>
+
+    <form class="filters" id="filters" role="search">
+      <label>搜索
+        <input id="query" name="query" type="search" autocomplete="off" placeholder="名称或说明">
+      </label>
+      <label>类别
+        <select id="category" name="category">
+          <option value="">全部类别</option>
+          <option value="基础">基础</option>
+          <option value="进阶">进阶</option>
+          <option value="专项">专项</option>
+        </select>
+      </label>
+      <button type="reset" class="secondary">清除筛选</button>
+    </form>
+
+    <div class="result-bar">
+      <p id="result-count" role="status" aria-live="polite"></p>
+      <p id="compare-status" role="status" aria-live="polite"></p>
+    </div>
+
+    <section aria-labelledby="results-title">
+      <h2 id="results-title" class="sr-only">筛选结果</h2>
+      <div id="results" class="results"></div>
+      <div id="empty" class="empty" hidden>
+        <h2>没有符合条件的结果</h2>
+        <p>调整搜索内容或清除筛选。</p>
+        <button id="clear-empty" type="button" class="secondary">清除筛选</button>
+      </div>
+    </section>
+
+    <section id="comparison" class="comparison" aria-labelledby="comparison-title" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">已选择</p>
+          <h2 id="comparison-title">比较方案</h2>
+        </div>
+        <button id="clear-comparison" type="button" class="secondary">清空</button>
+      </div>
+      <div class="table-scroll" tabindex="0" aria-label="方案比较表，可横向滚动">
+        <table>
+          <thead id="compare-head"></thead>
+          <tbody id="compare-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="detail-dialog" aria-labelledby="detail-title">
+    <div class="dialog-heading">
+      <p class="eyebrow" id="detail-category"></p>
+      <button id="close-detail" type="button" class="icon-button" aria-label="关闭详情">×</button>
+    </div>
+    <h2 id="detail-title"></h2>
+    <p id="detail-description"></p>
+    <dl id="detail-facts"></dl>
+  </dialog>
+</body>
+</html>

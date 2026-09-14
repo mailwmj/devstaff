@@ -1,23 +1,34 @@
 ---
 name: site-check
-description: 只验收或独立检查已有网站和 Web 应用的构建、核心任务、视觉及再次打开行为，输出有证据的结果但不修复源码；也由 site-builder 在正式交付前调用。“检查并修复”由 site-builder 编排。
+description: Use when independently checking a website or web app for build, core-task, rendered visual, mobile, state, distribution, or reopen behavior; it reports evidence and never fixes formal source.
 ---
 # 网站独立检查
 
-检查实际成果，不根据代码意图、文件存在或构建成功推断用户任务可用。此 Skill 始终只读；修复由 `site-builder` 完成后再次调用本 Skill。
+检查用户实际能否完成任务，不从代码意图、文件存在、截图或构建成功推断通过。此 Skill 始终只读；修复交回 `site-builder`。
 
 ## 执行
 
-1. **确定对象和范围。** 定位用户指定项目，读取源码、原生说明、`.site/brief.md`、`.site/implementation-plan.md` 和状态。没有 `.site` 也可从请求与工程检查；不初始化、迁移或补写第三方项目。
-2. **建立检查矩阵。** 读 [验证规则](references/verification.md)，先根据本轮改动选择 `smoke`、`targeted` 或 `full` 档位并写明 `profile_reason`，再把每项能力写成“前提 → 操作 → 可观察结果”，标明 `axis` 与是否阻断交付。小范围文案、颜色和间距调整通常使用 `smoke`；单个交互、计算或局部 Bug 使用 `targeted`；新建、重大结构变化、持久化、权限、隐私、导入导出或共享数据使用 `full`。`full` 必须有 `static_build / core_task / visual_desktop / visual_mobile / reopen` 五个阻断轴；其他档位也至少包含受影响的阻断 `core_task`。Bug 必须覆盖原症状，参考还原保留参考条件。
-3. **静态与构建。** 沿用项目原生命令；静态网页可用本 Skill 的检查脚本。命令成功只证明该命令，不能替代业务和视觉轴。
-4. **核心业务。** 在实际运行环境完成核心任务和高价值反例。可见控件必须兑现承诺；持久记录重新打开核验。未经授权不提交外站表单或修改真实数据。
-5. **视觉审查。** 调用 `site-design` 的只读审查分支，传入选定结构与风格、代表页面、关键状态和目标视口。结构已确认但风格待选时，不得按已确认视觉做方向匹配判定。该分支不得调用 `site-brief`；没有依据时按质量标准检查，并把方向匹配标为 `not_run`。
-6. **再次打开。** 从真实交付入口重新启动或打开，核对运行说明、入口、关键数据和限制。开发服务器当次可用不等于可再次使用。
-7. **报告。** 每项记录前提、操作、预期、观察、状态、`axis`、是否阻断、证据与限制；回执说明本轮档位及选择原因，并按影响排序 failed 项。每项证据写清它来自哪个真实产物（截图、结果 JSON、日志）或哪次 `check.py run` 的 `check_id`，再交给 `check.py matrix --profile <smoke|targeted|full>` 生成内容寻址矩阵凭据；阻断项只有 `artifact` 或 `command` 证据可用，写不出证据的项标成 `not_run`。验证较久时在开始新检查轴、发现阻断项、进入修复复验时报告一次阶段变化，不把命令流水逐条转给用户。回执带上 `check_id`。摘要校验只用于发现误改，不把它称为签名或恶意 Agent 防护；证据是否真正支持语义结论仍由本 Skill 判断。重要检查未执行或核心任务失败时不能称全面通过，也不写任何协作状态；本 Skill 唯一的写入位置是 `.site/checks/` 下自己的检查凭据。
+1. **锁定对象。** 读取正式入口、源码、brief/计划、`.site/design/packet.json`、分发合同和 prototype lineage。没有 `.site` 也可检查第三方项目，但不初始化或迁移它。
+2. **建立矩阵。** 读 [验证规则](references/verification.md)，按后果与影响面选择 `smoke | targeted | full`。每项写成“前提 → 操作 → 可观察结果”，映射 DesignPacket 的 `required / excluded`、核心任务、失败恢复、状态、视口和 reopen。缺证据写 `not_run`。
+3. **静态与构建。** 沿用项目原生命令；普通静态页可用 `scripts/check.py static`。命令成功只证明该命令。
+4. **真实任务与渲染。** 在正式运行入口执行核心任务和高价值反例。调用 `site-design` 只读审查，并运行：
 
-## 协作回执
+   ```sh
+   node ../site-design/tools/check-render.mjs \
+     --entry <URL或HTML> --contract <contract.json> --output <evidence-dir>
+   ```
 
-返回：`passed | failed | incomplete | blocked`、检查矩阵与 `check_id`、阻断项、非阻断建议、实际入口、未执行项及恢复条件。被 `site-builder` 调用时只返回发现；用户直接验收时到报告为止。宿主支持独立 Agent 时优先隔离检查上下文，不支持时说明独立性限制。
+   真实渲染至少覆盖桌面和 390px，检查 linked CSS/computed style、字体/CJK、相邻对比、溢出、触控目标、图片、减弱动效，以及适用的焦点、悬停、禁用、错误和加载状态。构图、direction 可追溯和项目特异性由只读视觉审查判断。
+5. **分发与再次打开。** 从约定接收者实际得到的文件、URL 或安装入口打开；需要离线时按真实前提断网；需要持久化时关闭并重开。回环开发地址不能证明可分享。
+6. **保存证据。** 每项只保留能改变判定的最小 artifact/command 证据。开始生成矩阵后停止写入正式源码和证据；用 `check.py matrix` 生成绑定当前指纹的 `check_id`。阻断项不能只靠散文或截图名称。
+7. **报告。** 按影响排序失败项，说明本轮档位、真实入口、已运行、`not_run` 与恢复条件。可脚本化结论给 `verify_command`；窄档修复可用 `reverify`，`full` 必须重新完整执行。
 
-截图不是操作证据，代码推断不是视觉检查。无浏览器、账号或执行能力时完成可执行部分，并把缺口标为 `not_run`。连续两次复验没有新证据时返回 `blocked`，不盲目重试。
+## 隔离
+
+Writer 必须先停止自有服务并冻结；Checker 检查前后核对源码指纹。Checker 不编辑、格式化、安装会改写源码的依赖或替 Writer 修复。源码变化使本轮作废，必须重新 handoff。
+
+## 回执
+
+返回 `passed | failed | incomplete | blocked`、检查矩阵与 `check_id`、阻断发现、非阻断建议、真实入口和未执行项。给用户只说“能不能用、还差什么、下一步是什么”；档位、轴、指纹和矩阵保留给 builder 与文件。
+
+没有浏览器、账号或必要环境时完成其余检查并诚实降级。完整维护者生成质量评测不属于本 Skill 的普通验收；它由根目录 `tests/evaluate.py` 和双真人协议负责。

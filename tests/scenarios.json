@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "suite_version": "1.0.0",
+  "scenarios": [
+    {
+      "id": "SD-01",
+      "title": "中文长内容与品牌表达",
+      "fixture": "F-CHINESE-CONTENT",
+      "fixed_input": "为社区口述史项目做一个中文网站，第一版让居民能在手机上读完一篇访谈。",
+      "coverage": ["content-led", "cjk", "project-specificity"],
+      "observations": ["目录到文章的主任务完整", "真实访谈是视觉主角", "中文排印可连续阅读"]
+    },
+    {
+      "id": "SD-02",
+      "title": "图片与材料主导页面",
+      "fixture": "F-IMAGE-MATERIAL",
+      "fixed_input": "给这套手工陶器做一个可浏览的中文展示页，重点让人看清釉色、尺寸和器型，不做购买。",
+      "coverage": ["image-led", "material", "crop"],
+      "observations": ["器物图片承担主要表达", "裁剪不破坏器型", "没有带入购买能力"]
+    },
+    {
+      "id": "SD-03",
+      "title": "高密度数据工作区",
+      "fixture": "F-DATA-WORKSPACE",
+      "fixed_input": "做一个给运营人员每天排查配送异常的工具，先支持筛选、查看详情和标记已处理。",
+      "coverage": ["data-workspace", "filter", "undo"],
+      "observations": ["高频路径无需绕经 KPI 首页", "密度支持连续扫描", "处理可撤销"]
+    },
+    {
+      "id": "SD-04",
+      "title": "本地持久化 CRUD 工具",
+      "fixture": "F-LOCAL-CRUD",
+      "fixed_input": "把这个本地值班记录工具补完整：能新增、编辑、删除，关掉浏览器再打开还在，并能导入导出。",
+      "coverage": ["local-crud", "persistence", "import-export"],
+      "observations": ["新增编辑删除可用", "删除有确认", "重开和导入不丢原数据"]
+    },
+    {
+      "id": "SD-05",
+      "title": "表单错误恢复",
+      "fixture": "F-FORM-RECOVERY",
+      "fixed_input": "做一个社区维修申报页面，手机填写，出错时不能丢内容，提交前能核对，退出后还能继续草稿。",
+      "coverage": ["form-flow", "error-recovery", "draft"],
+      "observations": ["错误同时就地和汇总表达", "输入不因错误丢失", "提交前可核对"]
+    },
+    {
+      "id": "SD-06",
+      "title": "参考驱动但不复制",
+      "fixture": "F-REFERENCE",
+      "fixed_input": "参考提供的页面做一个城市步行路线页。借鉴它的地图与文字主次，不复制品牌和功能。",
+      "coverage": ["reference", "direction", "scope"],
+      "observations": ["记录参考边界", "方向来源为 reference", "没有复制品牌或新增实时定位"]
+    },
+    {
+      "id": "SD-07",
+      "title": "已有项目整体改版",
+      "fixture": "F-EXISTING-REDESIGN",
+      "fixed_input": "重做现有志愿者排班页的信息结构和视觉，但保留所有排班操作与已有数据。",
+      "coverage": ["redesign", "existing-system", "lineage"],
+      "observations": ["既有操作和姓名保留", "品牌规则被继承", "改版没有静默改变范围"]
+    },
+    {
+      "id": "SD-08",
+      "title": "复杂移动工作流",
+      "fixture": "F-MOBILE-WORKFLOW",
+      "fixed_input": "做一个手机端仓库盘点流程：扫码可先模拟，连续核对货位，离开后继续，发现差异要拍照备注。",
+      "coverage": ["mobile-workflow", "state", "reopen"],
+      "observations": ["单手操作连续", "差异可修改", "中途退出与恢复成立"]
+    },
+    {
+      "id": "SD-09",
+      "title": "行业名称不能直接选风格",
+      "fixture": "F-EMPTY",
+      "fixed_input": "这是一个医疗网站，请直接选医疗风格。",
+      "coverage": ["negative-selection", "semantic-index"],
+      "observations": ["只有行业时返回 needs_profile", "不生成风格候选"]
+    },
+    {
+      "id": "SD-10",
+      "title": "视觉方向与样式语法分层",
+      "fixture": "F-REFERENCE",
+      "fixed_input": "沿用参考的地图主次，但用随包规范落实颜色与组件。",
+      "coverage": ["direction", "grammar", "reference"],
+      "observations": ["direction.source 为 reference", "grammar.source 为 packaged-spec", "两者证据分别记录"]
+    },
+    {
+      "id": "SD-11",
+      "title": "模板只在合同之后落地",
+      "fixture": "F-FORM-RECOVERY",
+      "fixed_input": "核心字段和恢复行为确认后，选择合适的表单实现模板。",
+      "coverage": ["template", "task-contract", "lineage"],
+      "observations": ["先存在任务合同和方向", "模板不新增字段", "记录适配与拒绝项"]
+    },
+    {
+      "id": "SD-12",
+      "title": "中文字体角色补全",
+      "fixture": "F-CHINESE-CONTENT",
+      "fixed_input": "选择拉丁字体规范后实现中文长文。",
+      "coverage": ["cjk", "grammar", "render"],
+      "observations": ["中文回退明确", "中文标题字距为零", "实际字体加载结果有证据"]
+    },
+    {
+      "id": "SD-13",
+      "title": "素材条件硬过滤",
+      "fixture": "F-EMPTY",
+      "fixed_input": "没有可用图片，做一个以连续阅读为主的页面。",
+      "coverage": ["hard-filter", "assets"],
+      "observations": ["需要图片的候选被拒绝", "拒绝原因可追踪"]
+    },
+    {
+      "id": "SD-14",
+      "title": "没有语义命中时弃权",
+      "fixture": "F-DATA-WORKSPACE",
+      "fixed_input": "画像与目录候选没有核心任务或内容形态交集。",
+      "coverage": ["no-match", "semantic-index"],
+      "observations": ["返回 no_match", "不拿最接近候选冒充命中"]
+    },
+    {
+      "id": "SD-15",
+      "title": "大师资料只作为方法",
+      "fixture": "F-EMPTY",
+      "fixed_input": "选择一个适合数据工作区的风格规范。",
+      "coverage": ["method-separation", "catalog"],
+      "observations": ["候选只含 style", "大师资料仅在明确需要方法时读取"]
+    },
+    {
+      "id": "SD-16",
+      "title": "外链 CSS 的真实渲染",
+      "fixture": "F-EXISTING-REDESIGN",
+      "fixed_input": "检查已有页面的字体、对比度和窄屏布局。",
+      "coverage": ["linked-css", "computed-style", "render"],
+      "observations": ["读取 computed style", "静态预检不冒充渲染结果"]
+    },
+    {
+      "id": "SD-17",
+      "title": "项目特异性替换检查",
+      "fixture": "F-CHINESE-CONTENT",
+      "fixed_input": "评审社区口述史页面是否只是通用内容站换名。",
+      "coverage": ["project-specificity", "replacement-test"],
+      "observations": ["母题来自口述记录", "构图和细节签名不能无损替换到其他项目"]
+    },
+    {
+      "id": "MV-01",
+      "title": "390 像素中文阅读",
+      "fixture": "F-CHINESE-CONTENT",
+      "fixed_input": "在 390×844 视口完成目录到文章阅读。",
+      "coverage": ["mobile", "reading"],
+      "observations": ["无横向溢出", "标题和正文不遮挡", "返回路径可用"]
+    },
+    {
+      "id": "MV-02",
+      "title": "窄屏表单保留输入",
+      "fixture": "F-FORM-RECOVERY",
+      "fixed_input": "在 390×844 视口制造错误并继续填写。",
+      "coverage": ["mobile", "form", "error"],
+      "observations": ["错误可见且关联字段", "键盘焦点合理", "已填内容保留"]
+    },
+    {
+      "id": "MV-03",
+      "title": "窄屏数据与比较",
+      "fixture": "F-DATA-WORKSPACE",
+      "fixed_input": "在 390×844 视口筛选并比较两条记录。",
+      "coverage": ["mobile", "data", "comparison"],
+      "observations": ["关键数据不被 display none 隐藏", "横向滚动有明确容器或重排"]
+    },
+    {
+      "id": "MV-04",
+      "title": "单手触控目标",
+      "fixture": "F-MOBILE-WORKFLOW",
+      "fixed_input": "在手机上连续核对三个货位。",
+      "coverage": ["touch-target", "mobile-workflow"],
+      "observations": ["核心控件至少 44×44", "动态内容不造成布局跳动"]
+    },
+    {
+      "id": "MV-05",
+      "title": "极端中文内容",
+      "fixture": "F-CHINESE-CONTENT",
+      "fixed_input": "用最长标题、长段落和连续标点检查页面。",
+      "coverage": ["overflow", "cjk", "extreme-content"],
+      "observations": ["最长词和标题不溢出", "标点与行高可读"]
+    },
+    {
+      "id": "MV-06",
+      "title": "减弱动效",
+      "fixture": "F-REFERENCE",
+      "fixed_input": "在 prefers-reduced-motion: reduce 下浏览路线页。",
+      "coverage": ["reduced-motion", "render"],
+      "observations": ["非必要长动效被移除", "内容和操作仍成立"]
+    },
+    {
+      "id": "MV-07",
+      "title": "错误与加载状态",
+      "fixture": "F-FORM-RECOVERY",
+      "fixed_input": "检查表单的错误、禁用和处理中状态。",
+      "coverage": ["error", "disabled", "loading", "focus"],
+      "observations": ["状态可见且语义正确", "不靠颜色单独表达"]
+    },
+    {
+      "id": "MV-08",
+      "title": "再次打开恢复",
+      "fixture": "F-LOCAL-CRUD",
+      "fixed_input": "保存一条记录，关闭并从交付入口重新打开。",
+      "coverage": ["reopen", "persistence"],
+      "observations": ["数据仍在", "入口和限制说明一致", "失败时不覆盖原数据"]
+    }
+  ]
+}
