@@ -14,21 +14,171 @@
 
 `profile_reason` 必填，但不能推翻推导结果。`full` 至少有阻断轴：`static_build / core_task / visual_desktop / visual_mobile / reopen`；smoke/targeted 至少覆盖本轮受影响的阻断 `core_task`。分发要求分享、离线或原型交接时再增加 `share / offline / prototype_lineage`。
 
-每项使用：
+### 根对象 JSON Schema (`--input` 文件规范)
+
+运行矩阵检查时，输入文件必须包含完整的根对象元数据与 `items` 列表：
 
 ```json
 {
-  "id": "core-save",
-  "axis": "core_task",
-  "capability": "保存记录",
-  "precondition": "存在一条有效输入",
-  "action": "填写并点击保存",
-  "expected": "列表出现记录并显示成功反馈",
-  "observed": "实际观察",
-  "status": "passed | failed | not_run | not_applicable",
-  "blocking": true,
-  "evidence": {"kind": "artifact | command", "summary": "...", "paths": [], "commands": []},
-  "verify_command": ["可重复命令"]
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["consequence", "surface", "profile", "profile_reason", "items"],
+  "properties": {
+    "consequence": {
+      "type": "string",
+      "enum": ["high", "low"],
+      "description": "后果严重度：错误结果是否伤害用户（漏车、失窃、泄露数据为 high；样式文案小瑕疵为 low）"
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["narrow", "wide"],
+      "description": "变更影响面：单点微调/单任务为 narrow，跨模块/多路由/主框架变更或新建为 wide"
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["smoke", "targeted", "full"],
+      "description": "档位，必须与 consequence x surface 推导一致（low->smoke, high+narrow->targeted, high+wide->full）"
+    },
+    "profile_reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "档位选定原因，不可为空"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "axis", "status", "blocking", "evidence"],
+        "properties": {
+          "id": { "type": "string", "description": "唯一标识" },
+          "title": { "type": "string", "description": "人类可读名称，缺省回退为 id" },
+          "axis": {
+            "type": "string",
+            "description": "验证轴。full 档必需：static_build, core_task, visual_desktop, visual_mobile, reopen；其他可选：share, offline, prototype_lineage 等"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "not_run", "not_applicable"]
+          },
+          "blocking": { "type": "boolean", "description": "是否为阻断项（阻断项 passed 必须附带 artifact 或 command 证据）" },
+          "carried_from": { "type": "string", "description": "沿用前序通过的 check_id（仅 smoke/targeted 允许）" },
+          "verify_command": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "可自动重跑的验证命令"
+          },
+          "evidence": {
+            "type": "object",
+            "required": ["kind", "summary"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["artifact", "command", "observation", "declared"],
+                "description": "证据类型，阻断项仅支持 artifact 或 command"
+              },
+              "summary": { "type": "string", "description": "证据描述摘要" },
+              "paths": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "工程内证据文件相对路径（如截图、测试报告），单项不超过 3 个，整表不超过 24 个"
+              },
+              "commands": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "关联的 check.py run 产生的 check_id"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### CLI 标准调用命令
+
+```bash
+python scripts/check.py matrix --input <json_path> <root>
+```
+
+> **参数说明**：`<json_path>` 为上述 JSON 文件路径，`<root>` 为待验证项目根目录。工具校验通过后将证据哈希与源码指纹持久化至 `.site/checks/<check_id>.json`。
+
+### 开箱即用完整示例 (`full` 档位)
+
+```json
+{
+  "consequence": "high",
+  "surface": "wide",
+  "profile": "full",
+  "profile_reason": "核心主流程完整交付，涉及核心业务流程、真实持久化与多端真实渲染，执行全量验证",
+  "items": [
+    {
+      "id": "build-static",
+      "title": "静态构建与外链合规审查",
+      "axis": "static_build",
+      "status": "passed",
+      "blocking": true,
+      "verify_command": ["python", "scripts/check.py", "static", "."],
+      "evidence": {
+        "kind": "artifact",
+        "summary": "静态项目无构建错误，无境外不可达 CDN 依赖与内联危险代码",
+        "paths": [".site/checks/static-report.txt"]
+      }
+    },
+    {
+      "id": "core-task-primary",
+      "title": "核心主任务打通与数据持久化",
+      "axis": "core_task",
+      "status": "passed",
+      "blocking": true,
+      "verify_command": ["python", "-m", "unittest", "site-builder/tests/test_site.py"],
+      "evidence": {
+        "kind": "artifact",
+        "summary": "核心任务端到端测试通过，完成完整输入、状态变更与持久化写入",
+        "paths": [".site/checks/core-task.log"]
+      }
+    },
+    {
+      "id": "visual-desktop-390",
+      "title": "桌面端布局与视觉基准一致性",
+      "axis": "visual_desktop",
+      "status": "passed",
+      "blocking": true,
+      "evidence": {
+        "kind": "artifact",
+        "summary": "桌面端视口真实渲染核验通过，计算样式、CJK 字体与层叠上下文无溢出",
+        "paths": [".site/checks/desktop-render.json"]
+      }
+    },
+    {
+      "id": "visual-mobile-390",
+      "title": "移动端 390px 视口与触控尺寸合规",
+      "axis": "visual_mobile",
+      "status": "passed",
+      "blocking": true,
+      "evidence": {
+        "kind": "artifact",
+        "summary": "390px 视口下无横向溢出，触控热区均大于 44x44px，100dvh 弹性高度适配正常",
+        "paths": [".site/checks/mobile-render.json"]
+      }
+    },
+    {
+      "id": "reopen-persistence",
+      "title": "重开会话与状态持久化无损恢复",
+      "axis": "reopen",
+      "status": "passed",
+      "blocking": true,
+      "evidence": {
+        "kind": "artifact",
+        "summary": "重新打开页面后历史数据与核心状态完整恢复",
+        "paths": [".site/checks/reopen.json"]
+      }
+    }
+  ]
 }
 ```
 

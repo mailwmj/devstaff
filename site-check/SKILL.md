@@ -25,7 +25,7 @@ description: Use when independently checking a website or web app for build, cor
 
 ## 隔离
 
-Writer 必须先停止自有服务并冻结；Checker 检查前后核对源码指纹。Checker 不编辑、格式化、安装会改写源码的依赖或替 Writer 修复。源码变化使本轮作废，必须重新 handoff。
+Checker **必须作为独立会话或独立子智能体生命周期（如派发的只读 Subagent）执行**，全程只读，杜绝与 Writer 共享主会话造成上下文污染与工具调用爆炸。Writer 必须先停止自有服务并通过 `state.py handoff` 冻结；Checker 检查前后重新比对源码指纹与哈希。Checker 绝不编辑、格式化、安装会改写源码的依赖或替 Writer 修复；若检查前后源码哈希发生任何变化，本轮独立验收立即作废，必须退回 Writer 重新 handoff。
 
 ## 回执
 
