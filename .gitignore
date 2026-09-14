@@ -1,2 +1,5 @@
 .DS_Store
+.playwright-cli/
+__pycache__/
+*.py[cod]
 tests/runs/

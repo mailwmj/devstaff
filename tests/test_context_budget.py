@@ -15,8 +15,13 @@ class ContextBudgetTests(unittest.TestCase):
 
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['metric'], 'utf8_bytes_proxy_not_model_tokens')
+        self.assertEqual(result['baseline_ref'], '681c43c')
+        self.assertEqual(result['baseline_bytes'], 121_411)
         self.assertGreaterEqual(result['reduction'], 0.30)
         self.assertEqual(result['current_bytes'], sum(row['bytes'] for row in result['files']))
+        paths = {row['path'] for row in result['files']}
+        self.assertIn('templates/AGENTS.md', paths)
+        self.assertNotIn('AGENTS.md', paths)
 
 
 if __name__ == '__main__':

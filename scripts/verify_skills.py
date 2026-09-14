@@ -2,9 +2,9 @@
 """Verify the packaging and collaboration graph of the site skill suite.
 
 This checker uses only the Python standard library.  Each skill manifest must
-list every regular file below that skill directory except ``manifest.json``.
-That exception is deliberately narrow: there are no wildcard or implicit
-allow rules, so every other unlisted file is an error.
+list every distributable file below that skill directory except
+``manifest.json``. Python runtime caches are not distributable assets and are
+ignored; every other unlisted file is an error.
 
 An optional root-level ``skills.json`` may declare collaboration dependencies.
 The preferred shape is::
@@ -300,12 +300,16 @@ class Verification:
         actual = {
             path.relative_to(skill_dir).as_posix()
             for path in skill_dir.rglob("*")
-            if path.is_file()
+            if path.is_file() and not self.is_runtime_cache(path.relative_to(skill_dir))
         }
         for path in sorted(actual - listed - ALLOWED_UNLISTED_FILES):
             self.error(skill_dir / Path(*PurePosixPath(path).parts), "file is not listed in manifest")
         for path in sorted(listed - actual):
             self.error(manifest_path, f"manifest lists absent file: {path!r}")
+
+    @staticmethod
+    def is_runtime_cache(path: Path) -> bool:
+        return "__pycache__" in path.parts or path.suffix == ".pyc"
 
     @staticmethod
     def normalize_manifest_path(raw_path: str) -> str | None:

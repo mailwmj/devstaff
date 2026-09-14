@@ -8,15 +8,15 @@
 ## 回放顺序
 
 1. `python3 tests/evaluate.py validate-catalog` 检查场景、夹具和锁。
-2. 从所需 `F-*` 复制隔离副本，记录四个 Skill manifest 版本与哈希。
+2. 从所需 `F-*` 复制隔离副本，记录四个 Skill manifest 版本与哈希，并把模型和关键工具条件写入 `environment`。
 3. 用固定输入开始同一条持续用户会话；用户只说自然语言，不提示内部流程。
 4. 保存 `select.mjs` 选择/拒绝、`DesignPacket`、正式输出、`check-render.mjs` JSON 与截图。
 5. 两名真人独立完成五维评分；任何未执行项写入 `not_run`。
-6. 用 `evaluate.py validate-run --full` 检查单条完整记录，再按 `AGENTS.md` 汇总全套结论。
+6. 用 `evaluate.py validate-run --full` 区分单条记录是否证据完整、是否达到发布门槛；再用 `compare` 机器核对完整 25 场景集合。
 
 ## Token 对比
 
-每个相同固定输入记录实际 `input_tokens`、`output_tokens` 与 `duration_ms`。比较前后版本时，场景集合、模型和工具条件必须相同：
+每个相同固定输入记录实际 `input_tokens`、`output_tokens` 与 `duration_ms`。`fixed_input_sha256` 必须匹配场景目录，`environment.model` 与 `environment.tools` 记录可复现条件。比较器会拒绝场景缺失、重复、输入变化或环境不一致：
 
 ```sh
 python3 tests/evaluate.py compare before.json after.json --target 0.30

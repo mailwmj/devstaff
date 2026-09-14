@@ -45,7 +45,7 @@
 | RC-22 | 核心任务按前提、操作、结果执行，而不是从代码推断 |
 | RC-23 | 再次打开按真实交付入口验证，持久化失败不覆盖原数据 |
 | RC-24 | 自动冒烟、人工视觉判断和完整回归结论明确分级 |
-| RC-25 | 运行记录含版本、固定输入、选择/拒绝、产物、截图、得分、token、耗时、评测者、否决和 `not_run` |
+| RC-25 | 运行记录含版本、固定输入、模型/工具条件、选择/拒绝、产物、截图、得分、token、耗时、评测者、否决和 `not_run` |
 
 ## 评分
 
@@ -71,7 +71,7 @@
 
 ## 运行记录
 
-以 `tests/evaluate.py` 校验 JSON。普通自动冒烟可以只有一个 `automated` 评测者，但必须保持 `full_ready=false`；完整单场景记录使用：
+以 `tests/evaluate.py` 校验 JSON。普通自动冒烟可以只有一个 `automated` 评测者，但必须保持 `evaluation_complete=false`；完整单场景记录使用：
 
 ```sh
 python3 tests/evaluate.py validate-catalog
@@ -80,4 +80,4 @@ python3 tests/evaluate.py validate-run path/to/run.json --full
 python3 tests/evaluate.py compare before.json after.json --target 0.30
 ```
 
-`--full` 只验证一条运行记录具备两名真人、无否决/缺测且达到质量门槛；版本级完整结论还必须由评测负责人按 `AGENTS.md` 确认所有场景均已覆盖。
+`--full` 对一条记录分别返回：`evaluation_complete` 表示两名真人和证据均齐全，`release_ready` 表示核心任务、五维得分和否决项同时达标。完整但失败的基线仍可比较。`compare` 只接受前后各 25 个固定场景，并核对相同 suite、固定输入、模型和工具条件；最终人工责任仍按 `AGENTS.md` 执行。

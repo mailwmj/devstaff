@@ -11,7 +11,7 @@ site-builder  默认入口、正式源码 Writer、修复与交付
 └── site-check   冻结后的只读 Checker
 ```
 
-四个目录与根 `AGENTS.md` 应一起安装。普通用户不需要手动选择 Skill，也不会看到“快速/高质量”等模式。
+四个 Skill 目录与 [`templates/AGENTS.md`](templates/AGENTS.md) 应一起安装；根 `AGENTS.md` 只约束维护者评测，不能作为用户侧路由复制。`scripts/install.py` 原子安装四个 Skill，但不覆盖宿主配置；具体注入位置见 [`templates/hosts/README.md`](templates/hosts/README.md)。普通用户不需要手动选择 Skill，也不会看到“快速/高质量”等模式。
 
 ## 质量模型
 

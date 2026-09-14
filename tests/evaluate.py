@@ -21,6 +21,15 @@ REQUIRED_SCENARIOS = tuple(
     + [f'MV-{index:02d}' for index in range(1, 9)]
 )
 HASH = re.compile(r'^[0-9a-f]{64}$')
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def scenario_metadata(root=ROOT):
+    catalog = json.loads((root / 'tests' / 'scenarios.json').read_text(encoding='utf-8'))
+    return catalog['suite_version'], {
+        row['id']: hashlib.sha256(row['fixed_input'].encode()).hexdigest()
+        for row in catalog['scenarios']
+    }
 
 
 def fixture_digest(folder):
@@ -115,6 +124,8 @@ def _evaluation_errors(row, index):
 def quality_score(record):
     scores = []
     for evaluation in record.get('evaluations') or []:
+        if not isinstance(evaluation, dict):
+            continue
         for name in QUALITY_DIMENSIONS:
             value = (evaluation.get('dimensions') or {}).get(name) or {}
             if isinstance(value.get('score'), int): scores.append(value['score'])
@@ -124,25 +135,52 @@ def quality_score(record):
 def validate_run(record, full=False):
     errors = []
     if not isinstance(record, dict) or record.get('schema_version') != 1:
-        return {'errors': ['run must be a schema_version=1 object'], 'full_ready': False}
+        return {
+            'errors': ['run must be a schema_version=1 object'],
+            'evaluation_complete': False,
+            'release_ready': False,
+            'full_ready': False,
+        }
     for field in ('run_id', 'scenario_id', 'suite_version'):
         if not record.get(field): errors.append(f'{field} is required')
-    if record.get('scenario_id') not in REQUIRED_SCENARIOS:
+    scenario_id = record.get('scenario_id')
+    if scenario_id not in REQUIRED_SCENARIOS:
         errors.append('scenario_id is not in the fixed suite')
+    try:
+        expected_suite, fixed_inputs = scenario_metadata()
+    except (OSError, KeyError, json.JSONDecodeError) as error:
+        errors.append(f'cannot load fixed scenario metadata: {error}')
+        expected_suite, fixed_inputs = None, {}
+    if expected_suite and record.get('suite_version') != expected_suite:
+        errors.append(f'suite_version must match scenarios.json ({expected_suite})')
     skills = record.get('skills') or {}
     for name in SKILLS:
         value = skills.get(name)
         if not isinstance(value, dict) or not value.get('version') or not value.get('path') or not HASH.match(str(value.get('sha256', ''))):
             errors.append(f'skills.{name} needs version, path, and sha256')
-    if not HASH.match(str(record.get('fixed_input_sha256', ''))):
+    fixed_input_sha256 = str(record.get('fixed_input_sha256', ''))
+    if not HASH.fullmatch(fixed_input_sha256):
         errors.append('fixed_input_sha256 must be a lowercase SHA-256')
+    elif scenario_id in fixed_inputs and fixed_input_sha256 != fixed_inputs[scenario_id]:
+        errors.append('fixed_input_sha256 does not match the catalog fixed input')
+    environment = record.get('environment') or {}
+    if not isinstance(environment, dict) or not isinstance(environment.get('model'), str) or not environment['model'].strip():
+        errors.append('environment.model must be a non-empty string')
+    tools = environment.get('tools') if isinstance(environment, dict) else None
+    if not isinstance(tools, dict) or not tools or any(
+        not isinstance(name, str) or not name.strip() or not isinstance(version, str) or not version.strip()
+        for name, version in (tools or {}).items()
+    ):
+        errors.append('environment.tools must be a non-empty object of tool names to versions or conditions')
     selection = record.get('selection') or {}
     if not isinstance(selection.get('profile'), dict): errors.append('selection.profile is required')
     for field in ('candidates', 'selected', 'rejected'):
         if not isinstance(selection.get(field), list): errors.append(f'selection.{field} must be a list')
     artifacts = record.get('artifacts') or {}
-    if not isinstance(artifacts.get('outputs'), list) or not isinstance(artifacts.get('screenshots'), list):
-        errors.append('artifacts outputs and screenshots must be lists')
+    for field in ('outputs', 'screenshots'):
+        values = artifacts.get(field)
+        if not isinstance(values, list) or not values or any(not isinstance(value, str) or not value.strip() for value in values):
+            errors.append(f'artifacts.{field} must be a non-empty list of evidence paths')
     cost = record.get('cost') or {}
     for field in ('input_tokens', 'output_tokens', 'duration_ms'):
         if not isinstance(cost.get(field), int) or cost[field] < 0: errors.append(f'cost.{field} must be a non-negative integer')
@@ -157,44 +195,106 @@ def validate_run(record, full=False):
     human_ids = {
         row.get('evaluator', {}).get('identity')
         for row in evaluations
-        if row.get('evaluator', {}).get('kind') == 'human'
+        if isinstance(row, dict) and row.get('evaluator', {}).get('kind') == 'human'
     }
     human_ids.discard(None)
-    full_conditions = [
-        len(human_ids) >= 2,
+    zero_dimensions = [
+        {'evaluator': row.get('evaluator', {}).get('identity'), 'dimension': name}
+        for row in evaluations
+        if isinstance(row, dict)
+        for name in QUALITY_DIMENSIONS
+        if (row.get('dimensions', {}).get(name) or {}).get('score') == 0
+    ]
+    evaluation_complete = not errors and len(human_ids) >= 2 and not record.get('not_run')
+    release_ready = evaluation_complete and all([
         not record.get('vetoes'),
-        not record.get('not_run'),
+        not zero_dimensions,
         bool(evaluations) and all(row.get('core_task', {}).get('status') == 'passed' for row in evaluations),
         quality_score(record) >= 3,
-    ]
-    full_ready = not errors and all(full_conditions)
-    if full and not full_ready:
+    ])
+    if full and not evaluation_complete:
         if len(human_ids) < 2: errors.append('full evaluation requires two distinct human evaluators')
-        if record.get('vetoes'): errors.append('full evaluation cannot contain vetoes')
         if record.get('not_run'): errors.append('full evaluation cannot contain not_run items')
-        if evaluations and any(row.get('core_task', {}).get('status') != 'passed' for row in evaluations): errors.append('full evaluation requires every core task to pass')
-        if quality_score(record) < 3: errors.append('full evaluation quality score must be at least 3.0')
-    return {'errors': errors, 'full_ready': full_ready, 'quality_score': round(quality_score(record), 3)}
+    return {
+        'errors': errors,
+        'evaluation_complete': evaluation_complete,
+        'release_ready': release_ready,
+        'full_ready': release_ready,
+        'quality_score': round(quality_score(record), 3),
+        'zero_dimensions': zero_dimensions,
+    }
 
 
 def compare_run_sets(before, after, target=0.30):
     if not before or not after: raise ValueError('before and after run sets must not be empty')
+    errors = []
+    indexed = {}
+    for label, runs in (('before', before), ('after', after)):
+        identifiers = [row.get('scenario_id') if isinstance(row, dict) else None for row in runs]
+        duplicates = sorted(
+            {identifier for identifier in identifiers if identifiers.count(identifier) > 1},
+            key=str,
+        )
+        if duplicates:
+            errors.append(f'{label} contains duplicate scenario ids: {", ".join(map(str, duplicates))}')
+        actual = set(identifiers)
+        expected = set(REQUIRED_SCENARIOS)
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected, key=str)
+            detail = []
+            if missing: detail.append(f'missing {", ".join(missing)}')
+            if extra: detail.append(f'unknown {", ".join(map(str, extra))}')
+            errors.append(f'{label} scenario set must equal the fixed 25-scenario suite ({"; ".join(detail)})')
+        indexed[label] = {
+            row.get('scenario_id'): row for row in runs
+            if isinstance(row, dict) and row.get('scenario_id') in REQUIRED_SCENARIOS
+        }
+        for index, row in enumerate(runs):
+            result = validate_run(row, full=True)
+            errors.extend(f'{label}[{index}]: {error}' for error in result['errors'])
+
+    for scenario_id in sorted(set(indexed['before']) & set(indexed['after'])):
+        baseline = indexed['before'][scenario_id]
+        candidate = indexed['after'][scenario_id]
+        for field in ('suite_version', 'fixed_input_sha256', 'environment'):
+            if baseline.get(field) != candidate.get(field):
+                errors.append(f'{scenario_id}: {field} differs between before and after')
+
+    if errors:
+        return {'status': 'failed', 'target': target, 'errors': errors}
+
     before_tokens = statistics.median(row['cost']['input_tokens'] for row in before)
     after_tokens = statistics.median(row['cost']['input_tokens'] for row in after)
     reduction = 0.0 if before_tokens == 0 else (before_tokens - after_tokens) / before_tokens
     before_quality = statistics.median(quality_score(row) for row in before)
     after_quality = statistics.median(quality_score(row) for row in after)
-    no_new_vetoes = sum(bool(row.get('vetoes')) for row in after) <= sum(bool(row.get('vetoes')) for row in before)
-    passed = reduction >= target and after_quality >= before_quality and no_new_vetoes
+    new_vetoes = []
+    for scenario_id in REQUIRED_SCENARIOS:
+        earlier = {json.dumps(value, ensure_ascii=False, sort_keys=True) for value in indexed['before'][scenario_id].get('vetoes') or []}
+        for value in indexed['after'][scenario_id].get('vetoes') or []:
+            if json.dumps(value, ensure_ascii=False, sort_keys=True) not in earlier:
+                new_vetoes.append({'scenario_id': scenario_id, 'veto': value})
+    no_new_vetoes = not new_vetoes
+    after_release_ready = all(validate_run(row)['release_ready'] for row in after)
+    passed = (
+        reduction >= target
+        and after_quality >= before_quality
+        and no_new_vetoes
+        and after_release_ready
+    )
     return {
         'status': 'passed' if passed else 'failed',
         'target': target,
+        'errors': [],
         'before_median_input_tokens': before_tokens,
         'after_median_input_tokens': after_tokens,
         'input_token_reduction': round(reduction, 4),
         'before_median_quality': round(before_quality, 3),
         'after_median_quality': round(after_quality, 3),
         'no_new_vetoes': no_new_vetoes,
+        'new_vetoes': new_vetoes,
+        'after_release_ready': after_release_ready,
     }
 
 
@@ -223,7 +323,11 @@ def main():
         output = {'status': 'passed' if not errors else 'failed', 'errors': errors}
     elif args.action == 'validate-run':
         output = validate_run(json.loads(args.run.read_text(encoding='utf-8')), args.full)
-        output['status'] = 'passed' if not output['errors'] else 'incomplete'
+        output['status'] = (
+            'incomplete' if output['errors']
+            else 'failed' if args.full and not output['release_ready']
+            else 'passed'
+        )
     elif args.action == 'compare':
         output = compare_run_sets(load_runs(args.before), load_runs(args.after), args.target)
     else:

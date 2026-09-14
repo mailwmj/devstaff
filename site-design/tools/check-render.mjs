@@ -248,46 +248,57 @@ const DIAGNOSTICS = String.raw`async page => {
   return base;
 }`;
 
-function contractRunner(contract) {
+function contractRunner(contract, phase = 'main') {
   return `async page => {
     const contract = ${JSON.stringify(contract)};
+    const phase = ${JSON.stringify(phase)};
     const result = { core_task: { status: 'not_run', steps: [] }, state_probes: [], reopen: { status: 'not_run', steps: [] } };
     const styleSignature = async locator => locator.evaluate(element => {
       const style = getComputedStyle(element);
       return [style.color, style.backgroundColor, style.borderColor, style.boxShadow, style.transform, style.textDecorationLine, style.opacity].join('|');
     });
     const runSteps = async steps => {
+      if (!Array.isArray(steps) || steps.length === 0) {
+        return { status: 'failed', steps: [], error: 'contract needs at least one step' };
+      }
       const rows = [];
       for (const step of steps || []) {
         try {
+          const hasAction = typeof step.action === 'string' && step.action.length > 0;
+          const hasAssert = typeof step.assert === 'string' && step.assert.length > 0;
+          if (hasAction === hasAssert) throw new Error('step needs exactly one action or assert');
           const locator = step.selector ? page.locator(step.selector).first() : null;
-          if (step.action === 'fill') await locator.fill(String(step.value ?? ''));
-          else if (step.action === 'click') await locator.click();
-          else if (step.action === 'click_confirm') {
-            await page.evaluate(() => {
-              window.__renderCheckConfirmCalls = 0;
-              window.confirm = () => { window.__renderCheckConfirmCalls += 1; return true; };
-            });
-            await locator.click();
-            const calls = await page.evaluate(() => window.__renderCheckConfirmCalls);
-            if (!calls) throw new Error('expected the action to request confirmation');
+          if (hasAction) {
+            if (step.action === 'fill') await locator.fill(String(step.value ?? ''));
+            else if (step.action === 'click') await locator.click();
+            else if (step.action === 'click_confirm') {
+              await page.evaluate(() => {
+                window.__renderCheckConfirmCalls = 0;
+                window.confirm = () => { window.__renderCheckConfirmCalls += 1; return true; };
+              });
+              await locator.click();
+              const calls = await page.evaluate(() => window.__renderCheckConfirmCalls);
+              if (!calls) throw new Error('expected the action to request confirmation');
+            }
+            else if (step.action === 'check') await locator.check();
+            else if (step.action === 'uncheck') await locator.uncheck();
+            else if (step.action === 'select') await locator.selectOption(String(step.value));
+            else if (step.action === 'hover') await locator.hover();
+            else if (step.action === 'press') await page.keyboard.press(String(step.value));
+            else if (step.action === 'wait') await page.waitForTimeout(Number(step.value));
+            else if (step.action === 'reload') await page.reload({ waitUntil: 'networkidle' });
+            else throw new Error('unsupported contract action: ' + step.action);
+          } else {
+            if (step.assert === 'visible') { if (!(await locator.isVisible())) throw new Error('expected visible'); }
+            else if (step.assert === 'hidden') { if (await locator.isVisible()) throw new Error('expected hidden'); }
+            else if (step.assert === 'enabled') { if (!(await locator.isEnabled())) throw new Error('expected enabled'); }
+            else if (step.assert === 'disabled') { if (!(await locator.isDisabled())) throw new Error('expected disabled'); }
+            else if (step.assert === 'text') { if (!(await locator.textContent() || '').includes(String(step.value))) throw new Error('expected text: ' + step.value); }
+            else if (step.assert === 'value') { if (await locator.inputValue() !== String(step.value)) throw new Error('expected value: ' + step.value); }
+            else if (step.assert === 'count') { if (await page.locator(step.selector).count() !== Number(step.value)) throw new Error('expected count: ' + step.value); }
+            else if (step.assert === 'url') { if (!page.url().includes(String(step.value))) throw new Error('expected URL containing: ' + step.value); }
+            else throw new Error('unsupported contract assert: ' + step.assert);
           }
-          else if (step.action === 'check') await locator.check();
-          else if (step.action === 'uncheck') await locator.uncheck();
-          else if (step.action === 'select') await locator.selectOption(String(step.value));
-          else if (step.action === 'hover') await locator.hover();
-          else if (step.action === 'press') await page.keyboard.press(String(step.value));
-          else if (step.action === 'wait') await page.waitForTimeout(Number(step.value));
-          else if (step.action === 'reload') await page.reload({ waitUntil: 'networkidle' });
-          else if (step.assert === 'visible' && !(await locator.isVisible())) throw new Error('expected visible');
-          else if (step.assert === 'hidden' && await locator.isVisible()) throw new Error('expected hidden');
-          else if (step.assert === 'enabled' && !(await locator.isEnabled())) throw new Error('expected enabled');
-          else if (step.assert === 'disabled' && !(await locator.isDisabled())) throw new Error('expected disabled');
-          else if (step.assert === 'text' && !(await locator.textContent() || '').includes(String(step.value))) throw new Error('expected text: ' + step.value);
-          else if (step.assert === 'value' && await locator.inputValue() !== String(step.value)) throw new Error('expected value: ' + step.value);
-          else if (step.assert === 'count' && await page.locator(step.selector).count() !== Number(step.value)) throw new Error('expected count: ' + step.value);
-          else if (step.assert === 'url' && !page.url().includes(String(step.value))) throw new Error('expected URL containing: ' + step.value);
-          else if (!step.action && !step.assert) throw new Error('step needs action or assert');
           rows.push({ ...step, status: 'passed' });
         } catch (error) {
           rows.push({ ...step, status: 'failed', error: error.message });
@@ -297,48 +308,45 @@ function contractRunner(contract) {
       return { status: 'passed', steps: rows };
     };
 
-    if (contract.core_task) {
-      result.core_task = { name: contract.core_task.name || 'core task', ...(await runSteps(contract.core_task.steps)) };
-    }
-    for (const probe of contract.state_probes || []) {
-      const row = { name: probe.name, kind: probe.kind, selector: probe.selector };
-      try {
-        const locator = page.locator(probe.selector).first();
-        if (probe.kind === 'focus') {
-          await page.evaluate(() => document.activeElement?.blur());
-          const tabStops = await page.locator('button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [role="button"]').count();
-          for (let index = 0; index <= tabStops; index++) {
-            await page.keyboard.press('Tab');
-            if (await locator.evaluate(element => document.activeElement === element)) break;
-          }
-          const state = await locator.evaluate(element => {
-            const style = getComputedStyle(element);
-            return element.matches(':focus-visible') && ((style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none');
-          });
-          if (!state) throw new Error('focus indicator is not visible');
-        } else if (probe.kind === 'hover') {
-          await page.mouse.move(0, 0);
-          const before = await styleSignature(locator); await locator.hover(); const after = await styleSignature(locator);
-          if (before === after) throw new Error('hover has no visible style change');
-        } else if (probe.kind === 'disabled') {
-          if (!(await locator.isDisabled())) throw new Error('element is not disabled');
-        } else if (probe.kind === 'error' || probe.kind === 'loading') {
-          const visible = await locator.isVisible();
-          if ((probe.expected || 'visible') === 'hidden' ? visible : !visible) throw new Error('visibility differs from expected ' + (probe.expected || 'visible'));
-        } else throw new Error('unknown state probe kind');
-        row.status = 'passed';
-      } catch (error) { row.status = 'failed'; row.error = error.message; }
-      result.state_probes.push(row);
-    }
-    if (contract.reopen) {
-      const before = await runSteps(contract.reopen.before);
-      if (before.status === 'passed') await page.reload({ waitUntil: 'networkidle' });
-      const after = before.status === 'passed' ? await runSteps(contract.reopen.after) : { status: 'not_run', steps: [] };
-      result.reopen = {
-        name: contract.reopen.name || 'reopen',
-        status: before.status === 'passed' && after.status === 'passed' ? 'passed' : 'failed',
-        steps: [...before.steps, ...after.steps],
-      };
+    if (phase === 'main') {
+      if (contract.core_task) {
+        result.core_task = { name: contract.core_task.name || 'core task', ...(await runSteps(contract.core_task.steps)) };
+      }
+      for (const probe of contract.state_probes || []) {
+        const row = { name: probe.name, kind: probe.kind, selector: probe.selector };
+        try {
+          const locator = page.locator(probe.selector).first();
+          if (probe.kind === 'focus') {
+            await page.evaluate(() => document.activeElement?.blur());
+            const tabStops = await page.locator('button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [role="button"]').count();
+            for (let index = 0; index <= tabStops; index++) {
+              await page.keyboard.press('Tab');
+              if (await locator.evaluate(element => document.activeElement === element)) break;
+            }
+            const state = await locator.evaluate(element => {
+              const style = getComputedStyle(element);
+              return element.matches(':focus-visible') && ((style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none');
+            });
+            if (!state) throw new Error('focus indicator is not visible');
+          } else if (probe.kind === 'hover') {
+            await page.mouse.move(0, 0);
+            const before = await styleSignature(locator); await locator.hover(); const after = await styleSignature(locator);
+            if (before === after) throw new Error('hover has no visible style change');
+          } else if (probe.kind === 'disabled') {
+            if (!(await locator.isDisabled())) throw new Error('element is not disabled');
+          } else if (probe.kind === 'error' || probe.kind === 'loading') {
+            const visible = await locator.isVisible();
+            if ((probe.expected || 'visible') === 'hidden' ? visible : !visible) throw new Error('visibility differs from expected ' + (probe.expected || 'visible'));
+          } else throw new Error('unknown state probe kind');
+          row.status = 'passed';
+        } catch (error) { row.status = 'failed'; row.error = error.message; }
+        result.state_probes.push(row);
+      }
+      if (contract.reopen) {
+        result.reopen = { name: contract.reopen.name || 'reopen', ...(await runSteps(contract.reopen.before)) };
+      }
+    } else if (phase === 'reopen' && contract.reopen) {
+      result.reopen = { name: contract.reopen.name || 'reopen', ...(await runSteps(contract.reopen.after)) };
     }
     return result;
   }`;
@@ -384,6 +392,23 @@ async function main() {
       await runCli(session, ['resize', '1280', '800'], outputDirectory);
       await runCli(session, ['goto', served.url], outputDirectory);
       report.contract = parseRunCode(await runCli(session, ['run-code', contractRunner(contract)], outputDirectory));
+      if (contract.reopen && report.contract.reopen.status === 'passed') {
+        const before = report.contract.reopen;
+        await runCli(session, ['tab-new', 'about:blank'], outputDirectory);
+        await runCli(session, ['tab-close', '0'], outputDirectory);
+        await runCli(session, ['goto', served.url], outputDirectory);
+        const reopened = parseRunCode(await runCli(
+          session,
+          ['run-code', contractRunner(contract, 'reopen')],
+          outputDirectory,
+        ));
+        report.contract.reopen = {
+          name: before.name,
+          method: 'close-original-tab-then-open-delivery-entry',
+          status: reopened.reopen.status,
+          steps: [...before.steps, ...reopened.reopen.steps],
+        };
+      }
     }
   } finally {
     try { await runCli(session, ['close'], outputDirectory); } catch {}

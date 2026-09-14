@@ -40,9 +40,17 @@ def color_checks(tokens):
               ('accent', 'surface', 4.5)]
     pairs += [(state, state + '-surface', 4.5) for state in ('success', 'error', 'warning')]
     pairs += [(fg, bg, 3) for fg in ('border-control', 'focus') for bg in ('canvas', 'surface')]
-    return [{'foreground': fg, 'background': bg, 'ratio': contrast(tokens[fg], tokens[bg]),
-             'minimum': minimum, 'passed': contrast(tokens[fg], tokens[bg]) >= minimum}
-            for fg, bg, minimum in pairs]
+    results = []
+    for foreground, background, minimum in pairs:
+        ratio = contrast(tokens[foreground], tokens[background])
+        results.append({
+            'foreground': foreground,
+            'background': background,
+            'ratio': round(ratio, 6),
+            'minimum': minimum,
+            'passed': ratio >= minimum,
+        })
+    return results
 
 
 def px(value):

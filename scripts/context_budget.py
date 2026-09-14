@@ -8,10 +8,11 @@ import json
 from pathlib import Path
 
 
-BASELINE_BYTES = 130_729
+BASELINE_REF = '681c43c'
+BASELINE_BYTES = 121_411
 TARGET_REDUCTION = 0.30
 RUNTIME_PATHS = (
-    'AGENTS.md',
+    'templates/AGENTS.md',
     'site-builder/SKILL.md',
     'site-brief/SKILL.md',
     'site-design/SKILL.md',
@@ -42,6 +43,7 @@ def evaluate(root: Path) -> dict[str, object]:
     return {
         'status': 'passed' if reduction >= TARGET_REDUCTION else 'failed',
         'metric': 'utf8_bytes_proxy_not_model_tokens',
+        'baseline_ref': BASELINE_REF,
         'baseline_bytes': BASELINE_BYTES,
         'current_bytes': current,
         'maximum_bytes': int(BASELINE_BYTES * (1 - TARGET_REDUCTION)),
