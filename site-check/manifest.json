@@ -4,8 +4,8 @@
   "name": "site-check",
   "files": {
     "agents/openai.yaml": "607b1a7b728339471ec6a08eee93cee5c506168e38323b3140d4e851d5cf3cce",
-    "references/verification.md": "629ec225a5f1dc01925700433202794e3ee1ece43063c1bde25b35f933dc926e",
+    "references/verification.md": "75e448983c66f3abf45bc27c6c3aff19453cbb8c24c971396c301b73e033f52b",
     "scripts/check.py": "779a43a54c6123685fdbf48e7233872f4a588b4c1c96945f11a7c763f26a9bcb",
-    "SKILL.md": "7e1a13cbc0e40051f1c8fafc8ed30df5814ed0a558f69b6bd4d096b73d0ee90c"
+    "SKILL.md": "4025de60b4b3585fa0a441268e9817662308450831798381694c497228883dbf"
   }
 }

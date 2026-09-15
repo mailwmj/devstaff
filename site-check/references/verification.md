@@ -192,7 +192,7 @@ python scripts/check.py matrix --input <json_path> <root>
 4. **状态**：按任务合同检查 focus、hover、disabled、error、loading；不适用的状态说明原因，不机械造状态。
 5. **独立视觉判断**：核对 direction 证据、项目签名、构图重心、真实内容和 grammar 一致性。自动渲染通过不能代替这一项。
 6. **再次打开**：从真实交付入口关闭并重开，核对运行方式、关键数据和限制。
-7. **分发**：文件必须从约定渠道在接收设备打开；URL 必须非回环且接收者可达；离线按 downloaded/after-first-visit/installed 的真实前提断网。
+7. **分发**：文件必须从约定渠道在接收设备打开；URL 必须非回环且接收者可达；离线按 downloaded/after-first-visit/installed 的真实前提断网。从实际交付入口断网打开或重开，核对图标等所需本地资源的加载及相关操作；资源缺失或仍依赖外部请求不能记为通过。构建成功、静态外链扫描和联网缓存中的截图都不能代替断网证据。
 
 `check-output.mjs` 只是 grammar 静态预检，不能作为 `visual_*` 的唯一证据。
 
