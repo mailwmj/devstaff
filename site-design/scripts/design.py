@@ -27,6 +27,58 @@ def intelligence_environment():
     return environment
 
 
+def _density_hint(design_system):
+    """Return a layout density hint without treating a catalog style as a decision."""
+    dials = design_system.get('dials') or {}
+    label = dials.get('density_label')
+    if label:
+        return str(label)
+    text = ' '.join(
+        str(design_system.get(key) or '')
+        for key in ('category', 'style', 'pattern', 'typography', 'key_effects')
+    ).lower()
+    if any(word in text for word in ('dense', 'compact', 'dashboard', 'analytics', 'data')):
+        return 'compact'
+    if any(word in text for word in ('spacious', 'airy', 'editorial', 'luxury')):
+        return 'spacious'
+    return 'balanced'
+
+
+def _layout_guidance(design_system):
+    """Translate search metadata into implementable, reviewable shape hints.
+
+    These hints widen the candidate pool; they are not a substitute for the
+    project-specific mother theme, content facts, or user confirmation.
+    """
+    category = str(design_system.get('category') or '').lower()
+    pattern = design_system.get('pattern') or {}
+    sections = str(pattern.get('sections') or '')
+    if any(word in category for word in ('inventory', 'dashboard', 'analytics', 'admin', 'operations')):
+        motif = 'data-matrix-with-summary-ribbon'
+        components = ['summary-ribbon', 'filter-toolbar', 'data-table-or-list', 'inline-status-and-actions']
+    elif any(word in category for word in ('ecommerce', 'commerce', 'shopping', 'retail')):
+        motif = 'filter-rail-with-product-grid'
+        components = ['filter-rail', 'product-grid', 'comparison-or-quantity-control', 'persistent-cart-action']
+    elif any(word in category for word in ('portfolio', 'gallery', 'editorial', 'publication')):
+        motif = 'editorial-grid-with-featured-detail'
+        components = ['featured-item', 'asymmetric-grid', 'metadata-rail', 'related-items']
+    elif any(word in category for word in ('education', 'course', 'learning')):
+        motif = 'lesson-rail-with-progress-detail'
+        components = ['current-task-panel', 'progress-rail', 'feedback-state', 'next-action']
+    else:
+        motif = 'content-led-section-flow'
+        components = [part.strip() for part in sections.split('>') if part.strip()][:4]
+        if not components:
+            components = ['primary-content', 'supporting-detail', 'next-action']
+    return {
+        'layout_motif': motif,
+        'component_patterns': components,
+        'density': _density_hint(design_system),
+        'variation_axes': ['layout topology', 'core component shape', 'information density', 'visual focal point'],
+        'anti_skin_check': 'After swapping colors and fonts, these structural axes must still differ between candidates.',
+    }
+
+
 def research(args):
     """Run the bundled UI/UX search behind this skill's stable interface."""
     root = intelligence_root()
@@ -62,7 +114,7 @@ def research(args):
         raise ValueError('Bundled design intelligence returned invalid JSON') from error
 
     mode = 'design-system' if args.design_system else ('stack' if args.stack else 'domain')
-    return {
+    payload = {
         'source': {
             'name': 'ui-ux-pro-max',
             'version': INTELLIGENCE_VERSION,
@@ -73,6 +125,18 @@ def research(args):
         'query': args.query,
         'result': result,
     }
+    design_system = result.get('design_system') if isinstance(result, dict) else None
+    if isinstance(design_system, dict):
+        payload.update(_layout_guidance(design_system))
+    else:
+        payload.update({
+            'layout_motif': None,
+            'component_patterns': [],
+            'density': 'unknown',
+            'variation_axes': ['layout topology', 'core component shape', 'information density', 'visual focal point'],
+            'anti_skin_check': 'No design-system result; derive structural differences from project evidence before presenting candidates.',
+        })
+    return payload
 
 
 def validate_intelligence():

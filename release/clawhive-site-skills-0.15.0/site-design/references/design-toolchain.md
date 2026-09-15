@@ -34,7 +34,7 @@ python <site-design>/scripts/design.py research "<实现问题>" --stack <检测
 
 不持久化上游的 `MASTER.md`；从结果中选用的机制、查询、命中 ID、适配理由和拒绝理由写回页面设计合同。无结果时只允许缩窄查询重试一次；仍无结果就标明使用本项目通用规则，不能伪造命中。
 
-完成条件：候选池有可追溯查询结果，或合同明确记录 `no_verified_match`。
+完成条件：候选池有可追溯查询结果，或合同明确记录 `no_verified_match`。保存检索回执时同时保留 `layout_motif`、`component_patterns` 和 `density`；只有颜色、字体或风格名的回执不算完成。
 
 ### 3. 形成项目自己的方向
 
@@ -42,7 +42,12 @@ python <site-design>/scripts/design.py research "<实现问题>" --stack <检测
 
 检索排名、行业映射、配色或字体预设都不是项目证据。两个候选互换配色和字体后差异消失，就回到本步重做。
 
-完成条件：每个候选至少有两条上下文依据，且统一配色字体后仍能解释其差异。
+完成条件：每个候选至少有两条上下文依据，且统一配色字体后仍能解释其差异。合同要逐项写出主布局容器、核心组件形态、信息密度和首屏重心；缺任一项，按换肤反模式退回重做。
+
+合同中的工具来源要写成可核对的非空记录，例如
+`ui-ux-pro-max: Query: inventory desktop dashboard | Style ID: data-matrix`。
+确实执行过查询但没有验证命中时，才使用 `no_verified_match`。项目已有
+`surface-brief.md` 时，`confirm-visual` 会检查这两个字段，缺失就拒绝记录视觉确认。
 
 ### 4. 制作并打磨体验稿
 

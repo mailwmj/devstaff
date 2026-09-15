@@ -57,6 +57,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import sys
 import tempfile
@@ -430,6 +431,29 @@ def regular_file(root, raw, option):
         if parent.resolve() == root:
             break
         parent = parent.parent
+    return resolved
+
+
+def validate_surface_brief(root, raw):
+    """Require an auditable design-tool record when a project contract is supplied."""
+    resolved = regular_file(root, raw, '--surface-brief')
+    text = resolved.read_text(encoding='utf-8')
+    if not re.search(r'ui-ux-pro-max', text, re.IGNORECASE):
+        raise ValueError(
+            '--surface-brief must record the bundled ui-ux-pro-max source before visual confirmation'
+        )
+    has_query = bool(re.search(r'(?:query|查询)\s*[:：]\s*[^|\n]+\S', text, re.IGNORECASE))
+    has_style_id = bool(re.search(
+        r'(?:style[_ -]?id|result[_ -]?id)\s*[:：]\s*[`"\']?([A-Za-z0-9][A-Za-z0-9._-]*)',
+        text,
+        re.IGNORECASE,
+    ))
+    explicit_no_match = bool(re.search(r'\bno_verified_match\b', text, re.IGNORECASE))
+    if not has_query or not (has_style_id or explicit_no_match):
+        raise ValueError(
+            '--surface-brief must include a recorded design.py query and a non-empty Style/Result ID; '
+            'use no_verified_match only when the query was executed but produced no verified result'
+        )
     return resolved
 
 
@@ -974,6 +998,13 @@ def action_confirm_visual(root, args):
     consent = build_consent(args)
     resolved = regular_file(root, args.prototype, '--prototype')
     inside = resolved.is_relative_to(root)
+    contract = None
+    contract_arg = getattr(args, 'surface_brief', None)
+    default_contract = root / '.site' / 'design' / 'surface-brief.md'
+    if contract_arg:
+        contract = validate_surface_brief(root, contract_arg)
+    elif default_contract.is_file():
+        contract = validate_surface_brief(root, str(default_contract))
     stale_authorization = bool(state.get('development_authorized'))
     record_consent(state, 'visual_consent', consent, 'visual')
     state['visual_confirmed'] = True
@@ -1001,6 +1032,8 @@ def action_confirm_visual(root, args):
         'invalidated_stale_authorization': stale_authorization,
         'prototype': str(resolved),
         'prototype_inside_project': inside,
+        'surface_brief': str(contract) if contract else None,
+        'surface_brief_validated': bool(contract),
         'consent': describe_consent(consent),
     }
 
@@ -1459,6 +1492,10 @@ def build_parser():
     visual.add_argument('--quote', required=True)
     visual.add_argument('--anchor')
     visual.add_argument('--prototype', required=True)
+    visual.add_argument(
+        '--surface-brief',
+        help='optional project design contract; when present it must record a design.py query and Style/Result ID',
+    )
     authorize = add('authorize-build', 'record explicit development authorization as the creator\'s verbatim quote')
     authorize.add_argument('--quote', required=True)
     authorize.add_argument('--anchor')
