@@ -48,8 +48,11 @@ python scripts/install.py /absolute/path/to/agent/skills
 
 - 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
 - 结构选择、视觉选择与开发授权是三个决定：用户选了页面结构不等于确认了视觉风格；
+- 开发授权按完整请求与相邻问答的行动含义判断，不按关键词：直接要求建设正式成果的委托可在前置决定确认后继续生效；没有既有委托时，Agent 先说清“确认后进入开发”的后果，再理解用户紧接着的自然答复。当前答复不得倒填旧门禁，也不要求用户背“开始开发”口令；
 - 结构候选前先按任务形成轻量交互合同：`required / recommended / confirm / excluded` 约束对象生命周期、工作区、完整 Flow、本地化和范围；行业经验只能提出建议或待确认项，不能创造首版功能；
-- `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文，再按受众、任务、内容和素材条件匹配 2～3 个适合的风格供用户选择；候选必须在母题层不同而非只换配色，推荐要有依据但不能替用户确认；
+- `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文；默认给一个有依据的页面结构和两个母题层不同的风格，只有新的重要取舍才增加候选；推荐要有依据但不能替用户确认；
+- `site-design` 内置经项目化改写的 `web-design-direction`、Impeccable 工艺规则、ClawHive 前端设计原则，以及 UI/UX Pro Max `2.13.0` 的 MIT 检索器和数据。统一通过 `scripts/design.py research` 调用，不依赖仓库根的参考资料或用户额外安装；
+- `.site/design/surface-brief.md` 是设计、建设和验收共用的一份页面设计合同：视觉确认后补全页面地图、区块、Token、响应式、组件状态、文案、素材和可观察验收标准，`site-builder` 与 `site-check` 都按同一组 ID 工作，不再各自猜测或复制规格；
 - 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
 - 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须原样保留用户那句原话（`--quote`），规范化摘要只用于识别空白差异下的重复，同一句不能连过两道门禁；每次写状态都追加紧凑的前后摘要与可用的租约 owner；
 - **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
@@ -80,8 +83,9 @@ python scripts/install.py /absolute/path/to/agent/skills
 python scripts/verify_skills.py .
 python tests/gate_flow.py
 python site-design/scripts/design.py validate
+python site-design/scripts/design.py research "productivity tool novice calm" --design-system --project-name "Example"
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 检查 `tokens.json` 每个配方与色板的列出色对、排版下限（字号、正文行高、中文标题字距、字体许可），并在 `gallery.html` 内嵌目录与配置漂移时失败；改过 `tokens.json` 后用 `design.py sync-gallery` 刷新预览。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
+`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 同时检查本地 Token/Gallery 和内置 UI/UX Pro Max 数据完整性；`design.py research` 是唯一检索入口，并固定返回带来源与版本的 JSON。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
 
 **这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/design-quality.md`](site-design/references/design-quality.md) 的四条判据核对。
