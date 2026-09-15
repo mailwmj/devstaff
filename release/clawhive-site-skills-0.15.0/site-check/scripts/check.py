@@ -55,6 +55,15 @@ EVIDENCE_KINDS = ('artifact', 'command', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
 VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command')
 PATH_KEYS = ('paths', 'artifacts', 'files', 'screenshots')
+EMOJI_PATTERN = re.compile(r'[\U0001F000-\U0001FAFF\u2600-\u27BF]')
+EMOJI_SINK_PATTERN = re.compile(
+    r'(?i)\b(?:alert|confirm|showToast|innerHTML|textContent|innerText|insertAdjacentHTML)\b[^;\n]*'
+)
+UI_TAGS = {'a', 'button', 'nav', 'th'}
+UI_CLASS_TOKENS = {
+    'badge', 'btn', 'brand-logo', 'icon', 'metric-icon-box', 'nav-item', 'tab-item',
+}
+UI_ROLES = {'button', 'img', 'tab'}
 
 
 def now():
@@ -393,13 +402,25 @@ class Page(HTMLParser):
         self.idrefs = []
         self.refs = []
         self.in_style = False
+        self.tag_stack = []
+        self.emoji_hits = []
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
+        if self.tag_stack and self.tag_stack[-1][0] == tag:
+            self.tag_stack.pop()
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         line = self.getpos()[0]
+        class_tokens = set((attrs.get('class') or '').split())
+        is_ui = (
+            tag in UI_TAGS
+            or bool(class_tokens & UI_CLASS_TOKENS)
+            or attrs.get('role') in UI_ROLES
+            or 'data-lucide' in attrs
+        )
+        self.tag_stack.append((tag, is_ui, line))
         if attrs.get('id'):
             self.ids.setdefault(attrs['id'], []).append(line)
         for key in ('for', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-errormessage', 'list', 'headers'):
@@ -421,11 +442,19 @@ class Page(HTMLParser):
     def handle_endtag(self, tag):
         if tag == 'style':
             self.in_style = False
+        for index in range(len(self.tag_stack) - 1, -1, -1):
+            if self.tag_stack[index][0] == tag:
+                del self.tag_stack[index:]
+                break
 
     def handle_data(self, data):
         if self.in_style:
             for value, offset in css_urls(data):
                 self.refs.append((value, True, self.getpos()[0] + offset))
+        if any(is_ui for _, is_ui, _ in self.tag_stack):
+            match = EMOJI_PATTERN.search(data)
+            if match:
+                self.emoji_hits.append((self.getpos()[0], match.group(0)))
 
 
 def static_check(root, offline=False, web_root=None):
@@ -464,6 +493,22 @@ def static_check(root, offline=False, web_root=None):
             page = Page()
             page.feed(content)
             pages[path.resolve()] = page
+            for line, glyph in page.emoji_hits:
+                issue(
+                    'emoji-in-ui',
+                    path,
+                    line,
+                    f'UI content contains {glyph}; use a Lucide icon or a documented product-specific exception',
+                )
+            for match in EMOJI_SINK_PATTERN.finditer(content):
+                glyph = EMOJI_PATTERN.search(match.group(0))
+                if glyph:
+                    issue(
+                        'emoji-in-ui-sink',
+                        path,
+                        content.count('\n', 0, match.start()) + 1,
+                        f'UI text sink contains {glyph.group(0)}; use a Lucide icon or a documented product-specific exception',
+                    )
             for value, lines in page.ids.items():
                 if len(lines) > 1:
                     issue('duplicate-id', path, lines[1], value)
