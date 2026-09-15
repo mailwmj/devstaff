@@ -57,7 +57,7 @@
 python3 /absolute/site-check/scripts/check.py static /absolute/PROJECT [--offline] [--web-root PATH]
 ```
 
-Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 ID、ID 引用、片段和部分离线依赖；它不执行 JavaScript，不是完整 CSS、安全或视觉检查。
+Windows 可按实际环境使用 `py -3`。该工具检查本地引用、重复 ID、ID 引用、片段和部分离线依赖，并扫描 UI 容器及常见 UI 文本注入点中的 Emoji（`emoji-in-ui` / `emoji-in-ui-sink`）；它不执行 JavaScript，不是完整 CSS、安全或视觉检查。
 
 项目存在 `.site` 时，静态与命令检查会把结果连同 `check_id` 和源码指纹写入 `.site/checks/`。这是本 Skill 唯一的写入位置：不编辑正式源码，也不写 `.site/state.json`；没有 `.site` 的第三方项目保持只读，不初始化也不补写。
 
