@@ -63,6 +63,23 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
+try:
+    from state_consent import (
+        CONSENT_FIELDS,
+        build_consent as _build_consent,
+        consent_replay as _consent_replay,
+        describe_consent as _describe_consent,
+        record_consent as _record_consent,
+    )
+except ImportError:  # pragma: no cover - supports direct package imports
+    from .state_consent import (
+        CONSENT_FIELDS,
+        build_consent as _build_consent,
+        consent_replay as _consent_replay,
+        describe_consent as _describe_consent,
+        record_consent as _record_consent,
+    )
+
 SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
 STAGES = (
     'discovering',
@@ -384,37 +401,6 @@ def load_artifact(root, check_id):
     return artifact
 
 
-def normalize_quote(raw):
-    """The creator's own words, verbatim, as the caller recorded them.
-
-    A quote is required because an empty or absent basis is the failure this gate
-    exists to catch, and because a verbatim line is what the creator can recognise
-    and correct when it is replayed to them.  Length is deliberately not policed:
-    "好，就这样" is a legitimate approval for a reversible decision, and any minimum
-    here would just be a number to satisfy.
-    """
-    if not isinstance(raw, str) or not raw.strip():
-        raise ValueError(
-            '--quote needs the creator\'s own words, verbatim; a gate never records an empty basis'
-        )
-    return raw
-
-
-def canonical_quote(raw):
-    return ' '.join(str(raw or '').split())
-
-
-def normalized_quote_digest(record):
-    recorded = record.get('quote_normalized_sha256')
-    if isinstance(recorded, str) and recorded:
-        return recorded
-    quote = record.get('quote') or record.get('text')
-    if isinstance(quote, str) and quote:
-        return hashlib.sha256(canonical_quote(quote).encode('utf-8')).hexdigest()
-    legacy = record.get('quote_sha256')
-    return legacy if isinstance(legacy, str) else None
-
-
 def regular_file(root, raw, option):
     path = Path(raw).expanduser()
     if path.is_symlink():
@@ -435,7 +421,12 @@ def regular_file(root, raw, option):
 
 
 def validate_surface_brief(root, raw):
-    """Require an auditable design-tool record when a project contract is supplied."""
+    """Require the minimum auditable design record for a visual decision.
+
+    The gate checks that the direction was documented, not whether the direction
+    is good. Semantic quality and the relevance of rejected candidates remain a
+    human/Checker judgement.
+    """
     resolved = regular_file(root, raw, '--surface-brief')
     text = resolved.read_text(encoding='utf-8')
     if not re.search(r'ui-ux-pro-max', text, re.IGNORECASE):
@@ -454,226 +445,41 @@ def validate_surface_brief(root, raw):
             '--surface-brief must include a recorded design.py query and a non-empty Style/Result ID; '
             'use no_verified_match only when the query was executed but produced no verified result'
         )
+    evidence_patterns = {
+        'category default': r'(?:类别默认|默认答案|category\s+default)',
+        'anti-default reason': r'(?:反默认原因|反默认理由|anti[- ]default(?:\s+reason)?)',
+        'replacement': r'(?:替代结构|替代答案|replacement)',
+        'swap check': r'(?:交换检查结论|交换检查|swap\s+check)',
+        'structural difference evidence': r'(?:结构差异证据|结构差异|structural\s+difference)',
+    }
+    missing = []
+    for name, label in evidence_patterns.items():
+        match = re.search(
+            rf'(?im)^\s*[-*]\s*(?:\*\*)?{label}\s*[:：]?(?:\*\*)?\s*[:：]?\s*(\S.*)$',
+            text,
+        )
+        if not match or match.group(1).strip().lower() in {'pending', 'todo', '待补', '待填写'}:
+            missing.append(name)
+    if missing:
+        raise ValueError(
+            '--surface-brief is missing non-empty direction evidence: ' + ', '.join(missing) +
+            '. Record the project default, replacement, candidate difference and swap check; '
+            'write not-applicable with a reason when a field does not apply'
+        )
     return resolved
 
 
-def anchor_text(path):
-    """Best-effort transcript text. Returns None when the host shape is unknown.
-
-    Unreadable is a normal outcome, not an error: the caller keeps a
-    ``agent-reported`` label and the workflow continues.
-    """
-    try:
-        raw = path.read_bytes()
-    except OSError:
-        return None
-    if raw[:2] == b'\x1f\x8b':
-        try:
-            raw = gzip.decompress(raw)
-        except OSError:
-            return None
-    elif raw[:4] == b'\x28\xb5\x2f\xfd':
-        try:
-            import zstandard  # type: ignore[import-not-found]
-        except ImportError:
-            return None
-        try:
-            raw = zstandard.ZstdDecompressor().decompressobj().decompress(raw)
-        except Exception:
-            return None
-    return raw.decode('utf-8', errors='replace')
-
-
-def anchor_records(text):
-    """Parse transcript text into records, tolerating JSON array or JSONL."""
-    stripped = text.lstrip()
-    if stripped.startswith('['):
-        try:
-            payload = json.loads(stripped)
-        except json.JSONDecodeError:
-            return []
-        return [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
-    records = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict):
-            records.append(record)
-    return records
-
-
-def record_text(message):
-    content = message.get('content')
-    if isinstance(content, str):
-        return content.strip()
-    parts = []
-    if isinstance(content, list):
-        for block in content:
-            if isinstance(block, dict) and block.get('type') == 'text' and isinstance(block.get('text'), str):
-                parts.append(block['text'])
-            elif isinstance(block, str):
-                parts.append(block)
-    return '\n'.join(parts).strip()
-
-
-def anchor_user_messages(path):
-    """Every user-role message text in a transcript, or None when unreadable."""
-    text = anchor_text(path)
-    if text is None:
-        return None
-    found = []
-    for record in anchor_records(text):
-        message = record.get('message') if isinstance(record.get('message'), dict) else record
-        role = str(message.get('role') or '').strip().lower()
-        if role in ANCHOR_AGENT_ROLES or role not in ANCHOR_USER_ROLES:
-            continue
-        body = record_text(message)
-        if body:
-            found.append(body)
-    return found
-
-
-def locate_anchor(raw, cwd):
-    """Resolve the optional ``--anchor`` pointer into (path, readable, note).
-
-    Three outcomes, and only the middle one is a caller error:
-
-    * no anchor supplied -> (None, False, None): label stays ``agent-reported``;
-    * anchor supplied and readable -> (path, True, None): the caller must then show
-      that the quote really appears, because pointing at a record that lacks it is a
-      false claim rather than a downgrade;
-    * anchor supplied but unreadable (unknown host format or compression) ->
-      (path, False, note): downgrade the label, never block the workflow.
-
-    An unreadable host shape must never fail the gate.  That is the whole point of
-    the anchor being optional: host knowledge buys a stronger label, and its absence
-    costs nothing but honesty.  Any ``#selector`` suffix is accepted and ignored.
-    """
-    text = (raw or '').strip()
-    if not text:
-        return None, False, None
-    head, _, _tail = text.partition('#')
-    candidate = Path(head).expanduser()
-    if not candidate.is_absolute():
-        candidate = Path(cwd) / candidate
-    resolved = candidate.resolve()
-    if not resolved.is_file():
-        raise ValueError(f'--anchor transcript not found: {head}')
-    if anchor_text(resolved) is None:
-        return resolved, False, (
-            f'The anchor {resolved.name!r} uses a host format this tool cannot read '
-            f'(recognised shapes: {", ".join(TRANSCRIPT_SUFFIXES)}; other hosts may compress or '
-            'relocate their records). Nothing was verified. The record keeps the agent-reported '
-            'label and the workflow continues.'
+def require_visual_contract(root, state=None):
+    """Resolve the project contract for visual scopes and fail closed if absent."""
+    recorded = state.get('surface_brief') if isinstance(state, dict) else None
+    path = Path(recorded) if recorded else root / '.site' / 'design' / 'surface-brief.md'
+    if not path.is_absolute():
+        path = root / path
+    if not path.is_file():
+        raise ValueError(
+            'A visual scope needs .site/design/surface-brief.md before visual confirmation or development'
         )
-    return resolved, True, None
-
-
-def build_consent(args):
-    """Assemble the consent record from the caller's quote and optional anchor."""
-    quote = normalize_quote(getattr(args, 'quote', None))
-    anchor_path, readable, anchor_note = locate_anchor(getattr(args, 'anchor', None), os.getcwd())
-    if anchor_path is not None and readable:
-        collapsed = ' '.join(quote.split())
-        messages = anchor_user_messages(anchor_path) or []
-        if not any(collapsed in ' '.join(body.split()) for body in messages):
-            raise ValueError(
-                f'The quote was not found in a user message of {anchor_path.name}; point --anchor at '
-                'the message that carries it, or drop --anchor to record an agent-reported basis'
-            )
-        basis, note = BASIS_QUOTE_MATCHED, ANCHOR_NOTE
-    else:
-        basis, note = BASIS_REPORTED, BASIS_NOTE
-    return {
-        'basis': basis,
-        'basis_note': note,
-        'quote': quote,
-        'quote_sha256': hashlib.sha256(quote.encode('utf-8')).hexdigest(),
-        'quote_normalized_sha256': hashlib.sha256(canonical_quote(quote).encode('utf-8')).hexdigest(),
-        'anchor': str(anchor_path) if anchor_path is not None else None,
-        'anchor_note': anchor_note,
-        'recorded_at': now(),
-    }
-
-
-def record_consent(state, field, consent, gate):
-    """Attach a consent record, refusing to reuse one quote for two gates.
-
-    The live records are checked, and so is ``consent_history``: recording a gate
-    again overwrites its record, so without the history an earlier sentence would
-    silently become free for a different gate.  The history also keeps superseded
-    quotes readable, because a rewritten record must not erase what was said.
-    """
-    for other in CONSENT_FIELDS:
-        if other == field:
-            continue
-        existing = state.get(other)
-        if not isinstance(existing, dict):
-            continue
-        # Compare by content, not by path: copying a file used to defeat this.
-        if normalized_quote_digest(existing) == consent['quote_normalized_sha256']:
-            raise ValueError(
-                f'This quote already confirms {other.replace("_consent", "")}; '
-                f'{gate} needs its own explicit expression from the creator'
-            )
-    for entry in as_list(state.get('consent_history')):
-        if not isinstance(entry, dict) or entry.get('gate') == gate:
-            continue
-        if normalized_quote_digest(entry) == consent['quote_normalized_sha256']:
-            raise ValueError(
-                f"This quote already confirmed {entry.get('gate')} in an earlier record; {gate} needs its own "
-                'explicit expression from the creator, and recording a gate again does not free an old sentence'
-            )
-    collapsed = ' '.join(consent['quote'].split())
-    earlier = []
-    for other in CONSENT_FIELDS:
-        if other == field:
-            continue
-        existing = state.get(other)
-        if isinstance(existing, dict) and existing.get('quote'):
-            earlier.append((other.replace('_consent', ''), str(existing['quote'])))
-    for entry in as_list(state.get('consent_history')):
-        if isinstance(entry, dict) and entry.get('gate') != gate and entry.get('quote'):
-            earlier.append((str(entry.get('gate')), str(entry['quote'])))
-    for name, quote in earlier:
-        other = ' '.join(quote.split())
-        if not other:
-            continue
-        # Exact reuse is caught above; this catches the same words split into one gate
-        # and the rest into another, which is still a single expression of consent.
-        if other in collapsed or collapsed in other:
-            raise ValueError(
-                f'This quote overlaps the sentence already recorded for {name}; {gate} needs the creator\'s own, '
-                'separate expression rather than the same words split or repeated'
-            )
-    state['consent_history'] = as_list(state.get('consent_history')) + [{
-        'gate': gate,
-        'quote': consent['quote'],
-        'quote_sha256': consent['quote_sha256'],
-        'quote_normalized_sha256': consent['quote_normalized_sha256'],
-        'basis': consent['basis'],
-        'recorded_at': consent['recorded_at'],
-    }]
-    state[field] = consent
-
-
-def describe_consent(consent):
-    return {
-        'action': 'consent',
-        'basis': consent['basis'],
-        'basis_note': consent['basis_note'],
-        'quote': consent['quote'][:200],
-        'quote_sha256': consent['quote_sha256'][:16],
-        'quote_normalized_sha256': consent['quote_normalized_sha256'][:16],
-        'anchor': consent.get('anchor'),
-        'anchor_note': consent.get('anchor_note'),
-        'recorded_at': consent['recorded_at'],
-    }
+    return validate_surface_brief(root, str(path))
 
 
 def gate_reasons(state, visual_required):
@@ -758,7 +564,7 @@ def action_show(root, args):
             )
             for field in CONSENT_FIELDS
         },
-        'consent_replay': consent_replay(state),
+        'consent_replay': _consent_replay(state),
         'checks': [
             dict(row, matches_current_source=row.get('fingerprint') == current)
             for row in check_artifacts(root)
@@ -843,7 +649,7 @@ def action_confirm_concept(root, args):
             'so the running build, check or delivery is voided first. Re-recording the concept after delivery would '
             'leave a frozen delivery replay quoting a decision that has since been rewritten'
         )
-    consent = build_consent(args)
+    consent = _build_consent(args)
     visual_required = not args.no_visual
     if args.structure_directions is not None and args.structure_directions < 1:
         raise ValueError('--structure-directions counts the structures shown; it must be 1 or more')
@@ -869,7 +675,7 @@ def action_confirm_concept(root, args):
         state['development_authorized'] = False
         state['delegated'] = False
         state.pop('delivery', None)
-    record_consent(state, 'concept_consent', consent, 'concept')
+    _record_consent(state, 'concept_consent', consent, 'concept')
     state['concept_confirmed'] = True
     state['visual_required'] = visual_required
     state['structure_required'] = structure_required
@@ -914,7 +720,7 @@ def action_confirm_concept(root, args):
         'visual_required': visual_required,
         'structure_required': structure_required,
         'voided_decisions': voided,
-        'consent': describe_consent(consent),
+        'consent': _describe_consent(consent),
     }
 
 
@@ -943,11 +749,11 @@ def action_confirm_structure(root, args):
             '--scope-changed (a plain reopen returns to building and still refuses) so the old authorization, '
             'check and delivery are voided. A blocked project records the blockage, not new decisions'
         )
-    consent = build_consent(args)
+    consent = _build_consent(args)
     resolved = regular_file(root, args.prototype, '--prototype')
     inside = resolved.is_relative_to(root)
     stale_visual = bool(state.get('visual_confirmed'))
-    record_consent(state, 'structure_consent', consent, 'structure')
+    _record_consent(state, 'structure_consent', consent, 'structure')
     state['structure_required'] = True
     state['structure_confirmed'] = True
     state['structure_basis'] = consent['quote'][:200]
@@ -975,7 +781,7 @@ def action_confirm_structure(root, args):
         'next_action': state['next_action'],
         'prototype': str(resolved),
         'prototype_inside_project': inside,
-        'consent': describe_consent(consent),
+        'consent': _describe_consent(consent),
     }
 
 
@@ -983,6 +789,10 @@ def action_confirm_visual(root, args):
     state = load_state(root)
     if not state.get('concept_confirmed'):
         raise ValueError('concept_confirmed is false; confirm the first version before recording a visual choice')
+    if state.get('visual_required') is False:
+        raise ValueError(
+            'This scope declared --no-visual; there is no visual choice to record'
+        )
     if state.get('structure_required') and not state.get('structure_confirmed'):
         raise ValueError(
             'A structure choice is still pending: the creator compared page structures, not styles, and that is '
@@ -995,22 +805,22 @@ def action_confirm_visual(root, args):
             '(a plain reopen returns to building and still refuses) so the old authorization, check and delivery '
             'are voided. A blocked project records the blockage, not new decisions'
         )
-    consent = build_consent(args)
+    consent = _build_consent(args)
     resolved = regular_file(root, args.prototype, '--prototype')
     inside = resolved.is_relative_to(root)
     contract = None
     contract_arg = getattr(args, 'surface_brief', None)
-    default_contract = root / '.site' / 'design' / 'surface-brief.md'
     if contract_arg:
         contract = validate_surface_brief(root, contract_arg)
-    elif default_contract.is_file():
-        contract = validate_surface_brief(root, str(default_contract))
+    else:
+        contract = require_visual_contract(root)
     stale_authorization = bool(state.get('development_authorized'))
-    record_consent(state, 'visual_consent', consent, 'visual')
+    _record_consent(state, 'visual_consent', consent, 'visual')
     state['visual_confirmed'] = True
     state['visual_basis'] = consent['quote'][:200]
     state['visual_confirmed_at'] = now()
     state['visual_prototype'] = str(resolved)
+    state['surface_brief'] = str(contract)
     if stale_authorization:
         # The authorization was given for the previous style; it does not carry over.
         state['development_authorized'] = False
@@ -1034,7 +844,7 @@ def action_confirm_visual(root, args):
         'prototype_inside_project': inside,
         'surface_brief': str(contract) if contract else None,
         'surface_brief_validated': bool(contract),
-        'consent': describe_consent(consent),
+        'consent': _describe_consent(consent),
     }
 
 
@@ -1051,8 +861,10 @@ def action_authorize_build(root, args):
         raise ValueError('structure_confirmed is false; record the creator\'s structure choice before development')
     if state.get('visual_required') is not False and not state.get('visual_confirmed'):
         raise ValueError('visual_confirmed is false; show the prototype and get a choice before development')
-    consent = build_consent(args)
-    record_consent(state, 'authorization_consent', consent, 'authorization')
+    if state.get('visual_required') is not False:
+        require_visual_contract(root, state)
+    consent = _build_consent(args)
+    _record_consent(state, 'authorization_consent', consent, 'authorization')
     state['development_authorized'] = True
     state['authorization_basis'] = consent['quote'][:200]
     state['authorized_at'] = now()
@@ -1068,7 +880,7 @@ def action_authorize_build(root, args):
         'revision': state['revision'],
         'development_authorized': True,
         'delegated': bool(state.get('delegated')),
-        'consent': describe_consent(consent),
+        'consent': _describe_consent(consent),
     }
 
 
@@ -1078,6 +890,8 @@ def action_start_build(root, args):
     reasons = gate_reasons(state, state.get('visual_required') is not False)
     if reasons:
         raise ValueError('Gate not satisfied: ' + '; '.join(reasons))
+    if state.get('visual_required') is not False:
+        require_visual_contract(root, state)
     if state.get('stage') == 'delivered':
         raise ValueError('Project is delivered; run reopen before building again')
     state['stage'] = 'building'
@@ -1292,7 +1106,7 @@ def action_deliver(root, args):
         'artifact': f'.site/{CHECK_ARTIFACT_DIR}/{args.check}.json',
     }
     state['next_action'] = 'Deliver in plain language; reopen before any further scope change'
-    replay = consent_replay(state)
+    replay = _consent_replay(state)
     state['delivery']['consent_replay'] = [entry['quote'] for entry in replay]
     save_state(root, state, 'deliver', args.expect_revision)
     clear_lease(root)
@@ -1311,45 +1125,6 @@ def action_deliver(root, args):
             'Any line they disown must be reopened before the delivery stands.'
         ),
     }
-
-
-def consent_replay(state):
-    """Every still-standing recorded quote, for the creator to confirm or disown.
-
-    A quote whose decision was invalidated is skipped: handing the creator an
-    abandoned sentence as if it were current would defeat the one step that really
-    checks consent.  Invalidated records stay in ``consent_history`` for the audit.
-    """
-    labels = {
-        'concept_consent': '首版方案确认',
-        'structure_consent': '页面结构确认',
-        'visual_consent': '视觉风格确认',
-        'authorization_consent': '开发授权',
-    }
-    standing = {
-        'concept_consent': 'concept_confirmed',
-        'structure_consent': 'structure_confirmed',
-        'visual_consent': 'visual_confirmed',
-        'authorization_consent': 'development_authorized',
-    }
-    replay = []
-    for field in CONSENT_FIELDS:
-        record = state.get(field)
-        if not isinstance(record, dict):
-            continue
-        if not state.get(standing[field]):
-            continue
-        # A project already in flight under the older schema stored the wording in
-        # "text". Keep replaying it rather than handing the creator a blank line.
-        quote = record.get('quote') or record.get('text') or ''
-        replay.append({
-            'gate': field.replace('_consent', ''),
-            'label': labels[field],
-            'quote': quote,
-            'basis': record.get('basis', BASIS_REPORTED),
-            'recorded_at': record.get('recorded_at') or record.get('confirmed_at'),
-        })
-    return replay
 
 
 def action_reopen(root, args):
@@ -1494,7 +1269,7 @@ def build_parser():
     visual.add_argument('--prototype', required=True)
     visual.add_argument(
         '--surface-brief',
-        help='optional project design contract; when present it must record a design.py query and Style/Result ID',
+        help='project design contract; it must record the design.py source and minimum direction evidence',
     )
     authorize = add('authorize-build', 'record explicit development authorization as the creator\'s verbatim quote')
     authorize.add_argument('--quote', required=True)
