@@ -196,6 +196,8 @@
 
 ## 9. 项目记录
 
+四个 Skill 在正文使用统一的 `reads / writes / schema / handoff / evidence` 契约，并以 [内部回执 schema](site-brief/references/context-contract.md) 引用已有文件、稳定 ID、证据与未决项；不引入平行上下文目录，也不为简单修改创建状态。门禁工具在成功跃迁后派生 `.site/session-state.json` 作为恢复提示；它不参与门禁或冻结指纹。恢复时重新读取真实状态、租约、指纹和检查凭据，过期、缺失或损坏快照不阻塞；`show` 与 Checker 均不补写快照。
+
 记录按需创建，不向简单修改强加协议。默认只保留四个概念：
 
 ```text
@@ -253,7 +255,7 @@ Skills 遵循通用 Agent Skills 目录规范并作为一套安装。核心文�
 
 ## 12. 验证与交付
 
-`site-builder` 在正式实现后调用 `site-check`，对本轮范围执行适用的静态/构建、核心业务、视觉和再次打开检查；检查矩阵必须声明档位与非空选择原因，每项标记检查轴。`full` 最低包含 `static_build`、`core_task`、`visual_desktop`、`visual_mobile`、`reopen` 五个阻断轴，`smoke` / `targeted` 至少包含受影响的阻断 `core_task`。矩阵逐条映射已确认首版能力、交互合同的 `required / excluded`、`recommended` 的采用或偏离依据、`confirm` 的处理结果、页面设计合同中适用的 `PG-* / SC-* / RP-* / CP-* / TX-* / AS-* / VA-*`，以及各纵向切片的成功、失败恢复、中途退出和适用状态，缺失映射不得静默省略。新建、整体改版、主流程或信息结构变化缺少页面设计合同的适用部分时，Checker 将“设计交接不完整”记为阻断失败，不自行补规格。视觉轴由 `site-check` 调用 `site-design` 只读审查，实际渲染代表性的核心页面和复杂操作表面，核对跨页面视觉继承、控件状态、动效节奏与减弱动效行为；原创设计不默认要求像素级复刻。Writer 与 Checker 严格串行：Writer 先停止自有体验稿和开发服务并交接冻结指纹，Checker 全程只读，只把矩阵凭据写到 `.site/checks/`。内容寻址 `check_id` 用于发现 artifact 误改，不替代 Checker 对证据语义的判断。`site-builder` 修复范围内问题后必须引用失败矩阵取回 Writer、重新交接并复验，旧 `check_id` 不得沿用。宿主支持独立 Agent 时优先隔离检查上下文，减少自行实现、自行判定的偏差；用户试用不能替代 Agent 能执行的验证。
+`site-builder` 在正式实现后调用 `site-check`，对本轮范围执行适用的静态/构建、核心业务、视觉和再次打开检查；检查矩阵必须声明档位、非空选择原因与当前真实浏览器能力，每项标记检查轴。`full` 始终表示 `static_build`、`core_task`、`visual_desktop`、`visual_mobile`、`reopen` 五轴：真实浏览器可用时五轴均须有阻断项；不可用时 `static_build` 与 `core_task` 仍须阻断，后三轴分别保留非阻断 `not_run` 与恢复条件。浏览器是条件能力，不在设计或验收阶段要求创作者安装；但只能由浏览器证明的持久化、导入导出或复杂交互仍须在 `core_task` 中保持阻断 `not_run`，不得借能力降级交付。`smoke` / `targeted` 至少包含受影响的阻断 `core_task`。矩阵逐条映射已确认首版能力、交互合同的 `required / excluded`、`recommended` 的采用或偏离依据、`confirm` 的处理结果、页面设计合同中适用的 `PG-* / SC-* / RP-* / CP-* / TX-* / AS-* / VA-*`，以及各纵向切片的成功、失败恢复、中途退出和适用状态，缺失映射不得静默省略。新建、整体改版、主流程或信息结构变化缺少页面设计合同的适用部分时，Checker 将“设计交接不完整”记为阻断失败，不自行补规格。有真实浏览器时，视觉轴由 `site-check` 调用 `site-design` 只读审查，实际渲染代表性的核心页面和复杂操作表面，核对跨页面视觉继承、控件状态、动效节奏与减弱动效行为；原创设计不默认要求像素级复刻。Writer 与 Checker 严格串行：Writer 先停止自有体验稿和开发服务并交接冻结指纹，Checker 全程只读，只把矩阵凭据写到 `.site/checks/`。内容寻址 `check_id` 用于发现 artifact 误改，不替代 Checker 对证据语义的判断。`site-builder` 修复范围内问题后必须引用失败矩阵取回 Writer、重新交接并复验，旧 `check_id` 不得沿用。宿主支持独立 Agent 时优先隔离检查上下文，减少自行实现、自行判定的偏差；用户试用不能替代 Agent 能执行的验证。
 
 不强制生成 `acceptance-guide.md`。交付消息用通俗语言说明：
 

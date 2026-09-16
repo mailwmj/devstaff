@@ -31,10 +31,11 @@ where its evidence comes from:
 Only ``artifact``, ``command`` and ``check`` may carry a blocking item; anything else has
 to be reported as ``not_run`` instead of ``passed``.
 
-Every matrix needs a non-empty ``profile_reason`` and an ``axis`` on each item.
-Full verification requires blocking static/build, core-task, desktop visual,
-mobile visual and reopening axes; narrower profiles still require a blocking
-affected core task.
+Every matrix needs a non-empty ``profile_reason``, a browser capability
+declaration and an ``axis`` on each item. Full verification always represents
+static/build, core-task, desktop visual, mobile visual and reopening axes. The
+browser-dependent axes are blocking only when a real browser is available;
+static/build and the affected core task remain blocking in every environment.
 """
 import argparse
 import hashlib
@@ -54,6 +55,8 @@ CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
 CHECK_PROFILES = ('smoke', 'targeted', 'full')
 FULL_REQUIRED_AXES = ('static_build', 'core_task', 'visual_desktop', 'visual_mobile', 'reopen')
+ALWAYS_BLOCKING_AXES = ('static_build', 'core_task')
+BROWSER_AXES = ('visual_desktop', 'visual_mobile', 'reopen')
 EVIDENCE_KINDS = ('artifact', 'command', 'check', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
 VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command', 'check')
@@ -306,6 +309,18 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         profile_reason = str(payload.get('profile_reason') or '').strip()
     if not profile_reason:
         raise ValueError('Check matrix needs a non-empty profile_reason explaining why this scope was selected')
+    browser = payload.get('browser') if isinstance(payload, dict) else None
+    if not isinstance(browser, dict) or not isinstance(browser.get('available'), bool):
+        raise ValueError('Check matrix needs browser.available as a boolean capability declaration')
+    browser = {
+        'available': browser['available'],
+        'provider': str(browser.get('provider') or '').strip(),
+        'limitation': str(browser.get('limitation') or '').strip(),
+    }
+    if browser['available'] and not browser['provider']:
+        raise ValueError('Available browser capability needs a non-empty provider')
+    if not browser['available'] and not browser['limitation']:
+        raise ValueError('Unavailable browser capability needs a non-empty limitation')
     items = payload.get('items') if isinstance(payload, dict) else payload
     if not isinstance(items, list) or not items:
         raise ValueError('Check matrix needs a non-empty list of items')
@@ -357,13 +372,41 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
             'blocking': item['blocking'],
             'evidence': evidence,
         })
+    represented_axes = {item['axis'] for item in normalized}
     required_axes = FULL_REQUIRED_AXES if profile == 'full' else ('core_task',)
-    covered_axes = {item['axis'] for item in normalized if item['blocking']}
-    missing_axes = [axis for axis in required_axes if axis not in covered_axes]
+    missing_axes = [axis for axis in required_axes if axis not in represented_axes]
     if missing_axes:
         raise ValueError(
-            f'Profile {profile!r} is missing required blocking axes: {", ".join(missing_axes)}'
+            f'Profile {profile!r} is missing required axes: {", ".join(missing_axes)}'
         )
+    blocking_axes = {item['axis'] for item in normalized if item['blocking']}
+    required_blocking_axes = (
+        FULL_REQUIRED_AXES if profile == 'full' and browser['available']
+        else ALWAYS_BLOCKING_AXES if profile == 'full'
+        else ('core_task',)
+    )
+    missing_blocking_axes = [axis for axis in required_blocking_axes if axis not in blocking_axes]
+    if missing_blocking_axes:
+        raise ValueError(
+            f'Profile {profile!r} is missing required blocking axes: {", ".join(missing_blocking_axes)}'
+        )
+    if profile == 'full' and not browser['available']:
+        for axis in BROWSER_AXES:
+            axis_items = [item for item in normalized if item['axis'] == axis]
+            if not any(item['status'] == 'not_run' for item in axis_items):
+                raise ValueError(
+                    f'Unavailable browser capability requires a not_run item for axis {axis!r}'
+                )
+    if not browser['available']:
+        blocking_browser_items = [
+            item['id'] for item in normalized
+            if item['axis'] in BROWSER_AXES and item['blocking']
+        ]
+        if blocking_browser_items:
+            raise ValueError(
+                'When browser.available is false, browser-dependent axes must be non-blocking: '
+                + ', '.join(blocking_browser_items)
+            )
     if save_evidence:
         for row in artifacts.values():
             source = root / row['path']
@@ -389,6 +432,7 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         'label': label or '',
         'profile': profile,
         'profile_reason': profile_reason,
+        'browser': browser,
         'input_fingerprint': before,
         'fingerprint': after,
         'source_changed': before != after,
@@ -402,6 +446,7 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
             'The matrix verifies that declared evidence exists and is unchanged; it does not execute browser, visual or reopening checks by itself',
             'Only artifact, command and check evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
             'Content-addressed artifacts expose accidental edits but are not signed or hostile-writer-proof',
+            'An unavailable browser may leave visual and reopening axes non-blocking and not_run; affected core tasks still require blocking evidence',
         ],
         'follow_up': ['Fix blocking failures in site-builder', 'Re-run the whole matrix against a newly frozen fingerprint'],
     }

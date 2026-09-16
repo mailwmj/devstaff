@@ -29,6 +29,9 @@ jobs:
       - name: Run state-gate regression
         run: python3 tests/gate_flow.py
 
+      - name: Run session recovery regression
+        run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_session_state.py
+
       - name: Validate design assets
         run: python3 site-design/scripts/design.py validate
 

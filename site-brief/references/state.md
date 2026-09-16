@@ -89,7 +89,7 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT --ow
 | `start-build` | 已有 writer lease 且四道门禁字段满足 | 无 lease；门禁缺项；已交付未 `reopen` |
 | `handoff` | `--stopped-pid`、`--freed-port`、`--service-json` | 任一应停止 PID 仍在运行；端口被未登记服务占用；登记服务缺少存活 PID、端口未监听或根目录不在项目内 |
 | `start-verify` | `handoff` 记录与当前指纹一致 | 无 `handoff`；交接后源码再次变化 |
-| `deliver` | `site-check` 的内容寻址矩阵凭据 `--check <check_id>` | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；文件名、内部 ID 或内容摘要不一致；非矩阵凭据；指纹与当前源码不一致；档位最低轴缺失；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command`/`check` 证据；证据文件或引用检查在检查后被改动 |
+| `deliver` | `site-check` 的内容寻址矩阵凭据 `--check <check_id>`；交付记录保留 profile、浏览器能力声明与状态计数 | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；文件名、内部 ID 或内容摘要不一致；非矩阵凭据；指纹与当前源码不一致；档位最低轴缺失；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command`/`check` 证据；证据文件或引用检查在检查后被改动 |
 | `reopen` | `--reason`；Checker 已接管时还需 `--check <failed_check_id>`；实质范围变化时加 `--scope-changed` | 缺少 `--reason`；`verifying`/checker lease 下缺少当前源码上的失败矩阵；**没有任何可作废的已发生状态**（空项目不许借 `reopen` 拿到 writer 租约和 `building`）。`--scope-changed` 会同时作废方案、结构、视觉与授权确认，之后必须重新 `confirm-concept` |
 
 `claim` 是项目级单写者租约：同一 owner 重复 `claim` 返回原租约且不改获取时间；不同 owner 或 Writer/Checker 角色冲突会拒绝。`start-verify` 把租约从 writer 交给 checker，`deliver` 结束后释放；手动 `release` 必须提供与当前租约相同的 `--owner`，且不能释放 `verifying` 中的活跃 Checker。确需处理已确认失效的陈旧租约时，先用 `block` 记录 Checker 异常与恢复条件，再使用显式留痕路径处理；`verifying` 中的 `claim --force` 同样拒绝。
@@ -97,6 +97,8 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT --ow
 检查结束后租约仍在 checker 手里：通过时用 `deliver` 释放；不通过时用 `reopen --check <failed_check_id>` 原子取回 writer（同时清空 `writer_release` 和旧交付），再修复并重新交接。失败矩阵必须绑定当前源码；没有 Checker 结果时不能抢回租约。
 
 每次 `save_state` 都向 `transition_history` 追加时间、动作、可用的租约 owner/role，以及固定字段的前后摘要。摘要不包含历史自身，避免递归膨胀；它帮助定位误操作和状态漂移，不构成外部可信审计日志。
+
+成功跃迁还派生写入 `.site/session-state.json`；该恢复提示不包含门禁确认字段、不进入冻结指纹、不能代替真实状态。`show` 只读展示快照的 `current / stale / invalid / missing`，不补写；格式、读取顺序与内部回执见 [上下文与交接契约](context-contract.md)。
 
 冻结指纹包含正式项目文件、列出的 `.site` 文档以及 `.site/design/**` 普通文件；排除会随流程写入的 `state.json`、lease 与 `.site/checks/`。因此确认后的设计稿变化会使交接或验收失效。
 

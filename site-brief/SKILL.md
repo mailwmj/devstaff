@@ -4,6 +4,18 @@ description: 只梳理网站想法、调查事实并形成可确认的首版 bri
 ---
 # 首版梳理与协作记录
 
+## 协作契约
+
+交接或恢复会话时读 [上下文契约](references/context-contract.md)，按统一回执 schema 返回，不另建上下文副本。
+
+| 字段 | 本 Skill 的接口 |
+| --- | --- |
+| `reads` | 最新请求、项目事实、`.site/brief.md`、`state.py show`；缺少材料只补阻塞首版的未知 |
+| `writes` | `.site/brief.md`；门禁状态与派生恢复快照仅由 `state.py` 写入 |
+| `schema` | `ready / needs_user / blocked`；内容区分事实、决定、假设、首版切片、包含、排除与风险 |
+| `handoff` | `ready` 返回调用者或建议下一 Skill，不代表视觉确认、开发授权；未决项停在对应决定 |
+| `evidence` | 可定位的项目事实、查证来源和用户原话记录；无法查证的内容保留为假设 |
+
 把模糊愿景收敛为创作者能确认、其他 site Skill 能消费的 brief，并集中维护跨 Skill 状态。用户不需要理解阶段、技术栈或 Skill 名称。
 
 ## 选择分支

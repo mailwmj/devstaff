@@ -236,6 +236,49 @@ def state_summary(state):
     }
 
 
+def session_snapshot(root, state):
+    return {
+        'schema_version': 1,
+        'project_id': state['project_id'],
+        'project_root': str(root.resolve()),
+        'revision': state.get('revision'),
+        'stage': state.get('stage'),
+        'last_action': state.get('last_action'),
+        'updated_at': state.get('updated_at'),
+        'next_action': state.get('next_action'),
+    }
+
+
+def write_session_snapshot(root, state):
+    path = metadata_dir(root) / 'session-state.json'
+    try:
+        if path.is_symlink():
+            raise OSError('session-state.json must not be a symlink')
+        write_json(path, session_snapshot(root, state))
+    except OSError as error:
+        # State is already committed; a derived hint cannot invalidate the gate.
+        print(f'Warning: state saved but session snapshot unavailable: {error}', file=sys.stderr)
+
+
+def read_session_snapshot(root, state):
+    path = metadata_dir(root) / 'session-state.json'
+    if path.is_symlink():
+        return {'status': 'invalid'}
+    if not path.exists():
+        return {'status': 'missing'}
+    try:
+        snapshot = read_json(path)
+    except (OSError, ValueError):
+        return {'status': 'invalid'}
+    if not isinstance(snapshot, dict) or snapshot.get('schema_version') != 1:
+        return {'status': 'invalid'}
+    expected = session_snapshot(root, state)
+    return {
+        'status': 'current' if snapshot == expected else 'stale',
+        'snapshot': snapshot,
+    }
+
+
 def save_state(root, state, action, expect_revision=None):
     if expect_revision is not None and state.get('revision') != expect_revision:
         raise ValueError(
@@ -264,6 +307,7 @@ def save_state(root, state, action, expect_revision=None):
     }
     state['transition_history'] = as_list(state.get('transition_history')) + [transition]
     write_json(state_path, state)
+    write_session_snapshot(root, state)
     return state
 
 
@@ -539,6 +583,7 @@ def action_show(root, args):
         'revision': state.get('revision'),
         'fingerprint': current,
         'lease': lease,
+        'session_state': read_session_snapshot(root, state),
         'writer_release': release or None,
         'release_matches_current_source': bool(release) and release.get('fingerprint') == current,
         'delivery': state.get('delivery'),
@@ -1125,6 +1170,11 @@ def action_deliver(root, args):
         'fingerprint': current,
         'item_count': len(as_list(artifact.get('items'))),
         'artifact': f'.site/{CHECK_ARTIFACT_DIR}/{args.check}.json',
+        'verification': {
+            'profile': artifact.get('profile'),
+            'browser': artifact.get('browser'),
+            'counts': artifact.get('counts'),
+        },
     }
     state['next_action'] = 'Deliver in plain language; reopen before any further scope change'
     replay = _consent_replay(state)

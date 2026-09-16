@@ -79,6 +79,7 @@ class StaticEvidenceTests(unittest.TestCase):
         payload = {
             'profile': 'targeted',
             'profile_reason': 'Check a changed static page',
+            'browser': {'available': False, 'limitation': 'No browser is needed for this static fixture'},
             'items': [
                 {'id': 'static', 'axis': 'static_build', 'status': 'passed', 'blocking': True,
                  'evidence': {'kind': 'check', 'summary': 'Static references pass', 'checks': [static_id]}},
@@ -103,6 +104,8 @@ class StaticEvidenceTests(unittest.TestCase):
              patch.object(state, '_consent_replay', return_value=[]):
             delivery = state.action_deliver(self.root, args)
         self.assertEqual(delivery['stage'], 'delivered')
+        self.assertFalse(delivery['delivery']['verification']['browser']['available'])
+        self.assertEqual(delivery['delivery']['verification']['counts']['not_run'], 0)
 
     def test_failed_and_stale_static_results_cannot_support_pass(self):
         (self.root / 'index.html').write_text('<img src="missing.png">')
@@ -133,6 +136,7 @@ class StaticEvidenceTests(unittest.TestCase):
         result = check.finalize(self.root, check.run_check(self.root, [sys.executable, '-c', 'pass'], 5))
         payload = {
             'profile': 'targeted', 'profile_reason': 'Existing command evidence',
+            'browser': {'available': False, 'limitation': 'Command-only regression fixture'},
             'items': [
                 {'id': 'build', 'axis': 'static_build', 'status': 'passed', 'blocking': True,
                  'evidence': {'kind': 'command', 'summary': 'Build passed', 'commands': [result['check_id']]}},
@@ -141,6 +145,120 @@ class StaticEvidenceTests(unittest.TestCase):
             ],
         }
         self.assertEqual(check.matrix_check(self.root, payload)['status'], 'passed')
+
+
+class BrowserCapabilityMatrixTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        (self.root / '.site').mkdir()
+        (self.root / 'evidence.txt').write_text('verified')
+
+    def item(self, identifier, axis, status='passed', blocking=True):
+        evidence = (
+            {'kind': 'artifact', 'summary': identifier, 'paths': ['evidence.txt']}
+            if status == 'passed'
+            else {'kind': 'declared', 'summary': 'No real browser is available'}
+        )
+        return {
+            'id': identifier,
+            'axis': axis,
+            'status': status,
+            'blocking': blocking,
+            'evidence': evidence,
+        }
+
+    def full_items(self, browser_available):
+        items = [
+            self.item('static', 'static_build'),
+            self.item('core', 'core_task'),
+        ]
+        for axis in ('visual_desktop', 'visual_mobile', 'reopen'):
+            items.append(self.item(
+                axis,
+                axis,
+                status='passed' if browser_available else 'not_run',
+                blocking=browser_available,
+            ))
+        return items
+
+    def test_full_profile_requires_explicit_browser_capability(self):
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'New site acceptance',
+            'items': self.full_items(browser_available=False),
+        }
+        with self.assertRaisesRegex(ValueError, 'browser.available'):
+            check.matrix_check(self.root, payload)
+
+    def test_full_profile_can_pass_without_browser_when_browser_axes_are_disclosed(self):
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'New static site; browser automation is unavailable',
+            'browser': {'available': False, 'limitation': 'Host has no controllable browser'},
+            'items': self.full_items(browser_available=False),
+        }
+        result = check.matrix_check(self.root, payload)
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(result['counts']['not_run'], 3)
+        self.assertFalse(result['browser']['available'])
+
+    def test_full_profile_without_browser_can_supply_delivery_evidence(self):
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'Static site with browser limitations disclosed',
+            'browser': {'available': False, 'limitation': 'Host has no controllable browser'},
+            'items': self.full_items(browser_available=False),
+        }
+        matrix = check.finalize(self.root, check.matrix_check(self.root, payload))
+        current_state = {'stage': 'verifying', 'visual_required': False, 'revision': 1}
+        args = SimpleNamespace(check=matrix['check_id'], expect_revision=None)
+        with patch.object(state, 'load_state', return_value=current_state), \
+             patch.object(state, 'require_lease'), patch.object(state, 'gate_reasons', return_value=[]), \
+             patch.object(state, 'save_state'), patch.object(state, 'clear_lease'), \
+             patch.object(state, '_consent_replay', return_value=[]):
+            delivery = state.action_deliver(self.root, args)
+        self.assertEqual(delivery['stage'], 'delivered')
+        self.assertFalse(delivery['delivery']['verification']['browser']['available'])
+        self.assertEqual(delivery['delivery']['verification']['counts']['not_run'], 3)
+
+    def test_available_browser_keeps_all_full_axes_blocking(self):
+        items = self.full_items(browser_available=True)
+        items[-1]['blocking'] = False
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'New site with browser automation',
+            'browser': {'available': True, 'provider': 'host-browser'},
+            'items': items,
+        }
+        with self.assertRaisesRegex(ValueError, 'missing required blocking axes: reopen'):
+            check.matrix_check(self.root, payload)
+
+    def test_missing_browser_does_not_excuse_unverified_core_task(self):
+        items = self.full_items(browser_available=False)
+        items[1] = self.item('core', 'core_task', status='not_run', blocking=True)
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'Interactive task cannot be verified without a browser',
+            'browser': {'available': False, 'limitation': 'Host has no controllable browser'},
+            'items': items,
+        }
+        result = check.matrix_check(self.root, payload)
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['blocking_not_passed'], ['core'])
+
+    def test_unavailable_browser_rejects_blocking_browser_axis_claims(self):
+        items = self.full_items(browser_available=False)
+        items.append(self.item('screenshot-claim', 'visual_desktop', status='passed', blocking=True))
+        payload = {
+            'profile': 'full',
+            'profile_reason': 'Screenshot-only review cannot prove a browser axis',
+            'browser': {'available': False, 'limitation': 'Only a screenshot was supplied'},
+            'items': items,
+        }
+        with self.assertRaisesRegex(ValueError, 'browser-dependent axes must be non-blocking'):
+            check.matrix_check(self.root, payload)
 
 
 if __name__ == '__main__':
