@@ -49,7 +49,7 @@ python scripts/install.py /absolute/path/to/agent/skills
 ## 关键约束
 
 - 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
-- 结构选择、视觉选择与开发授权是三个决定：用户选了页面结构不等于确认了视觉风格；
+- 确认模型统一分为方案确认、结构确认（仅多结构比较时）、视觉确认和开发授权四类记录；用户选了页面结构不等于确认了视觉风格，开发授权也不替代前三类决定；详见 [`CONTEXT.md`](CONTEXT.md)；
 - 开发授权按完整请求与相邻问答的行动含义判断，不按关键词：直接要求建设正式成果的委托可在前置决定确认后继续生效；没有既有委托时，Agent 先说清“确认后进入开发”的后果，再理解用户紧接着的自然答复。当前答复不得倒填旧门禁，也不要求用户背“开始开发”口令；
 - 结构候选前先按任务形成轻量交互合同：`required / recommended / confirm / excluded` 约束对象生命周期、工作区、完整 Flow、本地化和范围；行业经验只能提出建议或待确认项，不能创造首版功能；
 - `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文；默认给一个有依据的页面结构和两个母题层不同的风格，只有新的重要取舍才增加候选；推荐要有依据但不能替用户确认；
@@ -84,11 +84,12 @@ python scripts/install.py /absolute/path/to/agent/skills
 
 ```text
 python scripts/verify_skills.py .
-python tests/gate_flow.py
+python scripts/test_check_protocol.py
+python scripts/test_session_state.py
 python site-design/scripts/design.py validate
 python site-design/scripts/design.py research "productivity tool novice calm" --design-system --project-name "Example"
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 同时检查本地 Token/Gallery 和内置 UI/UX Pro Max 数据完整性；`design.py research` 是唯一检索入口，并固定返回带来源与版本的 JSON。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
+`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`test_check_protocol.py` 和 `test_session_state.py` 覆盖检查矩阵、证据、状态恢复与门禁回归；**它们不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 同时检查本地 Token/Gallery 和内置 UI/UX Pro Max 数据完整性；`design.py research` 是唯一检索入口，并固定返回带来源与版本的 JSON。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。
 
 **这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/craft-review.md`](site-design/references/craft-review.md) 的设计、任务状态与机械三路证据核对。

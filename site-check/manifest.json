@@ -3,7 +3,7 @@
   "version": "0.16.0",
   "name": "site-check",
   "files": {
-    "SKILL.md": "5f2140dccac18abec3f3dee1fc33ffc5569abf8b1466a295e15dec85aea1f206",
+    "SKILL.md": "935b8f5c053e526802277526eee72cf0886dac9984dc6dad362eafe1c58336f7",
     "agents/openai.yaml": "607b1a7b728339471ec6a08eee93cee5c506168e38323b3140d4e851d5cf3cce",
     "references/verification.md": "8ec2665771a65ff4b8279e4d45156d263dfbcb0466edbdddf34936378d9cf709",
     "scripts/check.py": "e83982e7c70e8e15b00f4ba4014314abb2d1d2effb124f1429eed3a61d6ff547"

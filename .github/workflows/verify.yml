@@ -26,8 +26,8 @@ jobs:
       - name: Verify manifests and collaboration graph
         run: python3 scripts/verify_skills.py .
 
-      - name: Run state-gate regression
-        run: python3 tests/gate_flow.py
+      - name: Run check protocol regression
+        run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_check_protocol.py
 
       - name: Run session recovery regression
         run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_session_state.py

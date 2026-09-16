@@ -3,7 +3,7 @@
   "version": "0.16.0",
   "name": "site-design",
   "files": {
-    "SKILL.md": "ad28e606b9a8356b8c0b92ad6908c0a8e6751fd23a7a09aef30ac052593d56ab",
+    "SKILL.md": "e08964447e0283a9cb316485c489f07bcc026ac20e734948ee67fc4f0bf86969",
     "agents/openai.yaml": "e590141f533eb390cbdb344386dc978fc71ebaca3186a98cd27942ad5b7b60cc",
     "assets/design/gallery.html": "d62f6c60e261246355a11da01fdcc8f676dbe15c9b5cc53ba760f1b856cb15c7",
     "assets/design/primitives.css": "266411c2866d26fedcd8bf1bf812f8b5c24b9bfec0bf0d56ade73e84a4d6fb81",

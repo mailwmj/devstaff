@@ -3,7 +3,7 @@
   "version": "0.16.0",
   "name": "site-brief",
   "files": {
-    "SKILL.md": "329ba2dcaeed396889d42a51b5530d57df8441c01f271c85fcef457937fd851c",
+    "SKILL.md": "9a6cc58fd0fb293d68aa613de57f8d1a89940547a4c6c00284189c2f4301fb2c",
     "agents/openai.yaml": "438b5bb158643f5fc9ee6da63ff127d83ee290692e3650d2802cbc9fe805daab",
     "references/brief.md": "cd0f1fcd36659cac4067797f6d6e2d2d6fa1b3c775e29427d9c2d6b230626526",
     "references/context-contract.md": "3c11b27a1192c2b25bf6c69eb1d1233a4cc27609e781a26b8917faa5580cbdc4",

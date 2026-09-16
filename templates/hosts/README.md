@@ -21,7 +21,7 @@
 ### 对项目的直接结论
 
 1. **本仓库已有的 `agents/openai.yaml` 正是 Codex 的 skill 约定**（官方文档列为"Optional: appearance and dependencies"）。所以四个 Skill 在 Codex 侧已经具备元数据，不需要新增。
-2. **`templates/AGENTS.md` 的 124 行 / 12.6 KB 同时满足两家**：Claude Code 的"<200 行"建议、Codex 的 32 KiB 默认上限（约占 39%）。以文件实际行数与字节数为准。
+2. **`templates/AGENTS.md` 的 101 行 / 8.9 KB 同时满足两家**：Claude Code 的"<200 行"建议、Codex 的 32 KiB 默认上限（约占 27%）。以文件实际行数与字节数为准。
 3. **但 32 KiB 是 global + project 合并计算的**。若全局装了本文件，项目里还有别的 `AGENTS.md`，要留意累计。必要时用 `project_doc_max_bytes` 提高，或把非核心章节拆到嵌套目录。
 
 ## 2. 交付形态
