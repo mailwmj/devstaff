@@ -8,9 +8,9 @@
 
 1. 用户参考或已有设计系统优先。已有 token 时做语义映射，不引入第二套全局变量覆盖它。
 2. 根据已经确定的内容形状映射布局尺寸：阅读/写作 reading、记录/比较 workspace、收藏/作品 collection、介绍/叙述 story。名称只是校准入口，不是页面职责分类器；布局配置给尺寸与组织建议，不能自动生成信息架构。
-3. 按**角色分配**选排版（见 [排版](typography.md)）：`ui` 无衬线统一承担界面、`reading` 宋体承担标题与连续正文、`narrative` 衬线标题配无衬线正文、`display` 大尺度无衬线标题主导构图、`cultural` 楷体标题与引文、`technical` 无衬线与等宽数字、字阶更紧。字体是含中文回退的**本机字体栈，不下载字体**；实际设备必须查看回退效果。
+3. 按**角色分配**选排版（见 [工艺审查](craft-review.md)）：`ui` 无衬线统一承担界面、`reading` 宋体承担标题与连续正文、`narrative` 衬线标题配无衬线正文、`display` 大尺度无衬线标题主导构图、`cultural` 楷体标题与引文、`technical` 无衬线与等宽数字、字阶更紧。字体是含中文回退的**本机字体栈，不下载字体**；实际设备必须查看回退效果。
 4. 按操作频率与设备选密度：桌面高频比较可 compact，普通工具 comfortable，展示 spacious。紧凑模式下触屏仍使用 44px 的项目默认操作高度；不能通过压小正文容纳内容。
-5. 按品牌与内容气质选色彩/形状。深色要有明确需求或选定依据，不把“高级”直接翻译成黑底发光。色彩应从真实来源采样并按 [色彩与素材](color-and-material.md) 收敛成语义角色；本包的色板只是实现示例，不作为采样依据。
+5. 按品牌与内容气质选色彩/形状。深色要有明确需求或选定依据，不把“高级”直接翻译成黑底发光。色彩应从真实来源采样并按 [工艺审查](craft-review.md) 收敛成语义角色；本包的色板只是实现示例，不作为采样依据。
 6. 展示项目自己的代表页面、完成选择后导出并复验。更换任一维度后重新看布局和实际色对，不仅看色板。
 
 ## 推荐配方
@@ -45,7 +45,7 @@ python3 /absolute/site-design/scripts/design.py build --recipe reading-journal -
 python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace --palette ocean --density compact --shape crisp --out /absolute/project/alternate-choice
 ```
 
-输出目录须为新目录或空目录，已有内容拒绝覆盖。输出 `tokens.css`、`selection.json` 与 `intent.md`；后两者分别记录工具配置和待补充的人类设计意图。它们不是设计方向或用户选稿凭证；确认结果按 [体验流程](prototype.md) 交给 `site-brief` 写入 `.site/brief.md`，正式实现约束由 `site-builder` 写入 `.site/implementation-plan.md`。
+输出目录须为新目录或空目录，已有内容拒绝覆盖。输出 `tokens.css`、`selection.json` 与 `intent.md`；它们都是隔离的校准草稿，不是项目规格、设计方向或用户选稿凭证。只把最终采用的语义映射、项目理由和例外合并进 `.site/design/surface-brief.md`；`site-builder` 的实施计划引用该合同，不另行定义视觉事实。
 
 `validate` 检查每个配方与每套色板的**列出色对**和**排版下限**（字号、正文行高、中文标题字距、字体许可），并会把不合格的配方判为失败——它守的是目录默认值，不是你的页面。`sync-gallery` 在 `tokens.json` 变化后重新注入 gallery 的内嵌目录，避免预览与配置漂移。
 
@@ -66,4 +66,4 @@ shadcn 或其他库的 background/foreground/primary/input/ring 等语义变量�
 
 修改品牌色时同时复核按钮文字、悬停、链接、焦点与选中状态；不要只改一个 accent。工具检查目录内指定的不透明色对，文字默认目标 4.5、控件边界与焦点默认目标 3。它不检查透明、图片叠层、动态状态、实际字体、所有邻接背景或色觉辨识，不代表整页无障碍合规。
 
-**工具全部通过不等于设计通过。** token 表里相邻的色，和渲染后真正落在一起的色不是一回事；目录里的字号，也不是最终页面的字号。展示前必须按 [评审协议](review-protocol.md) 在实际渲染上重做字面、色对与触控断言。
+**工具全部通过不等于设计通过。** token 表里相邻的色，和渲染后真正落在一起的色不是一回事；目录里的字号，也不是最终页面的字号。展示前必须按 [工艺审查](craft-review.md) 在实际渲染上重做字面、色对与触控断言。

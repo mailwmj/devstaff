@@ -5,7 +5,7 @@
   "files": {
     "SKILL.md": "eb9a7c7e42506197e078b02fd49e7df32772ee2aa06a54deda01fe0e7202146a",
     "agents/openai.yaml": "607b1a7b728339471ec6a08eee93cee5c506168e38323b3140d4e851d5cf3cce",
-    "references/verification.md": "3bb12c6ddb6b8502ebdad2146732065deac7f828a126ec72c23cc14f0d9c122f",
+    "references/verification.md": "f79e3d15dd890f1b2c0b62097ba1dd504b7620f079b3c79d684312e042d6b7d5",
     "scripts/check.py": "8c29fe1fd3f830841780aeed98807c3cbe9cd781583e516e7c46e1256f1b2641"
   }
 }

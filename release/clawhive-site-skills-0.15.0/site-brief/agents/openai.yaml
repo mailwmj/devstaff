@@ -1,4 +1,0 @@
-interface:
-  display_name: "首版需求梳理"
-  short_description: "澄清想法并形成可确认的首版 brief"
-  default_prompt: "使用 $site-brief 帮我梳理这个网站想法，找出当前最关键的问题，并收敛为可确认的首版 brief。"

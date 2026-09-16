@@ -1,84 +1,90 @@
-# 内置设计工具链
+# 内置设计检索接口
 
-本文件是四套上游设计能力在 `site-design` 中的唯一调用接口。它隐藏供应方目录与独立工作流，外部调用者只需要 `site-design`、`.site/design/surface-brief.md` 和 `scripts/design.py`。
+本项目已经内置 UI/UX Pro Max `2.13.0` 的检索代码与数据。它只负责快速召回候选和实现注意项；项目事实、方向筛选、用户确认与实际渲染仍由本 Skill 负责。
 
-## 什么时候加载
-
-- 新建页面、整体改版、主流程或信息结构变化：完整执行本文件。
-- 已有成熟设计系统的局部页面：继承现有方向，只查询受影响的 UX、响应式或技术栈问题。
-- 单个低风险样式修复：读取 [Impeccable 工艺下限](upstream/impeccable-craft-floor.md) 中与问题有关的条目，不重新做风格检索。
-- 只读审查：读取工艺下限和 [ClawHive 设计原则](upstream/clawhive-frontend-design.md) 的对应章节；缺少项目方向时把方向匹配标为 `not_run`，不启动访谈。
-
-## 一条调用链
-
-### 1. 建立事实与页面职责
-
-先完成 [设计上下文](design-context.md) 与 [任务交互合同](interaction-contract.md)。把当前表面归为 `persuade | operate | read | experience`，分类只决定关注点，不决定结构或风格。
-
-完成条件：使用者、主任务、内容主角、代表内容、主要状态、设备、风险和继承依据都有真实来源或明确缺口。
-
-### 2. 用检索库扩大候选
-
-新页面或新视觉世界执行一次结构化检索：
+## 先看能力目录
 
 ```text
-python <site-design>/scripts/design.py research "<产品类型 受众 使用情境 视觉语气>" --design-system --project-name "<项目名>"
+python <site-design>/scripts/design.py catalog
 ```
 
-查询只写 2～5 个有意义的词并围绕一个主要意图。需要验证具体问题时另做一次最小查询：
+目录固定暴露 12 个搜索领域：
 
 ```text
-python <site-design>/scripts/design.py research "<可观察的 UX 结果>" --domain ux
-python <site-design>/scripts/design.py research "<实现问题>" --stack <检测到的技术栈>
+style  color  chart  landing  product  ux
+typography  google-fonts  icons  gsap  react  web
 ```
 
-不持久化上游的 `MASTER.md`；从结果中选用的机制、查询、命中 ID、适配理由和拒绝理由写回页面设计合同。无结果时只允许缩窄查询重试一次；仍无结果就标明使用本项目通用规则，不能伪造命中。
-
-完成条件：候选池有可追溯查询结果，或合同明确记录 `no_verified_match`。保存检索回执时同时保留 `layout_motif`、`component_patterns` 和 `density`；只有颜色、字体或风格名的回执不算完成。
-
-### 3. 形成项目自己的方向
-
-读取 [视觉方向](visual-direction.md)、[完整网页设计交付](upstream/web-design-direction.md) 与 [ClawHive 设计原则](upstream/clawhive-frontend-design.md) 中适用的 `Direction First`、页面类型、素材、反模式和检查章节。将检索结果翻译为当前项目的内容事实、视觉世界、母题、构图命题、字体角色、色彩来源和一个记忆点。
-
-检索排名、行业映射、配色或字体预设都不是项目证据。两个候选互换配色和字体后差异消失，就回到本步重做。
-
-完成条件：每个候选至少有两条上下文依据，且统一配色字体后仍能解释其差异。合同要逐项写出主布局容器、核心组件形态、信息密度和首屏重心；缺任一项，按换肤反模式退回重做。
-
-合同中的工具来源要写成可核对的非空记录，例如
-`ui-ux-pro-max: Query: inventory desktop dashboard | Style ID: data-matrix`。
-确实执行过查询但没有验证命中时，才使用 `no_verified_match`。项目已有
-`surface-brief.md` 时，`confirm-visual` 会检查这两个字段，缺失就拒绝记录视觉确认。
-
-### 4. 制作并打磨体验稿
-
-方向确定后读取 [Impeccable 工艺下限](upstream/impeccable-craft-floor.md)；任务型、后台、工具和长阅读表面再读 [Impeccable 操作界面](upstream/impeccable-operate.md)。按 [体验流程](prototype.md) 制作可点击 HTML，并同时检查真实内容、组件状态、响应式、键盘、触控、减少动态效果和素材来源。
-
-上游文档中的 `PRODUCT.md`、`DESIGN.md`、`.impeccable/`、独立确认页面及其 CLI 状态不进入本项目；对应职责已经由 `.site/brief.md`、`.site/design/surface-brief.md`、体验稿和 `site-brief` 门禁承担。这样直接复用工艺规则，同时保持一份状态和一份设计合同。
-
-完成条件：体验稿在约定宽窄视口实际打开，主要问题可判断，主要缺陷已完成一次集中修正；能力不足的检查标为 `not_run`。
-
-### 5. 交接同一份合同
-
-视觉确认后按 [页面设计合同](surface-brief.md) 补齐 `PG-* / SC-* / RP-* / CP-* / TX-* / AS-* / VA-*`。在“设计方法来源”记录：
+以及 22 个实现栈：
 
 ```text
-web-design-direction: bundled-adaptation
-impeccable: craft-floor [+ operate when applicable]
-ui-ux-pro-max: query + domain/stack + selected result IDs
-clawhive-frontend-design: sections actually applied
+react  nextjs  vue  svelte  astro  nuxtjs  nuxt-ui  angular
+laravel  swiftui  react-native  flutter  jetpack-compose
+html-tailwind  shadcn  threejs  javafx  wpf  winui  avalonia  uno  uwp
 ```
 
-`site-builder` 只按合同 ID 实施，`site-check` 只按合同 ID 取证。上游工具输出不构成用户确认、开发授权或验收通过。
+这已经覆盖本次核对的上游 `2.13.0` 快照中的风格、颜色、排版、UX、图表、动效、图标、产品/落地页推理、React 性能与全部技术栈数据。运行时不需要读取供应方目录，也不要把 CSV 全文塞进上下文。
 
-## 冲突顺序
+## 按一个问题查询
 
-从高到低：安全与高风险门禁 → 用户原话和已确认首版 → 真实项目及成熟设计系统 → 页面设计合同 → 上游工艺规则 → 检索结果和预设。低位规则不能覆盖高位事实。
+| 目的 | 命令 | 何时用 |
+| --- | --- | --- |
+| 扩大完整方向候选池 | `design.py research "<2-5 个词>" --design-system --project-name "<名称>"` | 新建、整体改版或新视觉世界；通常一次 |
+| 验证单一设计问题 | `design.py research "<2-5 个词>" --domain <domain> --max-results 3` | 只选一个最贴近的问题领域 |
+| 获取已检测技术栈的实现注意项 | `design.py research "<2-5 个词>" --stack <stack> --max-results 3` | 项目已明确使用该栈时；不猜栈 |
 
-## 来源与更新
+查询规则：
 
-- `web-design-direction`：用户提供的项目内版本，本文件按四 Skill 协作方式本地化。
-- `impeccable`：用户提供版本 `4.3.1`，内置工艺下限和操作界面参考。
-- `ui-ux-pro-max`：版本 `2.13.0`，MIT；检索代码、数据和许可位于 `../vendor/ui-ux-pro-max/`。
-- `clawhive-frontend-design`：由用户提供的前端设计方法本地化，内置设计原则参考。
+1. 每次只有一个主要意图，并包含产品、平台或使用情境之一；不要把整段需求当查询。
+2. 先用最小查询。无结果或明显偏题时只允许缩窄重试一次，不用近义词循环消耗上下文。
+3. 只读取返回的 `retrieval`、`decision_record` 和少量相关 `result`；不要遍历数据目录寻找“更好看”的随机答案。
+4. `verified_match` 只表示检索有稳定候选，不表示适合项目。必须用真实用户、任务、内容、设备、风险或既有系统作为 `fit_basis`。
+5. `no_verified_match` 时采用本项目通用规则，并在合同记录回退；不得编造 Result ID。
 
-升级上游时先替换内置实现，再运行 `python <site-design>/scripts/design.py validate` 和整套 manifest 校验；不要让主流程直接引用仓库根的 `design-skills-pack/`。
+## 领域路由
+
+| 当前问题 | 首选领域 |
+| --- | --- |
+| 风格机制与候选命名 | `style` |
+| 语义色、品牌配色与相邻色对 | `color` |
+| 图表类型、数据关系、文本替代 | `chart` |
+| 落地页信息顺序与转化模式 | `landing` |
+| 产品类型、页面职责与常见风险 | `product` |
+| 表单、导航、反馈、无障碍与任务机制 | `ux` |
+| 字体角色与配对 | `typography`；确需联网字体时才查询 `google-fonts` |
+| 图标语义 | `icons` |
+| 动效机制 | `gsap` |
+| React 性能 | `react` |
+| 通用 Web 实现与无障碍 | `web` |
+
+不要为了“完整”逐领域查询。新方向一般是一次 `--design-system`，再针对真实风险补 0～2 次领域或栈查询；成熟系统中的局部问题只查询受影响领域，甚至可以不查询。
+
+## 决策记录
+
+工具返回的 `decision_record.selected` 和 `fit_basis` 故意为空，要求 Agent 显式完成项目匹配。把最终记录写入 `.site/design/surface-brief.md#设计方法来源`：
+
+```text
+Query：
+Route：design-system | domain:<name> | stack:<name>
+Candidate ID：稳定 ID，或 no_verified_match
+Selected：yes | no
+Fit basis：至少两条项目事实；有现成系统/真实素材时至少一条 measured
+Rejected reason：高排名候选未采用的项目原因
+Contract effect：进入母题 / Token / 组件状态 / VA-* 的具体机制
+```
+
+不能直接复制搜索结果里的行业功能、Landing 顺序、色板、字体、组件或代码。先经过范围分级、项目匹配、反默认和候选交换检查。
+
+## 图表与技术栈的额外门槛
+
+- 图表先写清关系：比较、趋势、分布、组成、相关、层级或流向；再选图型。提供同等意义的文本/表格替代，不只靠颜色区分系列；键盘、Tooltip、极端值和窄屏简化都要在真实页面验证。
+- 栈建议只在活跃工程已确认该栈时使用。它是实现注意项，不得覆盖项目现有约定，也不能反向决定视觉方向。
+- Google Fonts 条目只证明候选存在；许可、中文覆盖、加载与离线策略仍需单独核对。已有字体系统优先继承。
+
+## 验证与边界
+
+```text
+python <site-design>/scripts/design.py validate
+```
+
+此命令验证内置版本、结构化数据、配方下限与 gallery 同步。代码位于 `../vendor/ui-ux-pro-max/`，许可为 MIT。项目长期设计事实只写 `surface-brief.md`；不生成或持久化供应方自己的设计主文件，也不把检索结果当用户确认、开发授权或设计通过。

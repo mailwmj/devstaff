@@ -10,6 +10,16 @@ import sys
 GROUPS = {'palette': 'palettes', 'typography': 'typographies', 'density': 'densities',
           'shape': 'shapes', 'layout': 'layouts'}
 INTELLIGENCE_VERSION = '2.13.0'
+INTELLIGENCE_DOMAINS = (
+    'style', 'color', 'chart', 'landing', 'product', 'ux',
+    'typography', 'google-fonts', 'icons', 'gsap', 'react', 'web',
+)
+INTELLIGENCE_STACKS = (
+    'react', 'nextjs', 'vue', 'svelte', 'astro', 'nuxtjs', 'nuxt-ui',
+    'angular', 'laravel', 'swiftui', 'react-native', 'flutter',
+    'jetpack-compose', 'html-tailwind', 'shadcn', 'threejs', 'javafx',
+    'wpf', 'winui', 'avalonia', 'uno', 'uwp',
+)
 
 
 def resources():
@@ -25,6 +35,100 @@ def intelligence_environment():
     environment = os.environ.copy()
     environment['PYTHONDONTWRITEBYTECODE'] = '1'
     return environment
+
+
+def intelligence_source():
+    return {
+        'name': 'ui-ux-pro-max',
+        'version': INTELLIGENCE_VERSION,
+        'bundled': True,
+        'license': 'MIT',
+    }
+
+
+def intelligence_catalog():
+    """Expose the bundled search surface without making agents inspect data files."""
+    summary_path = intelligence_root() / 'data' / 'catalog-summary.json'
+    if not summary_path.is_file():
+        raise ValueError('Bundled design intelligence catalog is missing')
+    summary = json.loads(summary_path.read_text(encoding='utf-8'))
+    stack_files = tuple(sorted(path.stem for path in (intelligence_root() / 'data' / 'stacks').glob('*.csv')))
+    if set(stack_files) != set(INTELLIGENCE_STACKS):
+        raise ValueError('Bundled design intelligence stack catalog is inconsistent')
+    if summary.get('counts', {}).get('stacks') != len(INTELLIGENCE_STACKS):
+        raise ValueError('Bundled design intelligence stack count is inconsistent')
+    return {
+        'source': intelligence_source(),
+        'domains': list(INTELLIGENCE_DOMAINS),
+        'stacks': list(INTELLIGENCE_STACKS),
+        'counts': summary.get('counts', {}),
+        'verified_at': summary.get('verifiedAt'),
+        'query_contract': {
+            'one_dominant_intent': True,
+            'recommended_terms': '2-5',
+            'retry_limit': 1,
+            'fallback': 'record no_verified_match and apply project rules',
+            'decision_target': '.site/design/surface-brief.md#设计方法来源',
+        },
+    }
+
+
+def _result_identity(result):
+    """Return one stable candidate identity from any upstream result shape."""
+    if not isinstance(result, dict):
+        return None
+    design_system = result.get('design_system')
+    if isinstance(design_system, dict):
+        identities = design_system.get('source_identities')
+        if isinstance(identities, dict):
+            parts = [f'{key}={value}' for key, value in identities.items() if value]
+            if parts:
+                return 'design-system:' + '|'.join(parts)
+        style = design_system.get('style')
+        if isinstance(style, dict) and style.get('id'):
+            return 'style:' + str(style['id'])
+
+    rows = result.get('results')
+    if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+        return None
+    row = rows[0]
+    identity_fields = (
+        'Style ID', 'Pattern ID', 'Product Type', 'Font Pairing Name', 'Family',
+        'Data Type', 'Issue', 'Icon Name', 'Guideline', 'Name', 'Title',
+        'Category', 'Rule',
+    )
+    for field in identity_fields:
+        if row.get(field):
+            return f'{field}:{row[field]}'
+    for field, value in row.items():
+        if value not in (None, ''):
+            return f'{field}:{value}'
+    return None
+
+
+def _retrieval_record(args, result):
+    design_system = result.get('design_system') if isinstance(result, dict) else None
+    if isinstance(design_system, dict) and design_system:
+        count = 1
+    elif isinstance(result, dict) and isinstance(result.get('results'), list):
+        count = len(result['results'])
+    else:
+        count = 0
+    route = 'design-system' if args.design_system else (
+        f'stack:{args.stack}' if args.stack else f'domain:{args.domain}')
+    top_result_id = _result_identity(result) if count else None
+    status = 'verified_match' if count and top_result_id else 'no_verified_match'
+    return {
+        'status': status,
+        'route': route,
+        'result_count': count,
+        'top_result_id': top_result_id,
+        'next_action': (
+            'check_project_fit_before_selecting'
+            if status == 'verified_match'
+            else 'retry_once_then_record_fallback'
+        ),
+    }
 
 
 def _density_hint(design_system):
@@ -114,15 +218,21 @@ def research(args):
         raise ValueError('Bundled design intelligence returned invalid JSON') from error
 
     mode = 'design-system' if args.design_system else ('stack' if args.stack else 'domain')
+    retrieval = _retrieval_record(args, result)
     payload = {
-        'source': {
-            'name': 'ui-ux-pro-max',
-            'version': INTELLIGENCE_VERSION,
-            'bundled': True,
-            'license': 'MIT',
-        },
+        'source': intelligence_source(),
         'mode': mode,
         'query': args.query,
+        'retrieval': retrieval,
+        'decision_record': {
+            'query': args.query,
+            'route': retrieval['route'],
+            'candidate_id': retrieval['top_result_id'],
+            'selected': None,
+            'fit_basis': [],
+            'rejected_reason': None,
+            'contract_target': '.site/design/surface-brief.md#设计方法来源',
+        },
         'result': result,
     }
     design_system = result.get('design_system') if isinstance(result, dict) else None
@@ -193,7 +303,7 @@ def px(value):
     return float(match.group(1)) if match else None
 
 
-# Craft floors taken from references/typography.md.  They guard the catalog's own
+# Craft floors mirrored in references/craft-review.md.  They guard the catalog's own
 # defaults, not the project's final page: an established design system may
 # override the heuristic values, but the catalog must never ship a broken one.
 TYPOGRAPHY_FLOORS = {'text-reading': 16.0, 'text-body': 16.0, 'text-label': 14.0, 'text-caption': 12.0}
@@ -353,12 +463,13 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('list')
     commands.add_parser('validate')
+    commands.add_parser('catalog', help='list bundled design domains, stacks, and query contract')
     lookup = commands.add_parser('research', help='query the bundled UI/UX design intelligence')
     lookup.add_argument('query', help='2-5 terms describing one design intent')
-    lookup_mode = lookup.add_mutually_exclusive_group()
+    lookup_mode = lookup.add_mutually_exclusive_group(required=True)
     lookup_mode.add_argument('--design-system', action='store_true', help='generate a direction candidate set')
-    lookup_mode.add_argument('--domain', help='search one design domain')
-    lookup_mode.add_argument('--stack', help='search guidance for a detected implementation stack')
+    lookup_mode.add_argument('--domain', choices=INTELLIGENCE_DOMAINS, help='search one design domain')
+    lookup_mode.add_argument('--stack', choices=INTELLIGENCE_STACKS, help='search guidance for a detected implementation stack')
     lookup.add_argument('--project-name')
     lookup.add_argument('--max-results', type=int, choices=range(1, 21), default=3)
     lookup.add_argument('--variance', type=int, choices=range(1, 11))
@@ -378,6 +489,10 @@ def main():
                     getattr(args, name) is not None for name in ('project_name', 'variance', 'motion', 'density')):
                 raise ValueError('--project-name/--variance/--motion/--density require --design-system')
             print(json.dumps(research(args), ensure_ascii=False, indent=2))
+            return
+
+        if args.command == 'catalog':
+            print(json.dumps(intelligence_catalog(), ensure_ascii=False, indent=2))
             return
 
         data = read_catalog()

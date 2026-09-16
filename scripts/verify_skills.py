@@ -136,7 +136,30 @@ class Verification:
             self.error(agent_yaml, "required agent metadata is missing")
 
         self.check_markdown_links(skill_dir)
+        if skill_name == "site-design":
+            self.check_site_design_reference_contract(skill_dir)
         self.check_manifest(skill_dir, skill_name)
+
+    def check_site_design_reference_contract(self, skill_dir: Path) -> None:
+        """Keep runtime guidance bounded, flat, and on one project specification."""
+        references = skill_dir / "references"
+        markdown = sorted(references.rglob("*.md")) if references.is_dir() else []
+        if len(markdown) > 8:
+            self.error(references, f"runtime reference budget exceeded: {len(markdown)} > 8")
+        nested = [path for path in markdown if path.parent != references]
+        for path in nested:
+            self.error(path, "runtime references must be flat; route from SKILL.md instead")
+
+        source_files = [skill_dir / "SKILL.md", *markdown]
+        for path in source_files:
+            try:
+                text = path.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeError):
+                continue
+            if ".site/design/design-intent.md" in text:
+                self.error(path, "surface-brief.md must be the only project design specification")
+            if "design-system/MASTER.md" in text:
+                self.error(path, "upstream persistence must not become a project design specification")
 
     def read_frontmatter(self, path: Path) -> dict[str, str] | None:
         if not path.is_file():

@@ -88,4 +88,4 @@ python site-design/scripts/design.py research "productivity tool novice calm" --
 
 `verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`gate_flow.py` 回放门禁事务：逐字原话与规范化防复用、结构/风格分离、owner 绑定租约、Checker 凭失败矩阵交回 Writer、项目内普通原型文件、包含 `.site/design` 的冻结指纹、正式服务 PID/端口/根目录、内容寻址 artifact、检查档位最低轴、阻断证据与交付回放。**它不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 同时检查本地 Token/Gallery 和内置 UI/UX Pro Max 数据完整性；`design.py research` 是唯一检索入口，并固定返回带来源与版本的 JSON。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。协作行为回放见 [`tests/scenarios.md`](tests/scenarios.md)，面向非技术用户的端到端画像、用例与评分标准见 [`tests/novice-user-evaluation.md`](tests/novice-user-evaluation.md)，视觉工艺评测见 [`tests/site-design-scenarios.md`](tests/site-design-scenarios.md)。
 
-**这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/design-quality.md`](site-design/references/design-quality.md) 的四条判据核对。
+**这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/craft-review.md`](site-design/references/craft-review.md) 的设计、任务状态与机械三路证据核对。

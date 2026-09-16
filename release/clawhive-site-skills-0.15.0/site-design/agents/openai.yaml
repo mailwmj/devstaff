@@ -1,4 +1,0 @@
-interface:
-  display_name: "网站设计实验"
-  short_description: "制作高保真体验稿、页面设计合同或只读审查"
-  default_prompt: "使用 $site-design 根据我的业务和参考制作可见体验稿；方向确认后补全可直接实施和验收的页面设计合同。"
