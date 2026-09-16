@@ -3,7 +3,7 @@
   "version": "0.15.0",
   "name": "site-builder",
   "files": {
-    "SKILL.md": "7dfd278de6dd97244a7fdfa873a259e554f132833f14d9b6dfcf1811739c4d1a",
+    "SKILL.md": "cec5aa63d879c6a3207e6195071abbf043c5887ed8dfff7a3b65d96e894cc606",
     "agents/openai.yaml": "4f55a439961d7ed582746bd6e7c1059f19c8b4375ecb7261aa1dbe62572528cd",
     "assets/templates/static/web/index.html": "0233c93b96a16cbc290fe1f313ef3da0dd6266d3cde23622d849f6ac64f9bb43",
     "assets/templates/static/web/style.css": "634154fb9f896e61d0183057026ffb100ae73256030fe6d1d8746b6fec6f9a38",

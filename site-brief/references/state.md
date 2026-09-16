@@ -71,6 +71,7 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT --ow
 
 - `--quote` 必填：抄录用户原话，逐字；换行与空格原样保存在 `quote`，`quote_sha256` 对精确字节取摘要。空话或转述会被拒绝。工具**不检查**这句话是否真是用户说的，也检查不了。
 - `--anchor` 可选：指向宿主会话记录。若能在其中某条**用户**消息里找到这句原话，标注升级为 `quote-matched`；找不到就是虚假断言，直接拒绝；而**读不懂的宿主格式只降级、不阻塞**——这是刻意的，门禁不得依赖宿主内部实现。
+- 会话记录支持 JSON/JSONL，gzip 可直接解压；zstd 压缩记录需要可选 Python 包 `zstandard`。缺包或解压失败时说明具体原因并保持 `agent-reported`，不自动安装、不以压缩文件后缀推断原话已核对。
 - 两个等级的记录都带 `basis_note`，明说它不是同意的证明。
 - 原话的**语义归属由调用 Skill 根据相邻问答和当前阶段判断**：直接建设请求可以作为稍后生效的低风险开发委托；简短肯定答复是否授权，取决于 Agent 上一句是否明确提出“确认后进入正式开发”的行动后果。工具不维护关键词白名单，也不允许调用者拿较晚反馈倒填较早门禁。
 - 四道门禁另存 `quote_normalized_sha256`，只用它识别换行/空格差异下的同一句话；精确 `quote_sha256` 不承担规范化。复制一份会话记录或调整空白都不能把同一句话用两次，结构那句也用不成视觉那句。旧记录没有规范化摘要时从已有 `quote` 回算，保持兼容。
@@ -88,7 +89,7 @@ python3 /absolute/site-brief/scripts/state.py release     /absolute/PROJECT --ow
 | `start-build` | 已有 writer lease 且四道门禁字段满足 | 无 lease；门禁缺项；已交付未 `reopen` |
 | `handoff` | `--stopped-pid`、`--freed-port`、`--service-json` | 任一应停止 PID 仍在运行；端口被未登记服务占用；登记服务缺少存活 PID、端口未监听或根目录不在项目内 |
 | `start-verify` | `handoff` 记录与当前指纹一致 | 无 `handoff`；交接后源码再次变化 |
-| `deliver` | `site-check` 的内容寻址矩阵凭据 `--check <check_id>` | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；文件名、内部 ID 或内容摘要不一致；非矩阵凭据；指纹与当前源码不一致；档位最低轴缺失；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command` 证据；证据文件或引用命令在检查后被改动 |
+| `deliver` | `site-check` 的内容寻址矩阵凭据 `--check <check_id>` | **方案/结构/视觉/授权门禁缺项**（阶段记录本身不足以交付：没有任何确认的项目不能靠 `reopen → handoff → start-verify` 走到 `delivered`）；文件名、内部 ID 或内容摘要不一致；非矩阵凭据；指纹与当前源码不一致；档位最低轴缺失；存在非 `passed` 的阻断项；阻断项没有 `artifact`/`command`/`check` 证据；证据文件或引用检查在检查后被改动 |
 | `reopen` | `--reason`；Checker 已接管时还需 `--check <failed_check_id>`；实质范围变化时加 `--scope-changed` | 缺少 `--reason`；`verifying`/checker lease 下缺少当前源码上的失败矩阵；**没有任何可作废的已发生状态**（空项目不许借 `reopen` 拿到 writer 租约和 `building`）。`--scope-changed` 会同时作废方案、结构、视觉与授权确认，之后必须重新 `confirm-concept` |
 
 `claim` 是项目级单写者租约：同一 owner 重复 `claim` 返回原租约且不改获取时间；不同 owner 或 Writer/Checker 角色冲突会拒绝。`start-verify` 把租约从 writer 交给 checker，`deliver` 结束后释放；手动 `release` 必须提供与当前租约相同的 `--owner`，且不能释放 `verifying` 中的活跃 Checker。确需处理已确认失效的陈旧租约时，先用 `block` 记录 Checker 异常与恢复条件，再使用显式留痕路径处理；`verifying` 中的 `claim --force` 同样拒绝。

@@ -18,6 +18,9 @@ where its evidence comes from:
 ``command``
     ``check_id`` values of earlier ``check.py run`` results that exited 0 and
     match the current source.
+``check``
+    ``check_id`` values of passing ``static`` or ``command`` results that match
+    the current source. Use this to cite ``check.py static`` directly.
 ``observation``
     Machine-usable result from something that cannot be archived, e.g. reading
     a clipboard by hand.
@@ -25,7 +28,7 @@ where its evidence comes from:
     A claim only.  It is recorded for the report but never counts as evidence,
     so it is refused for blocking items.
 
-Only ``artifact`` and ``command`` may carry a blocking item; anything else has
+Only ``artifact``, ``command`` and ``check`` may carry a blocking item; anything else has
 to be reported as ``not_run`` instead of ``passed``.
 
 Every matrix needs a non-empty ``profile_reason`` and an ``axis`` on each item.
@@ -51,9 +54,9 @@ CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
 CHECK_ARTIFACT_DIR = 'checks'
 CHECK_PROFILES = ('smoke', 'targeted', 'full')
 FULL_REQUIRED_AXES = ('static_build', 'core_task', 'visual_desktop', 'visual_mobile', 'reopen')
-EVIDENCE_KINDS = ('artifact', 'command', 'observation', 'declared')
+EVIDENCE_KINDS = ('artifact', 'command', 'check', 'observation', 'declared')
 DEFAULT_EVIDENCE_KIND = 'declared'
-VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command')
+VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command', 'check')
 PATH_KEYS = ('paths', 'artifacts', 'files', 'screenshots')
 EMOJI_PATTERN = re.compile(r'[\U0001F000-\U0001FAFF\u2600-\u27BF]')
 EMOJI_SINK_PATTERN = re.compile(
@@ -226,19 +229,20 @@ def validate_evidence(root, item, identifier, current, cache):
         summary = str(raw.get('summary') or '').strip()
         paths = [value for key in PATH_KEYS for value in (raw.get(key) or [])]
         commands = list(raw.get('commands') or [])
+        checks = list(raw.get('checks') or [])
     elif isinstance(raw, str) and raw.strip():
-        kind, summary, paths, commands = DEFAULT_EVIDENCE_KIND, raw.strip(), [], []
+        kind, summary, paths, commands, checks = DEFAULT_EVIDENCE_KIND, raw.strip(), [], [], []
     else:
         raise ValueError(
             f"Matrix item {identifier!r} needs evidence; use an object with kind "
-            f"{EVIDENCE_KINDS} plus summary/paths/commands, or a plain summary string"
+            f"{EVIDENCE_KINDS} plus summary/paths/commands/checks, or a plain summary string"
         )
     if kind not in EVIDENCE_KINDS:
         raise ValueError(f'Matrix item {identifier!r} evidence kind must be one of {EVIDENCE_KINDS}, got {kind!r}')
     if item['blocking'] and kind not in VERIFIABLE_EVIDENCE_KINDS:
         raise ValueError(
             f'Matrix item {identifier!r} is blocking but its evidence kind is {kind!r}; '
-            'blocking items need artifact or command evidence, otherwise report not_run'
+            'blocking items need artifact, command or check evidence, otherwise report not_run'
         )
     entries, problems = [], []
     for value in paths:
@@ -264,10 +268,25 @@ def validate_evidence(root, item, identifier, current, cache):
             'command': artifact.get('command'),
             'exit_code': artifact.get('exit_code'),
         })
+    for check_id in checks:
+        artifact = load_check_artifact(root, check_id)
+        check_kind = artifact.get('kind')
+        if check_kind not in ('static', 'command') or artifact.get('status') != 'passed':
+            problems.append(f'check evidence {check_id!r} is not a passing static or command result')
+            continue
+        if check_kind == 'command' and artifact.get('exit_code') != 0:
+            problems.append(f'check evidence {check_id!r} did not exit 0')
+            continue
+        if artifact.get('fingerprint') != current or artifact.get('source_changed'):
+            problems.append(f'check evidence {check_id!r} was recorded against different source')
+            continue
+        entries.append({'check_id': check_id, 'check_kind': check_kind})
     if kind == 'artifact' and not any('sha256' in row for row in entries):
         problems.append('artifact evidence names no readable file')
     if kind == 'command' and not any('command_check_id' in row for row in entries):
         problems.append('command evidence names no passing command result')
+    if kind == 'check' and not any('check_id' in row for row in entries):
+        problems.append('check evidence names no passing static or command result')
     evidence = {
         'kind': kind,
         'summary': summary,
@@ -381,7 +400,7 @@ def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
         'status': 'failed' if (blocking_not_passed or failures or before != after) else 'passed',
         'limits': [
             'The matrix verifies that declared evidence exists and is unchanged; it does not execute browser, visual or reopening checks by itself',
-            'Only artifact and command evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
+            'Only artifact, command and check evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
             'Content-addressed artifacts expose accidental edits but are not signed or hostile-writer-proof',
         ],
         'follow_up': ['Fix blocking failures in site-builder', 'Re-run the whole matrix against a newly frozen fingerprint'],

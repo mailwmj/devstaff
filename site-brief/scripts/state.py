@@ -1028,6 +1028,27 @@ def verify_delivery_evidence(root, artifact):
                     problems.append(f'command evidence {check_id}: stored result is not a passing command')
                 elif command.get('fingerprint') != artifact.get('fingerprint') or command.get('source_changed'):
                     problems.append(f'command evidence {check_id}: stored result belongs to different source')
+        if evidence.get('kind') == 'check':
+            entries = as_list(evidence.get('items'))
+            if not entries:
+                problems.append(f'item {identifier}: check evidence rows are missing')
+            for entry in entries:
+                check_id = entry.get('check_id') if isinstance(entry, dict) else None
+                if not check_id:
+                    problems.append(f'item {identifier}: check evidence row has no check_id')
+                    continue
+                try:
+                    result = load_artifact(root, check_id)
+                except ValueError as error:
+                    problems.append(f'check evidence {check_id}: {error}')
+                    continue
+                check_kind = result.get('kind')
+                if (check_kind not in ('static', 'command') or check_kind != entry.get('check_kind')
+                        or result.get('status') != 'passed'
+                        or (check_kind == 'command' and result.get('exit_code') != 0)):
+                    problems.append(f'check evidence {check_id}: stored result is not a passing check')
+                elif result.get('fingerprint') != artifact.get('fingerprint') or result.get('source_changed'):
+                    problems.append(f'check evidence {check_id}: stored result belongs to different source')
     if blocking_artifacts == 0 and any(
         isinstance(item, dict) and (item.get('evidence') or {}).get('kind') == 'artifact'
         for item in as_list(artifact.get('items'))
@@ -1085,8 +1106,8 @@ def action_deliver(root, args):
         if not isinstance(item, dict) or not item.get('blocking'):
             continue
         evidence = item.get('evidence')
-        if not isinstance(evidence, dict) or evidence.get('kind') not in ('artifact', 'command'):
-            unverified.append(f"{item.get('id')} (no verified artifact or command evidence)")
+        if not isinstance(evidence, dict) or evidence.get('kind') not in ('artifact', 'command', 'check'):
+            unverified.append(f"{item.get('id')} (no verified artifact, command or check evidence)")
         elif evidence.get('verified') is not True:
             unverified.append(f"{item.get('id')} ({evidence.get('kind')} evidence is not verified)")
     if unverified:

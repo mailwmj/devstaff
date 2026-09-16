@@ -3,9 +3,9 @@
   "version": "0.15.0",
   "name": "site-check",
   "files": {
-    "SKILL.md": "eb9a7c7e42506197e078b02fd49e7df32772ee2aa06a54deda01fe0e7202146a",
+    "SKILL.md": "109259f9efb399fa342a481c36c626ec10ca5d950fcc2f794c73237b55abb77a",
     "agents/openai.yaml": "607b1a7b728339471ec6a08eee93cee5c506168e38323b3140d4e851d5cf3cce",
-    "references/verification.md": "f79e3d15dd890f1b2c0b62097ba1dd504b7620f079b3c79d684312e042d6b7d5",
-    "scripts/check.py": "8c29fe1fd3f830841780aeed98807c3cbe9cd781583e516e7c46e1256f1b2641"
+    "references/verification.md": "f1209ac15afe53592664db4bf25ec318bd7d09634b68bb7671186ab5f197d9e5",
+    "scripts/check.py": "b2e898e4c0fe530f342e335287261cf90c79f4c7f19a4eff8213dc5037be2fd8"
   }
 }

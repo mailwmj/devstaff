@@ -83,18 +83,26 @@ def anchor_text(path):
             raw = zstandard.ZstdDecompressor().decompressobj().decompress(raw)
         except Exception:
             return None
-    return raw.decode('utf-8', errors='replace')
+    try:
+        return raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return None
 
 
 def anchor_records(text):
     """Parse transcript text into records, tolerating JSON array or JSONL."""
-    stripped = text.lstrip()
-    if stripped.startswith('['):
-        try:
-            payload = json.loads(stripped)
-        except json.JSONDecodeError:
-            return []
-        return [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
+    stripped = text.strip()
+    if not stripped:
+        return []
+    try:
+        payload = json.loads(stripped)
+    except json.JSONDecodeError:
+        if stripped.startswith('['):
+            return None
+    else:
+        if isinstance(payload, dict):
+            return [payload]
+        return payload if isinstance(payload, list) and all(isinstance(item, dict) for item in payload) else None
     records = []
     for line in text.splitlines():
         line = line.strip()
@@ -106,7 +114,7 @@ def anchor_records(text):
             continue
         if isinstance(record, dict):
             records.append(record)
-    return records
+    return records or None
 
 
 def record_text(message):
@@ -123,21 +131,27 @@ def record_text(message):
     return '\n'.join(parts).strip()
 
 
-def anchor_user_messages(path):
+def anchor_user_messages(path, text=None):
     """Every user-role message text in a transcript, or None when unreadable."""
-    text = anchor_text(path)
+    if text is None:
+        text = anchor_text(path)
     if text is None:
         return None
+    records = anchor_records(text)
+    if records is None:
+        return None
     found = []
-    for record in anchor_records(text):
+    recognized_roles = False
+    for record in records:
         message = record.get('message') if isinstance(record.get('message'), dict) else record
         role = str(message.get('role') or '').strip().lower()
+        recognized_roles |= role in ANCHOR_AGENT_ROLES or role in ANCHOR_USER_ROLES
         if role in ANCHOR_AGENT_ROLES or role not in ANCHOR_USER_ROLES:
             continue
         body = record_text(message)
         if body:
             found.append(body)
-    return found
+    return found if recognized_roles or not records else None
 
 
 def locate_anchor(raw, cwd):
@@ -151,12 +165,32 @@ def locate_anchor(raw, cwd):
     resolved = candidate.resolve()
     if not resolved.is_file():
         raise ValueError(f'--anchor transcript not found: {head}')
-    if anchor_text(resolved) is None:
+    text = anchor_text(resolved)
+    if text is None or anchor_user_messages(resolved, text) is None:
+        try:
+            with resolved.open('rb') as handle:
+                magic = handle.read(4)
+        except OSError:
+            magic = b''
+        if text is not None:
+            detail = 'This transcript does not expose supported JSON/JSONL message roles; the host may use another format.'
+        elif magic == b'\x28\xb5\x2f\xfd':
+            try:
+                import zstandard  # type: ignore[import-not-found]  # noqa: F401
+            except ImportError:
+                detail = 'This zstd-compressed transcript needs the optional Python package zstandard to be read.'
+            else:
+                detail = 'This zstd-compressed transcript could not be decompressed or decoded.'
+        elif magic[:2] == b'\x1f\x8b':
+            detail = 'This gzip-compressed transcript could not be decompressed or decoded.'
+        else:
+            detail = (
+                f'This transcript could not be read as JSON/JSONL '
+                f'({", ".join(TRANSCRIPT_SUFFIXES)}); the host may use another format.'
+            )
         return resolved, False, (
-            f'The anchor {resolved.name!r} uses a host format this tool cannot read '
-            f'(recognised shapes: {", ".join(TRANSCRIPT_SUFFIXES)}; other hosts may compress or '
-            'relocate their records). Nothing was verified. The record keeps the agent-reported '
-            'label and the workflow continues.'
+            f'The anchor {resolved.name!r} cannot be read. {detail} Nothing was verified. '
+            'The record keeps the agent-reported label and the workflow continues.'
         )
     return resolved, True, None
 
