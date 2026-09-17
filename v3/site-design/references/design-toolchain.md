@@ -1,6 +1,6 @@
 # 内置设计检索接口
 
-本项目已经内置 UI/UX Pro Max `2.13.0` 的检索代码与数据。它只负责快速召回候选和实现注意项；项目事实、方向筛选、用户确认与实际渲染仍由本 Skill 负责。
+本项目已经内置 `design-intelligence` `2.13.0` 的检索代码与数据。它只负责快速召回候选和实现注意项；项目事实、方向筛选、用户确认与实际渲染仍由本 Skill 负责。
 
 ## 先看能力目录
 
@@ -87,4 +87,4 @@ Contract effect：进入母题 / Token / 组件状态 / VA-* 的具体机制
 python <site-design-v3 安装目录>/scripts/design.py validate
 ```
 
-此命令验证内置版本、结构化数据、配方下限与 gallery 同步。代码位于 `../vendor/ui-ux-pro-max/`，许可为 MIT。项目长期设计事实只写 `surface-brief.md`；不生成供应方设计主文件，也不把检索结果当用户确认或设计通过。
+此命令验证内置版本、结构化数据、配方下限与 gallery 同步。代码位于 `../intelligence/`，许可为 MIT。项目长期设计事实只写 `surface-brief.md`；不生成供应方设计主文件，也不把检索结果当用户确认或设计通过。

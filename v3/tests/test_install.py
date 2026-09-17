@@ -21,10 +21,13 @@ class InstallTests(unittest.TestCase):
             )
             self.assertTrue((destination / "site-builder-v3" / "scripts" / "state.py").is_file())
             self.assertTrue(
+                (destination / "site-check-v3" / "scripts" / "check.py").is_file()
+            )
+            self.assertTrue(
                 (destination / "site-design-v3" / "references" / "surface-brief.md").is_file()
             )
             self.assertTrue(
-                (destination / "site-design-v3" / "vendor" / "ui-ux-pro-max" / "VERSION").is_file()
+                (destination / "site-design-v3" / "intelligence" / "VERSION").is_file()
             )
 
     def test_existing_bundle_requires_replace(self):

@@ -44,11 +44,14 @@ class BundleTests(unittest.TestCase):
         self.assertTrue((design / "assets" / "design" / "tokens.json").is_file())
         self.assertTrue((design / "assets" / "design" / "gallery.html").is_file())
         self.assertTrue((design / "scripts" / "design.py").is_file())
-        self.assertTrue((design / "vendor" / "ui-ux-pro-max" / "LICENSE").is_file())
+        self.assertTrue((design / "intelligence" / "LICENSE").is_file())
 
     def test_builder_owns_state_interface(self):
         self.assertTrue((ROOT / "site-builder" / "scripts" / "state.py").is_file())
         self.assertFalse((ROOT / "site_core").exists())
+
+    def test_check_owns_protocol_script(self):
+        self.assertTrue((ROOT / "site-check" / "scripts" / "check.py").is_file())
 
 
 if __name__ == "__main__":

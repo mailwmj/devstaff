@@ -10,6 +10,42 @@
 
 不适用字段直接删除，不为完整感凑内容。体验稿前形成方向部分；方向确认后在同一文件补全实现规格。
 
+## 设计合同索引
+
+机器可读的合同锚点，供 `site-design-v3` 检查和 `site-builder-v3` 交接校验。只索引正文已定义的编号，不复制正文规格；正文改了编号或内容，索引和旧报告同步失效。填写深度随任务：简单项目只索引适用字段，空列表表示该类对象不适用，不是缺失。
+
+```v3-contract
+{
+  "work_type": "",
+  "structure_mode": "",
+  "scope_refs": [],
+  "required_constraints": [],
+  "pages": [],
+  "sections": [],
+  "responsive": [],
+  "components": [],
+  "assets": [],
+  "acceptance": [],
+  "unresolved_confirm": [],
+  "blocking_missing_assets": [],
+  "icon_system": "",
+  "icon_exceptions": [],
+  "intentional_exceptions": []
+}
+```
+
+- `work_type`：见 [本轮问题](#本轮问题) 的工作类型。
+- `structure_mode`：`single` 无真实结构分歧；`choice` 存在需用户先选的信息拓扑分歧。
+- `scope_refs`：首版包含项 `BR-*` 编号，来自 [首版承诺](#首版承诺--原型覆盖)。
+- `required_constraints`：等级为 `required` 的 `IC-*`，来自 [任务交互合同](#任务交互合同)。
+- `pages / sections / responsive / components / assets`：`PG-* / SC-* / RP-* / CP-* / AS-*`，来自对应正文表。
+- `acceptance`：`VA-*`，来自 [视觉验收标准](#视觉验收标准)。
+- `unresolved_confirm`：尚未关闭的 `confirm` 项编号；为空才能进入实现。
+- `blocking_missing_assets`：缺失且会改变构图或可信度的 `AS-*`；为空才能进入实现。
+- `icon_system`：常规 UI 图标体系名（如 `lucide`）；界面无图标时留空。`lint-ui` 据此判定是否混用体系。
+- `icon_exceptions`：充当图标的 Emoji/Unicode 例外，每项 `{"char": "✓", "basis": "产品依据"}`；无例外留空。例外须核对识别、一致性和可访问名称。
+- `intentional_exceptions`：合同显式豁免的项，检查时跳过；`lint-ui` 把其中路径/通配条目当作免扫文件，其余条目按既有用途豁免对应编号。
+
 ## 本轮问题
 
 - **问题：** 本稿要验证什么？
@@ -105,6 +141,8 @@
 - **字体角色：** display / 标题 / 正文 / UI / 数据各用什么、为什么；见 [工艺审查](craft-review.md)
 - **构图命题：** 主次关系 + 它靠什么成立（尺度 / 位置 / 对比 / 留白 / 运动）
 - **细节签名：** 哪一处做到 120%，它服务什么内容
+- **常规 UI 图标体系：** 按钮、导航与状态用同一图标体系（默认 Lucide）；记录体系名，见 [工艺审查](craft-review.md)
+- **Emoji/Unicode 例外：** 哪些 Emoji 或 Unicode 字符充当图标、产品依据与可访问名称；无则留空
 - **素材与许可：** 来源、性质、许可、用途与裁剪；缺口有哪些
 
 ## 对照方向（仅在真实取舍存在时）
@@ -141,7 +179,7 @@
 | --- | --- | --- | --- | --- |
 | 项目事实 / 成熟设计系统 | 文件、页面或版本 | 继承的机制 | 冲突或例外 | 方向 / Token / 状态 |
 | `site-design-v3` 内置方法 | `direction` / `craft-review` | 实际采用原则 | 不适用项 | 方向 / `VA-*` |
-| `ui-ux-pro-max` | Query、Domain / Stack、`2.13.0` | Result ID 或 `no_verified_match` | 高排名未采用项及理由 | 方向 / Token / 状态 |
+| `design-intelligence` | Query、Domain / Stack、`2.13.0` | Result ID 或 `no_verified_match` | 高排名未采用项及理由 | 方向 / Token / 状态 |
 
 ### 页面地图
 
@@ -220,6 +258,16 @@ AI 起草和占位文字必须让创作者知道；事实性承诺、价格、�
 | `VA-01` |  |  | `core_task | visual_desktop | visual_mobile | reopen` | `yes | no` |
 
 最低覆盖：选定方向与首屏重心、色值和实际相邻色对、排版角色与中文回退、空间与栅格、主任务完整路径、组件状态、窄屏信息保真、素材清晰度与许可、键盘焦点和触控尺寸、减少动态效果。参考还原项目另写明参考页面、状态、视口与允许偏差；原创方向不要求像素级复刻。
+
+### 纵向切片
+
+正式实现按少量可独立体验的纵向切片排序，不按数据层、接口层和页面层横向铺开，也不把验证攒到最后一次。每条贯穿完成该能力所需的数据、规则、界面和检查，引用同一份合同 ID，不复制范围规格。方向确认后随实现补齐；简单项目可只列一条。
+
+| 切片 | 引用 ID | 成功路径 | 最可能失败路径 | 必要状态 |
+| --- | --- | --- | --- | --- |
+| `BR-*` 能力名 | `BR-* / IC-* / PG-* / SC-* / CP-* / VA-*` | 用户操作后界面或数据如何证明成功 | 失败时保留什么、用户如何理解并重试或改走安全路径 | 本切片实际需要的空、加载、错误或边界状态 |
+
+切片内闭环合同引用检查、typecheck/lint、受影响单测和最短行为检查后再进下一条，把返工前移到切片内而非攒到集成阶段；引用的 ID 在正文缺失先回 `site-design-v3` 补齐，不杜撰。所有切片完成后做一次集成构建，再由 `site-check-v3` 在集成构建通过后只读浏览器验证；首次浏览器验证前合同、类型、构建和受影响测试必须已通过。
 
 ## 体验稿完成条件
 

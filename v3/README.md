@@ -53,7 +53,7 @@ v3 精简的是确认流程，不是设计专业能力。`site-design-v3` 保留
 - 页面设计合同、流程体验稿和参考还原模板；
 - 排版、色彩、素材、构图、响应式、组件状态、无障碍与工艺审查规范；
 - Token、gallery、基础样式和可导出的校准配方；
-- UI/UX Pro Max `2.13.0` 的内置检索代码、数据与 MIT 许可。
+- `design-intelligence` `2.13.0` 的内置检索代码、数据与 MIT 许可。
 
 这些内容按任务分支加载。普通 guided 项目只填写设计合同的适用字段；完整模板不会变成新的用户门禁。内置 UI/UX 数据作为固定版本快照随 v3 打包，刻意不依赖 v2 目录；增加约 3.2MB，但保证 v3 可独立安装和复现。
 
@@ -91,6 +91,18 @@ python3 v3/site-builder/scripts/state.py verify PROJECT \
 ```
 
 `limited` 必须写明 `--limitation`；strict 的 `verified` 必须带 `--independent`。局部修改不初始化 `.v3`。
+
+绝大多数项目只有一次方向确认（`decide`）。只有简报浮现出真正不同的信息拓扑（例如先做单页落地页还是多页带后台的工作台）时，才走结构选择：先用 `discover --structure choice` 登记候选，用户选定后用 `select-structure --candidate ... --quote ...` 记录，再用一句不同的原话 `decide`：
+
+```text
+python3 v3/site-builder/scripts/state.py discover PROJECT \
+  --structure choice --reason "信息拓扑不同" \
+  --candidate "落地页" --candidate "工作台"
+python3 v3/site-builder/scripts/state.py select-structure PROJECT \
+  --candidate "工作台" --quote "就选工作台结构"
+```
+
+配色、字体、圆角、阴影等只影响视觉的差异一律走 `discover --structure single`，不触发结构选择。`select-structure` 与 `decide` 的两句原话不能相同。
 
 状态工具只防止顺序错误、空证据和不满足模式要求的跃迁。它不能判断用户原话的真实语义，也不能证明证据内容属实；strict 的 `--independent` 只能在独立 Checker 上下文实际完成检查后使用。
 
