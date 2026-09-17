@@ -25,6 +25,27 @@ class BundleTests(unittest.TestCase):
                 path = (document.parent / target.split("#", 1)[0]).resolve()
                 self.assertTrue(path.exists(), f"{document}: missing {target}")
 
+    def test_design_knowledge_base_is_packaged(self):
+        design = ROOT / "site-design"
+        expected_references = {
+            "craft-review.md",
+            "design-context.md",
+            "design-tokens.md",
+            "design-toolchain.md",
+            "prototype.md",
+            "reference-input.md",
+            "surface-brief.md",
+            "visual-direction.md",
+        }
+        self.assertEqual(
+            {path.name for path in (design / "references").glob("*.md")},
+            expected_references,
+        )
+        self.assertTrue((design / "assets" / "design" / "tokens.json").is_file())
+        self.assertTrue((design / "assets" / "design" / "gallery.html").is_file())
+        self.assertTrue((design / "scripts" / "design.py").is_file())
+        self.assertTrue((design / "vendor" / "ui-ux-pro-max" / "LICENSE").is_file())
+
     def test_builder_owns_state_interface(self):
         self.assertTrue((ROOT / "site-builder" / "scripts" / "state.py").is_file())
         self.assertFalse((ROOT / "site_core").exists())

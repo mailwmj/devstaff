@@ -15,13 +15,13 @@
     },
     "site-design-v3": {
       "directory": "site-design",
-      "role": "最小可见方向与设计合同",
+      "role": "完整设计知识、可见方向、体验稿、合同与只读审查",
       "depends_on": ["site-brief-v3"]
     },
     "site-check-v3": {
       "directory": "site-check",
-      "role": "只读核心任务验证",
-      "depends_on": []
+      "role": "只读核心任务与视觉验证",
+      "depends_on": ["site-design-v3"]
     }
   }
 }

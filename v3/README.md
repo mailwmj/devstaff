@@ -29,7 +29,7 @@
 ```text
 site-builder-v3  唯一编排者，决定下一步并停在需要用户决定的地方
 ├── site-brief-v3  收敛一个核心任务和首版范围
-├── site-design-v3 展示方向，必要时补最小设计合同
+├── site-design-v3 保留完整设计知识库，按需产出方向、体验稿和设计合同
 └── site-check-v3  只读验证，返回实际证据和未验证项
 ```
 
@@ -45,9 +45,27 @@ site-builder-v3  唯一编排者，决定下一步并停在需要用户决定的
 
 严格模式仍使用同一个小状态接口，只额外要求独立验证和适用的风险证据；不复刻租约、源码指纹或逐项覆盖矩阵。它们只有在真实使用证明有必要后才应该加入。
 
+## 设计能力
+
+v3 精简的是确认流程，不是设计专业能力。`site-design-v3` 保留：
+
+- 从项目事实形成结构和视觉方向的方法；
+- 页面设计合同、流程体验稿和参考还原模板；
+- 排版、色彩、素材、构图、响应式、组件状态、无障碍与工艺审查规范；
+- Token、gallery、基础样式和可导出的校准配方；
+- UI/UX Pro Max `2.13.0` 的内置检索代码、数据与 MIT 许可。
+
+这些内容按任务分支加载。普通 guided 项目只填写设计合同的适用字段；完整模板不会变成新的用户门禁。内置 UI/UX 数据作为固定版本快照随 v3 打包，刻意不依赖 v2 目录；增加约 3.2MB，但保证 v3 可独立安装和复现。
+
 ## 安装
 
-把 `site-builder`、`site-brief`、`site-design`、`site-check` 四个目录作为同级 Skill 安装，并把 `AGENTS.md` 的正文加入宿主项目指令。Skill 名称都带 `-v3`，可以和旧版并存；状态脚本随 `site-builder-v3` 一起安装。
+v3 使用独立安装器，并按带版本的 Skill 名称安装，因此可以和旧版并存：
+
+```text
+python3 v3/install.py /path/to/agent-skills
+```
+
+它会安装 `site-builder-v3`、`site-brief-v3`、`site-design-v3`、`site-check-v3`，并返回需要加入宿主项目指令的 `AGENTS.md` 路径。已有 v3 安装时，显式使用 `--replace` 整套替换。状态脚本随 `site-builder-v3` 一起安装。
 
 ## 状态接口
 
@@ -84,4 +102,6 @@ v3 是独立实验版本，不覆盖 v2。它保留范围收敛、可见方向�
 
 ```text
 python3 -m unittest discover -s v3/tests -p 'test_*.py'
+python3 -m unittest discover -s v3/site-design/scripts/tests -p 'test_*.py'
+python3 v3/site-design/scripts/design.py validate
 ```
