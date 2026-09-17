@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "bundle": "progressive-site-skills-v3",
+  "default_mode": "guided",
+  "skills": {
+    "site-builder-v3": {
+      "directory": "site-builder",
+      "role": "唯一编排与正式实施入口",
+      "depends_on": ["site-brief-v3", "site-design-v3", "site-check-v3"]
+    },
+    "site-brief-v3": {
+      "directory": "site-brief",
+      "role": "核心任务与首版范围收敛",
+      "depends_on": []
+    },
+    "site-design-v3": {
+      "directory": "site-design",
+      "role": "最小可见方向与设计合同",
+      "depends_on": ["site-brief-v3"]
+    },
+    "site-check-v3": {
+      "directory": "site-check",
+      "role": "只读核心任务验证",
+      "depends_on": []
+    }
+  }
+}
