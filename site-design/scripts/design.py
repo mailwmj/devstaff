@@ -4,6 +4,7 @@ import fnmatch
 import hashlib
 import io
 import json
+import math
 import os
 import tarfile
 from pathlib import Path, PurePath
@@ -285,7 +286,7 @@ def contrast(a, b):
             raise ValueError(f'Expected opaque hex color: {color}')
         values = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
         linear = [v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4 for v in values]
-        return sum(v * weight for v, weight in zip(linear, (.2126, .7152, .0722)))
+        return (linear[0] * .2126 + linear[1] * .7152) + linear[2] * .0722
     light, dark = sorted((luminance(a), luminance(b)), reverse=True)
     return (light + .05) / (dark + .05)
 
@@ -461,6 +462,17 @@ def sync_gallery(data, path):
         return False
     path.write_text(updated, encoding='utf-8')
     return True
+
+
+def _payload_equal(a, b):
+    """Recursively compare parsed payloads, tolerating float precision differences across Python versions."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_payload_equal(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_payload_equal(x, y) for x, y in zip(a, b))
+    if isinstance(a, float) and isinstance(b, float):
+        return math.isclose(a, b, rel_tol=1e-7, abs_tol=1e-7)
+    return a == b
 
 
 # --- design contract check ------------------------------------------------
@@ -1515,7 +1527,13 @@ def main():
                 if not match:
                     drift = 'Gallery has no <script id="catalog"> block.'
                 elif match.group(2) != expected:
-                    drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
+                    try:
+                        actual_payload = json.loads(match.group(2))
+                        expected_payload = json.loads(expected)
+                        if not _payload_equal(actual_payload, expected_payload):
+                            drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
+                    except Exception:
+                        drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
             if drift:
                 raise ValueError(drift)
             intelligence = validate_intelligence()
