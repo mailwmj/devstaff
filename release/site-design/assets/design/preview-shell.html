@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>体验稿起手壳</title>
+<!--
+  体验稿起手壳（site-design）
+  ==================================================================
+  这是骨架双选稿和视觉双选稿的起手件，它只做三件事：
+    1. 把颜色、字阶、间距、圆角固定下来（下面的 :root，不用改）；
+    2. 给出顶部那条深色切换条和切换脚本；
+    3. 备一套通用组件样式（按钮、卡片、标记、表单控件…），按需取用。
+
+  它不预设页面长什么样。台账页、落地页、流程页都从这里开始，
+  正文区自己搭：该有什么分区、放几张卡、要不要表格，由项目和方案决定。
+  只有顶栏切换条和色板是两版共用的，其余都不共用。
+
+  要改的：
+    1. 标题 title。
+    2. 顶栏两个标签换成实际方案名。
+    3. 脚本里的 HINT：每版一句话，说清先看见什么、再怎么动手。
+    4. 两个 view 里的正文全部自己写。
+  颜色纪律：颜色只用来分区块、分文字层级、标状态，不用来区分方案。
+           两个方案必须共用同一套颜色与字号。
+  图标：Lucide 内联 SVG（stroke-width 2），同界面只用这一套，不用 Emoji 顶替。
+  切换：不加动效。
+-->
+<style>
+/* =====================================================================
+   1. Token：固定。改这里就等于改整套稿子的观感
+   同心圆角：外框 16 时，内部元素不超过 16 − 6 = 10
+   ===================================================================== */
+:root{
+  /* 画板与表面 */
+  --canvas:#F4F5F6;
+  --surface:#FDFDFD;
+  --surface-sunken:#EEF0F1;
+  /* 文字四级 */
+  --text:#191C1E;
+  --text-2:#545B60;
+  --text-3:#767D82;
+  --text-4:#8A9196;
+  /* 分隔 */
+  --line:#E5E8E9;
+  --line-2:#D3D8D9;
+  /* 强调色：低饱和，只表示「能点的东西」 */
+  --accent:#41648C;
+  --accent-weak:#E8EEF6;
+  /* 状态色 */
+  --warn:#A6493B;
+  --warn-weak:#F7EAE7;
+  --good:#3F6F5B;
+  --good-weak:#E9F0EC;
+  --calm-weak:#EEF0F1;
+  /* 形状与层次 */
+  --r-card:16px;
+  --r-inner:10px;
+  --r-chip:999px;
+  --lift:0 0 0 1px rgba(0,0,0,.05), 0 1px 2px -1px rgba(0,0,0,.05);
+  /* 只用于可中断的状态过渡；切换条不做动效 */
+  --ease:cubic-bezier(.23,1,.32,1);
+  --dur:160ms;
+  /* 切换条：固定深色，和页面内容分开，不参与页面配色 */
+  --bar-bg:#1C1F21;
+  --bar-fg:#FCFCFC;
+  --bar-fg-2:#A8AEB2;
+  --bar-fg-3:#D2D7D9;
+  --bar-well:#111314;
+  --bar-sep:#3A3F42;
+  /* 字体：系统栈，不引外部字体 */
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--text);font:14px/1.65 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+h1,h2,h3,p{margin:0}
+[hidden]{display:none !important}
+.tnum{font-variant-numeric:tabular-nums}
+svg{display:block}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+/* =====================================================================
+   2. 顶部切换条：深色一条，一行说明。两类体验稿共用，不参与页面配色
+   ===================================================================== */
+.pickbar{position:sticky;top:0;z-index:20;background:var(--bar-bg);color:var(--bar-fg)}
+.pickbar-in{display:flex;align-items:center;gap:16px;min-height:50px;padding:7px 0}
+.seg{display:flex;gap:4px;background:var(--bar-well);border-radius:9px;padding:3px;flex:0 0 auto}
+.seg button{padding:7px 14px;border-radius:6px;font-size:13.5px;font-weight:500;color:var(--bar-fg-2);white-space:nowrap}
+.seg button[aria-selected="true"]{background:var(--bar-fg);color:var(--bar-bg)}
+.pickbar-sep{flex:0 0 auto;width:1px;height:18px;background:var(--bar-sep)}
+.pickbar-hint{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.55;color:var(--bar-fg-3);overflow-wrap:anywhere}
+.pickbar-hint b{color:var(--bar-fg);font-weight:500}
+
+/* =====================================================================
+   3. 通用组件：按需取用，不是每样都要用上
+   ===================================================================== */
+.stage{padding:22px 0 64px}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.pagehead h1{font-size:22px;font-weight:600}
+.pagesub{font-size:13px;color:var(--text-3);margin-top:4px}
+.foot{margin-top:16px;font-size:12.5px;line-height:1.75;color:var(--text-4);max-width:60em}
+
+/* 按钮：一屏只留一个实心主行动 */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:1px solid var(--line-2);border-radius:var(--r-inner);background:var(--surface);
+  padding:0 14px;min-height:38px;font-size:13.5px;font-weight:500;white-space:nowrap;
+  transition:background-color var(--dur) var(--ease);
+}
+.btn:hover{background:#F6F7F8}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#FBFCFD;min-height:42px;padding:0 18px;font-weight:600}
+.btn-primary:hover{background:#34506F}
+.btn-lg{min-height:46px;padding:0 22px;font-size:14.5px}
+.btn-sm{padding:0 11px;min-height:32px;font-size:13px}
+
+/* 卡片与分区 */
+.panel{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--lift);overflow:hidden}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel-head h2{font-size:14.5px;font-weight:600}
+.panel-head .more{font-size:12.5px;color:var(--text-3)}
+.panel-body{padding:14px 16px}
+.grid{display:grid;gap:14px}
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* 读数 */
+.stat{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--lift);padding:14px 16px}
+.stat .k{font-size:12.5px;color:var(--text-3)}
+.stat .v{font-size:26px;font-weight:600;line-height:1.2;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .v i{font-style:normal;font-size:12.5px;font-weight:400;color:var(--text-3);margin-left:4px}
+.stat-lead{border:1px solid #CFDCEA;box-shadow:none;background:var(--accent-weak)}
+.stat-lead .v{color:var(--accent)}
+.stat-warn .v{color:var(--warn)}
+
+/* 表单控件：输入框比画板微暗，营造容纳内容的感觉 */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12.5px;color:var(--text-2)}
+.input,.select{
+  border:1px solid var(--line-2);border-radius:var(--r-inner);background:var(--surface-sunken);
+  padding:9px 12px;font-size:13.5px;color:var(--text);min-height:38px;
+}
+.search{display:flex;align-items:center;gap:8px;flex:0 1 280px;min-width:200px;background:var(--surface-sunken);border:1px solid var(--line);border-radius:var(--r-inner);padding:9px 12px;color:var(--text-4);font-size:13.5px}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* 标签与筛选项 */
+.chip{font-size:13px;padding:6px 12px;border-radius:var(--r-chip);border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#FBFCFB}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1;padding:5px 9px;border-radius:6px;white-space:nowrap}
+.tag::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.tag-out{background:var(--warn-weak);color:var(--warn);box-shadow:inset 0 0 0 1px rgba(166,73,59,.22)}
+.tag-low{background:var(--calm-weak);color:var(--text-2);box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.tag-ok{background:var(--good-weak);color:var(--good);box-shadow:inset 0 0 0 1px rgba(63,111,91,.18)}
+
+/* 列表与表格 */
+.list-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.list-row:last-child{border-bottom:0}
+.list-row:hover{background:#FAFBFB}
+.list-row .who{flex:1;min-width:0}
+.list-row .who b{display:block;font-size:14px;font-weight:500;overflow-wrap:anywhere}
+.list-row .who em{display:block;font-style:normal;font-size:12.5px;color:var(--text-3);margin-top:2px;overflow-wrap:anywhere}
+.list-row .side-note{font-size:12.5px;color:var(--text-2);white-space:nowrap}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+thead th{font-size:12.5px;font-weight:500;color:var(--text-3);background:#FAFBFB;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+th.num,td.num{text-align:right;white-space:nowrap}
+th.act,td.act{text-align:right;white-space:nowrap}
+
+/* 空状态：业务上真会出现时才写 */
+.empty{padding:32px 16px;text-align:center;color:var(--text-3);font-size:13px}
+
+/* =====================================================================
+   4. 窄屏：从内容失效处断点，不靠隐藏核心信息来适配
+   ===================================================================== */
+@media (max-width:900px){
+  .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:720px){
+  .pickbar-in{flex-wrap:wrap;gap:8px 12px;padding:9px 0}
+  .pickbar-sep{display:none}
+  .pickbar-hint{flex:1 1 100%}
+  .grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:620px){
+  .wrap{padding:0 14px}
+  .pagehead{flex-direction:column;align-items:stretch;gap:10px}
+  .pagehead .btn-primary{min-height:44px}
+  .search{flex:1 1 100%}
+}
+</style>
+</head>
+<body>
+
+<!--
+  图标：Lucide（https://lucide.dev，ISC 许可）内联 SVG。
+  从 lucide.dev 复制 24×24 的路径，保持 stroke-width="2"，尺寸按场景给 16/18/20。
+  同一界面不要混第二套体系，也不要用 Emoji 顶替按钮、导航和状态图标。
+  常用几个：
+    搜索 search        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+    加号 plus          <path d="M5 12h14"/><path d="M12 5v14"/>
+    时钟 clock         <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+    刷新 rotate-cw     <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
+    台账 layout-grid   <rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>
+    对勾 check         <path d="M20 6 9 17l-5-5"/>
+    警示 triangle-alert <path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>
+
+  可用组件的类名（样式已备好，按项目内容挑着用，不要全用上）：
+    外壳       .stage.wrap 限宽容器
+    页面头     .pagehead > h1 + .pagesub，右侧一个 .btn.btn-primary
+    分区       .panel > .panel-head + .panel-body；栅格 .grid.grid-2 / .grid-3
+    读数       .stat（第一张可加 .stat-lead 当锚点，警示的加 .stat-warn）
+    控件       .field > label + .input / .select；.toolbar > .search + .chip
+    列表       .list-row（.who > b + em，右侧 .side-note）
+    表格       table（列用 .num 右对齐数字、.act 右对齐操作）
+    标记       .tag + .tag-out / .tag-low / .tag-ok，颜色与文字双通道
+    空状态     .empty
+    页脚解释   .foot
+-->
+
+<!-- ============ 顶部切换条：两个方案共用 ============ -->
+<div class="pickbar">
+  <div class="wrap">
+    <div class="pickbar-in">
+      <div class="seg" role="tablist" aria-label="方案切换">
+        <!-- 填：两个方案的实际名字 -->
+        <button role="tab" id="tab-a" aria-selected="true" aria-controls="view-a">方案 A</button>
+        <button role="tab" id="tab-b" aria-selected="false" aria-controls="view-b">方案 B</button>
+      </div>
+      <span class="pickbar-sep" aria-hidden="true"></span>
+      <p class="pickbar-hint" id="pickbar-hint"></p>
+    </div>
+  </div>
+</div>
+
+<main class="stage wrap">
+
+  <!-- ==================== 方案 A：正文自己搭 ==================== -->
+  <section id="view-a" role="tabpanel" aria-labelledby="tab-a">
+    <p class="foot">填：方案 A 的正文。分区、内容、行列数都按这个项目来。</p>
+  </section>
+
+  <!-- ==================== 方案 B：正文自己搭 ==================== -->
+  <section id="view-b" role="tabpanel" aria-labelledby="tab-b" hidden>
+    <p class="foot">填：方案 B 的正文。分区、内容、行列数都按这个项目来。</p>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  /* 说明就是一句话，说清两版差别；不加动效、不做折叠、不做悬浮提示 */
+  var HINT = {
+    a:'填：方案 A 先看见什么，再怎么动手。',
+    b:'填：方案 B 先看见什么，再怎么动手。'
+  };
+  var KEYS = { a:'view-a', b:'view-b' };
+  var tabs = { a:document.getElementById('tab-a'), b:document.getElementById('tab-b') };
+  var hint = document.getElementById('pickbar-hint');
+
+  function apply(key){
+    if(!KEYS[key]) key = 'a';
+    Object.keys(KEYS).forEach(function(k){
+      var on = (k === key);
+      document.getElementById(KEYS[k]).hidden = !on;
+      tabs[k].setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    hint.textContent = HINT[key];
+  }
+  function pick(key){
+    var url = new URL(location.href);
+    url.searchParams.set('view', key);
+    history.replaceState(null, '', url);
+    apply(key);
+  }
+  tabs.a.addEventListener('click', function(){ pick('a'); });
+  tabs.b.addEventListener('click', function(){ pick('b'); });
+  apply(new URL(location.href).searchParams.get('view') || 'a');
+})();
+</script>
+</body>
+</html>

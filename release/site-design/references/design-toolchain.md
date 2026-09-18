@@ -87,7 +87,7 @@ Candidate ID：稳定 ID，或 no_verified_match
 Selected：yes | no
 Fit basis：至少两条项目事实；有现成系统/真实素材时至少一条 measured
 Rejected reason：高排名候选未采用的项目原因
-Contract effect：进入母题 / Token / 组件状态 / VA-* 的具体机制
+Contract effect：进入设计主线 / Token / 组件状态 / VA-* 的具体机制
 ```
 
 不能直接复制搜索结果里的行业功能、Landing 顺序、色板、字体、组件或代码。先经过范围分级、项目匹配、反默认和候选交换检查。

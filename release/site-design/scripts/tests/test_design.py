@@ -57,7 +57,7 @@ BASE_BODY = """
 
 ## 视觉方向
 
-- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）
+- **设计主线：** 以表格为视觉主角密度优先（依据 `PG-01`）
 - **构图命题：** 表格居中占主区新增入口在顶部（依据 `PG-01`）
 - **细节签名：** 数量列等宽数字对齐（依据 `BR-01`）
 
@@ -212,7 +212,7 @@ class CheckContractTests(unittest.TestCase):
 
     def test_dropping_a_fact_from_the_index_ungrounds_judgments_citing_it(self):
         # Judgments cite the contract index. Replacing PG-01 with PG-99 both
-        # breaks the reference and removes the basis the 母题 rested on.
+        # breaks the reference and removes the basis the 设计主线 rested on.
         contract = dict(VALID_CONTRACT_JSON)
         contract["pages"] = ["PG-99"]
         write_contract(self.root, contract)
@@ -281,14 +281,14 @@ class CheckContractTests(unittest.TestCase):
 
     def _blank_motif(self):
         return BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
-            "- **母题：**",
+            "- **设计主线：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **设计主线：**",
         )
 
     def _uncited_motif(self, citation=""):
         return BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
-            "- **母题：** 以表格为视觉主角密度优先" + citation,
+            "- **设计主线：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **设计主线：** 以表格为视觉主角密度优先" + citation,
         )
 
     def test_blank_design_judgment_is_blocked(self):
@@ -297,6 +297,15 @@ class CheckContractTests(unittest.TestCase):
         self.assertIn("missing_design_judgment", self.codes(report))
         self.assertIn("visual_motif", [b["aspect"] for b in report["blockers"]
                                        if b["code"] == "missing_design_judgment"])
+
+    def test_legacy_motif_alias_is_accepted(self):
+        body = BASE_BODY.replace(
+            "- **设计主线：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+        )
+        write_contract(self.root, body=body)
+        report = check(self.root)
+        self.assertTrue(report["passed"])
 
     def test_uncited_design_judgment_is_blocked(self):
         # Filled in, but traceable to nothing: a synonym of the template would
@@ -440,8 +449,8 @@ class BuildDirectionGateTests(unittest.TestCase):
 
     def ungrounded(self):
         return BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
-            "- **母题：** 以表格为视觉主角密度优先")
+            "- **设计主线：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **设计主线：** 以表格为视觉主角密度优先")
 
     def test_missing_contract_is_refused_and_writes_nothing(self):
         out = self.root / "out"
@@ -754,6 +763,49 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.assertEqual(int(template.group(1)),
                          round(TEMPLATE.stat().st_size / 1024))
 
+    def test_recipe_table_matches_the_catalog(self):
+        # design-tokens.md owns 配色 / 字体 / 密度 / 形状, and its 推荐配方 table
+        # is the only place an agent learns which recipe keys exist. The keys
+        # themselves live in tokens.json. Both copies read correct today with no
+        # assertion between them, so adding or renaming a recipe would leave the
+        # table advertising a key `build` rejects.
+        tokens = (SKILL_ROOT / "references" / "design-tokens.md").read_text(encoding="utf-8")
+        catalog = json.loads(
+            (SKILL_ROOT / "assets" / "design" / "tokens.json").read_text(encoding="utf-8"))
+        section = tokens.split("## 推荐配方", 1)[1].split("\n## ", 1)[0]
+        documented = re.findall(r"^\|\s*([a-z][a-z0-9-]+)\s*\|", section, re.M)
+        self.assertEqual(sorted(catalog["recipes"]), sorted(documented))
+
+    def test_choice_vocabulary_is_documented_in_the_reference_that_owns_it(self):
+        # A4 tells the agent to read design-tokens.md and nothing else, but the
+        # reference used to name 色板 in prose ("钴蓝") while --palette accepts
+        # "cobalt". The 可选取值 table closes that gap; this keeps it closed, so
+        # a new palette or shape cannot ship as a key no document mentions.
+        tokens = (SKILL_ROOT / "references" / "design-tokens.md").read_text(encoding="utf-8")
+        catalog = json.loads(
+            (SKILL_ROOT / "assets" / "design" / "tokens.json").read_text(encoding="utf-8"))
+        for group in design.GROUPS.values():
+            for key in catalog[group]:
+                self.assertRegex(tokens, r"(?<![a-z0-9-])" + re.escape(key) + r"(?![a-z0-9-])",
+                                 f"{group} key {key} is undocumented in design-tokens.md")
+
+    def test_unknown_choice_names_the_valid_keys(self):
+        # `Unknown palette: cobal` made the caller discover the vocabulary by
+        # trial. The rejection has to carry the keys and, for a near miss, the
+        # intended one.
+        catalog = design.read_catalog()
+        with self.assertRaises(ValueError) as caught:
+            design.compose(catalog, "daily-workspace", palette="cobal")
+        message = str(caught.exception)
+        self.assertIn("cobalt", message)
+        self.assertRegex(message, r"(?i)did you mean")
+        for key in catalog["palettes"]:
+            self.assertIn(key, message)
+
+        with self.assertRaises(ValueError) as caught:
+            design.compose(catalog, "daily-workspaces")
+        self.assertIn("daily-workspace", str(caught.exception))
+
     def test_contract_template_stays_a_fill_in_skeleton(self):
         body = design._strip_contract_block(TEMPLATE.read_text(encoding="utf-8"))
         labels = list(design.PROJECT_FACT_LABELS) + [
@@ -775,7 +827,7 @@ class ReferenceArchitectureTests(unittest.TestCase):
     def test_template_declares_every_anchor_the_checker_reads(self):
         body = design._strip_contract_block(TEMPLATE.read_text(encoding="utf-8"))
         for markers in (("来源引用", "交接目标"), ("约束", "对结构"),
-                        ("可观察标准", "检查轴"), ("候选", "母题")):
+                        ("可观察标准", "检查轴"), ("候选", "设计主线")):
             header, _ = design._table(body, *markers)
             self.assertTrue(header, f"模板缺少表头 {markers}")
 
@@ -988,7 +1040,7 @@ class LintUiTests(unittest.TestCase):
     def test_skin_only_candidates_missing_evidence_is_blocked(self):
         body = self.CLEAN_BODY + (
             "## 对照方向（仅在真实取舍存在时）\n\n"
-            "| 候选 | 匹配依据 | 母题 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
+            "| 候选 | 匹配依据 | 设计主线 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
             "| `方案一` | a | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n"
             "| `方案二` | b | 货架卡片 | 实物 | 网格铺陈 | x | y | `pending` |\n")
@@ -999,7 +1051,7 @@ class LintUiTests(unittest.TestCase):
     def test_skin_only_candidates_identical_motif_is_blocked(self):
         body = self.CLEAN_BODY + (
             "## 对照方向（仅在真实取舍存在时）\n\n"
-            "| 候选 | 匹配依据 | 母题 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
+            "| 候选 | 匹配依据 | 设计主线 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
             "| `方案一` | a | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n"
             "| `方案二` | b | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n\n"
@@ -1011,7 +1063,7 @@ class LintUiTests(unittest.TestCase):
     def test_single_candidate_is_not_skin_blocked(self):
         body = self.CLEAN_BODY + (
             "## 对照方向（仅在真实取舍存在时）\n\n"
-            "| 候选 | 匹配依据 | 母题 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
+            "| 候选 | 匹配依据 | 设计主线 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
             "| `方案一` | a | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n")
         self._write(body=body, files={"index.html": "<h1>库存</h1>"})

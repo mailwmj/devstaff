@@ -35,6 +35,8 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 
 子 Skill 不继续调用其他 Skill，也不自行宣布交付。它们完成一个任务后只返回 `status / summary / artifacts / evidence / limitations` 五个字段；`site-builder` 重新读取状态后继续。
 
+四个 Skill 对用户说话、以及写网站文案时，统一按 `AGENTS.md` 的《说人话》写：说清谁做了什么，不抬高、不凑三连、不用大词。文风只有这一处来源，其他文件只引用不复述。
+
 ## 第一性原理
 
 系统只解决三种失败：
@@ -111,7 +113,7 @@ python3 release/site-builder/scripts/state.py verify PROJECT \
 
 `limited` 必须写明 `--limitation`；strict 的 `verified` 必须带 `--independent`。局部修改不初始化 `.site`。
 
-新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选并生成轻量骨架预览（优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
+新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选，并复制 `site-design/assets/design/preview-shell.html` 写成单文件骨架预览（色板与深色切换条用现成的，正文按项目自己搭，两版只在结构上不同，优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（同一骨架、同一顶栏，轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
 
 ```text
 python3 release/site-builder/scripts/state.py discover PROJECT \

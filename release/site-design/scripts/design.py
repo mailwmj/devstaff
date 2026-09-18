@@ -1,5 +1,6 @@
 """Research directions and compose portable design tokens. Python 3.10+, stdlib only."""
 import argparse
+import difflib
 import fnmatch
 import hashlib
 import io
@@ -414,18 +415,34 @@ def typography_checks(tokens):
     return rows
 
 
+def unknown_choice(kind, value, valid):
+    """Reject an unknown key by naming the keys that exist.
+
+    `Unknown palette: cobal` cost the caller a whole round trip to learn what
+    --palette accepts, and the answer is not in design-tokens.md. The caller is
+    usually an agent that cannot guess `cobalt` from a typo, so the message
+    carries the full vocabulary and the closest key.
+    """
+    options = [str(option) for option in valid]
+    close = difflib.get_close_matches(str(value), options, n=1, cutoff=0.6)
+    hint = f'; did you mean {close[0]}?' if close else ''
+    return ValueError(f"Unknown {kind} {value!r}: valid keys are "
+                      f"{', '.join(options)}{hint}")
+
+
 def compose(data, recipe, **overrides):
     if recipe not in data['recipes']:
-        raise ValueError(f'Unknown recipe: {recipe}')
+        raise unknown_choice('recipe', recipe, data['recipes'])
     chosen = data['recipes'][recipe]
     unknown = set(overrides) - set(GROUPS)
     if unknown:
-        raise ValueError(f'Unknown override groups: {sorted(unknown)}')
+        raise ValueError(f'Unknown override groups: {sorted(unknown)}; valid groups are '
+                         f"{', '.join(GROUPS)}")
     selection = {key: overrides.get(key) or chosen[key] for key in GROUPS}
     tokens = dict(data['base'])
     for key, group in GROUPS.items():
         if selection[key] not in data[group]:
-            raise ValueError(f'Unknown {key}: {selection[key]}')
+            raise unknown_choice(key, selection[key], data[group])
         tokens.update(data[group][selection[key]]['tokens'])
     results = color_checks(tokens)
     failed = [f"{r['foreground']}/{r['background']}={r['ratio']:.2f}" for r in results if not r['passed']]
@@ -617,7 +634,7 @@ PROJECT_FACT_LABELS = ('使用者', '主任务', '业务对象', '真实内容')
 # deviation instead: it passed on a synonym and failed on faithful reuse.
 DESIGN_JUDGMENT_ASPECTS = (
     ('anti_default', ('反默认原因',)),
-    ('visual_motif', ('母题',)),
+    ('visual_motif', ('设计主线', '母题')),
     ('composition', ('构图命题',)),
     ('detail_signature', ('细节签名',)),
 )
@@ -977,7 +994,7 @@ def direction_gate(root):
     """Report whether token selection is allowed for this project.
 
     ``passed`` is False while the contract is missing, unreadable, or does not
-    yet state the derived design judgments (母题 / 反默认原因 / 构图命题 /
+    yet state the derived design judgments (设计主线 / 反默认原因 / 构图命题 /
     细节签名) with citations to project facts the contract itself declares.
     The report carries the contract SHA-256 so a selection can be tied to the
     revision it was calibrated against, the same way state.py ties a build to
@@ -1165,9 +1182,11 @@ def _candidate_skin_blockers(body):
     all hard failures — color/font-only differences are not a second direction.
     """
     blockers = []
-    header, rows = _table(body, '候选', '母题')
+    header, rows = _table(body, '候选', '设计主线')
+    if not header:
+        header, rows = _table(body, '候选', '母题')
     cand_col = _column(header, '候选')
-    motif_col = _column(header, '母题')
+    motif_col = _column(header, '设计主线', '母题')
     comp_col = _column(header, '构图命题')
     if cand_col is None or motif_col is None or comp_col is None:
         return blockers
@@ -1190,7 +1209,7 @@ def _candidate_skin_blockers(body):
     if len(pairs) == 1:
         blockers.append({
             'code': 'skin_only_candidates',
-            'detail': '候选母题与构图命题相同，仅可能换色/字体'})
+            'detail': '候选设计主线与构图命题相同，仅可能换色/字体'})
     swap = _bullet_after(body, '交换检查结论')
     if swap and re.search(r'换肤|差异(?:不|基本.*不)成立|基本消失|只(?:是|能算).*上色',
                           swap):
@@ -1751,9 +1770,13 @@ def main():
                              help='findings listed per severity with --summary '
                                   f'(default {SUMMARY_FINDING_LIMIT})')
     build = commands.add_parser('build')
-    build.add_argument('--recipe', required=True)
+    build.add_argument('--recipe', required=True,
+                       help='recipe key; run `design.py list` for the catalog '
+                            'and each recipe default combination')
     for key in GROUPS:
-        build.add_argument('--' + key)
+        build.add_argument('--' + key,
+                           help=f'override the recipe default {key}; '
+                                f'run `design.py list` for valid keys')
     build.add_argument('--out', type=Path, required=True, help='New or empty output directory')
     build.add_argument('--project-root', type=Path, default=Path.cwd(),
                        help='project root holding .site/design/surface-brief.md; '
@@ -1829,7 +1852,7 @@ def main():
                     codes = ', '.join(sorted({entry['code'] for entry in gate['blockers']}))
                     raise ValueError(
                         '方向未确认，禁止选择配方（' + (codes or 'unknown') + '）。先补齐 '
-                        'surface-brief.md 的母题、反默认原因、构图命题与细节签名，'
+                        'surface-brief.md 的设计主线、反默认原因、构图命题与细节签名，'
                         '每项引用一条合同已声明的项目事实，再重跑；'
                         '确认这只是一份无方向依据的草稿时才加 --standalone。')
                 evidence = {'mode': 'direction-gate',

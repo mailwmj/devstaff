@@ -57,6 +57,7 @@ class BundleTests(unittest.TestCase):
         )
         self.assertTrue((design / "assets" / "design" / "tokens.json").is_file())
         self.assertTrue((design / "assets" / "design" / "gallery.html").is_file())
+        self.assertTrue((design / "assets" / "design" / "preview-shell.html").is_file())
         self.assertTrue((design / "scripts" / "design.py").is_file())
         self.assertTrue((design / "intelligence" / "LICENSE").is_file())
 

@@ -1,8 +1,8 @@
 # 方向形成后的设计 token 校准
 
-本包提供实现校准配方、10 套色彩、6 种排版角色分配、3 种密度、4 种形状和 4 类布局尺寸。配置见 `assets/design/tokens.json`；实际预览见 `assets/design/gallery.html`。它们只帮助把已形成的项目方向转成一致变量，不负责产生页面命题、信息架构、母题或行业答案，也不是保证任何组合都高级的认证。
+本包提供实现校准配方、10 套色彩、6 种排版角色分配、3 种密度、4 种形状和 4 类布局尺寸。配置见 `assets/design/tokens.json`；实际预览见 `assets/design/gallery.html`。它们只帮助把已形成的项目方向转成一致变量，不负责产生页面命题、信息架构、设计主线或行业答案，也不是保证任何组合都高级的认证。
 
-进入本文件前应已按 [设计上下文](design-context.md)、[页面设计合同](surface-brief.md) 和 [视觉方向](visual-direction.md) 确定用户路径、首屏结构、真实内容与母题。**尚不能说明母题从哪来时，不要进入 token 选择**——挑选配方不能代替设计判断，**没有任何一个配方能作为"方向"提交给用户**。这条由 `build` 的方向闸门机械执行，不靠提醒。
+进入本文件前应已按 [设计上下文](design-context.md)、[页面设计合同](surface-brief.md) 和 [视觉方向](visual-direction.md) 确定用户路径、首屏结构、真实内容与设计主线。**尚不能说明设计主线从哪来时，不要进入 token 选择**——挑选配方不能代替设计判断，**没有任何一个配方能作为"方向"提交给用户**。这条由 `build` 的方向闸门机械执行，不靠提醒。
 
 ## 选择顺序
 
@@ -15,9 +15,23 @@
 5. 按品牌与内容气质选色彩/形状。深色要有明确需求或选定依据，不把“高级”直接翻译成黑底发光。色彩应从真实来源采样并按 [工艺审查](craft-review.md) 收敛成语义角色；本包的色板只是实现示例，不作为采样依据。
 6. 展示项目自己的代表页面、完成选择后导出并复验。更换任一维度后重新看布局和实际色对，不仅看色板。
 
+## 可选取值
+
+`build` 只接受下面这些键名；中文是目录标签，不是取值。
+
+| 参数 | 键名 |
+| --- | --- |
+| `--palette` | paper 纸页与松墨、neutral 石墨与瓷白、cobalt 清晰钴蓝、clay 陶土与暖白、plum 梅紫与雾灰、ocean 海盐与深青、olive 亚麻与橄榄、rose 柔粉与莓红、midnight 夜蓝工作室、charcoal 炭黑与琥珀 |
+| `--typography` | ui、reading、narrative、display、cultural、technical |
+| `--density` | compact、comfortable、spacious |
+| `--shape` | crisp、soft、rounded、flat |
+| `--layout` | reading、workspace、collection、story |
+
+键名之外的值一律拒绝，报错会列出合法键名和最接近的一个。项目自己的色值不经过 `build`，按第 1、5 条写进合同的语义映射。不确定某个维度有哪些取值时跑 `python3 <site-design 安装目录>/scripts/design.py list`，它会连同每个配方的默认组合一起打印。
+
 ## 推荐配方
 
-配方是**实现校准 profile**，按内容形状与任务性质索引，不是视觉方向清单，也不能用来替代母题推导。引用具体色值前先按第 5 条确认采样来源。
+配方是**实现校准 profile**，按内容形状与任务性质索引，不是视觉方向清单，也不能用来替代设计主线推导。引用具体色值前先按第 5 条确认采样来源。
 
 | 配方 | 用途 | 组合重点 |
 | --- | --- | --- |
@@ -47,7 +61,7 @@ python3 /absolute/site-design/scripts/design.py build --recipe reading-journal -
 python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace --palette ocean --density compact --shape crisp --project-root /absolute/project --out /absolute/project/alternate-choice
 ```
 
-`build` 默认先过**方向闸门**：它从 `--project-root`（缺省为当前目录）读取 `.site/design/surface-brief.md`，合同缺失、不可读，或母题 / 反默认原因 / 构图命题 / 细节签名未填、未引用合同自己声明的项目事实时，直接拒绝并列出 blocker code，**不写任何文件**。闸门只组合已有规则（`check-contract` 的 direction 阶段 + 本文件要求的四项判断），不新增自己的判据。
+`build` 默认先过**方向闸门**：它从 `--project-root`（缺省为当前目录）读取 `.site/design/surface-brief.md`，合同缺失、不可读，或设计主线 / 反默认原因 / 构图命题 / 细节签名未填、未引用合同自己声明的项目事实时，直接拒绝并列出 blocker code，**不写任何文件**。闸门只组合已有规则（`check-contract` 的 direction 阶段 + 本文件要求的四项判断），不新增自己的判据。
 
 放行后 `selection.json` 会记录 `direction_evidence`：`{"mode": "direction-gate", "contract_sha256": ...}`，把这次校准钉在具体的合同版本上；合同一改，旧选择即可判定过期。确实只需要一份无方向依据的草稿时，显式加 `--standalone`，产出会标记 `{"mode": "standalone"}` 并在 `intent.md` 顶部写明"未读取任何项目合同"。**没有任何理由在真实项目里静默使用 `--standalone`。**
 
@@ -55,7 +69,7 @@ python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace -
 
 `validate` 检查每个配方与每套色板的**列出色对**和**排版下限**（字号、正文行高、中文标题字距、字体许可），并会把不合格的配方判为失败——它守的是目录默认值，不是你的页面。`sync-gallery` 在 `tokens.json` 变化后重新注入 gallery 的内嵌目录，避免预览与配置漂移。
 
-制作体验稿时只把 CSS 和按需使用的 `primitives.css` 复制到隔离的体验稿目录；把选定 token 和文件路径交给 `site-builder`，由它按项目结构应用到正式工程。最终运行不能依赖 Skill 安装路径。工具只生成 token，不替换现有页面、存储或业务逻辑。
+制作体验稿时用起手壳 `assets/design/preview-shell.html`（只固定颜色变量、字阶、间距、圆角、顶栏与通用组件样式，不预设页面结构），只把按需使用的 CSS 和 `primitives.css` 复制到隔离的体验稿目录；把选定 token 和文件路径交给 `site-builder`，由它按项目结构应用到正式工程。最终运行不能依赖 Skill 安装路径。工具只生成 token，不替换现有页面、存储或业务逻辑。
 
 ## 变量职责与应用
 
