@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).parents[1] / "site-builder" / "scripts" / "state.py"
-DESIGN = Path(__file__).parents[1] / "site-design" / "scripts" / "design.py"
+SCRIPT = Path(__file__).parents[1] / "release" / "site-builder" / "scripts" / "state.py"
+DESIGN = Path(__file__).parents[1] / "release" / "site-design" / "scripts" / "design.py"
 
 # A contract that passes prebuild: every indexed ID exists in the body, the BR
 # has a handoff target, the required IC has a structural impact, the VA is

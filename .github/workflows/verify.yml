@@ -27,10 +27,10 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Run design tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s site-design/scripts/tests -p 'test_*.py'
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
 
       - name: Validate design assets
-        run: PYTHONDONTWRITEBYTECODE=1 python3 site-design/scripts/design.py validate
+        run: PYTHONDONTWRITEBYTECODE=1 python3 release/site-design/scripts/design.py validate
 
       - name: Verify installation from a clean release archive
         shell: bash
@@ -39,9 +39,11 @@ jobs:
           ARCHIVE_FILE="$(mktemp)"
           RELEASE_DIR="$(mktemp -d)"
           INSTALL_DIR="$(mktemp -d)"
-          git archive --format=tar HEAD --output="$ARCHIVE_FILE"
+          git archive --format=tar HEAD:release --output="$ARCHIVE_FILE"
           tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-design/scripts/tests" -p 'test_*.py'
           PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/site-design/scripts/design.py" validate
           python3 "$RELEASE_DIR/install.py" "$INSTALL_DIR"
           test -f "$INSTALL_DIR/site-design/references/surface-brief.md"
+          test -f "$INSTALL_DIR/site-builder/scripts/state.py"
+          test -f "$INSTALL_DIR/site-check/scripts/check.py"

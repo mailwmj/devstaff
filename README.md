@@ -57,15 +57,34 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 
 这些内容按任务分支加载。普通 guided 项目只填写设计合同的适用字段；完整模板不会变成新的用户门禁。内置 UI/UX 数据作为固定版本快照打包，保证独立安装和复现。
 
+## 仓库结构
+
+分发内容与开发内容分开放置：
+
+```text
+release/          唯一分发根。整个目录可独立打包安装，不依赖仓库其他部分
+├── skills.json   技能清单
+├── install.py    安装器
+├── AGENTS.md     需要加入宿主项目指令的协议文件
+└── site-brief/ site-builder/ site-check/ site-design/
+tests/            开发用测试
+.github/          开发用 CI
+README.md  AGENT-GUIDE.md  REVIEW-MANIFEST.md   开发用文档
+```
+
+只分发 `release/`。校验、安装与测试命令都从仓库根目录执行，路径以 `release/` 开头。
+
 ## 安装
 
 使用安装器进行安装：
 
 ```text
-python3 install.py /path/to/agent-skills
+python3 release/install.py /path/to/agent-skills
 ```
 
 它会安装 `site-builder`、`site-brief`、`site-design`、`site-check`，并返回需要加入宿主项目指令的 `AGENTS.md` 路径。已有安装时，显式使用 `--replace` 整套替换。状态脚本随 `site-builder` 一起安装。
+
+也可以只打包分发根：`git archive --format=tar HEAD:release | tar -xf - -C /tmp/site-skills`，解包后的目录本身就是可安装的完整包。
 
 ## 状态接口
 
@@ -78,14 +97,14 @@ preflight → 执行 next_action → 写入结果 → 再次 preflight
 示例：
 
 ```text
-python3 site-builder/scripts/state.py init PROJECT --mode guided
-python3 site-builder/scripts/state.py preflight PROJECT
-python3 site-builder/scripts/state.py decide PROJECT \
+python3 release/site-builder/scripts/state.py init PROJECT --mode guided
+python3 release/site-builder/scripts/state.py preflight PROJECT
+python3 release/site-builder/scripts/state.py decide PROJECT \
   --task "登记库存并查看剩余数量" \
   --direction "单工作台展示当前库存和新增入口" \
   --quote "就按这个方向做"
-python3 site-builder/scripts/state.py start PROJECT
-python3 site-builder/scripts/state.py verify PROJECT \
+python3 release/site-builder/scripts/state.py start PROJECT
+python3 release/site-builder/scripts/state.py verify PROJECT \
   --status verified \
   --evidence "新增一条库存并刷新后仍可见"
 ```
@@ -95,10 +114,10 @@ python3 site-builder/scripts/state.py verify PROJECT \
 新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选并生成轻量骨架预览（优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
 
 ```text
-python3 site-builder/scripts/state.py discover PROJECT \
+python3 release/site-builder/scripts/state.py discover PROJECT \
   --structure choice --reason "信息架构差异：看板流 vs 向导流" \
   --candidate "看板全景流" --candidate "任务向导流"
-python3 site-builder/scripts/state.py select-structure PROJECT \
+python3 release/site-builder/scripts/state.py select-structure PROJECT \
   --candidate "看板全景流" --quote "选看板流"
 ```
 
@@ -110,6 +129,6 @@ python3 site-builder/scripts/state.py select-structure PROJECT \
 
 ```text
 python3 -m unittest discover -s tests -p 'test_*.py'
-python3 -m unittest discover -s site-design/scripts/tests -p 'test_*.py'
-python3 site-design/scripts/design.py validate
+python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
+python3 release/site-design/scripts/design.py validate
 ```

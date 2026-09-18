@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 import hashlib
 
-STATE_PATH = Path(__file__).parents[1] / "site-builder" / "scripts" / "state.py"
+STATE_PATH = Path(__file__).parents[1] / "release" / "site-builder" / "scripts" / "state.py"
 SPEC = importlib.util.spec_from_file_location("site_state", STATE_PATH)
 state = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

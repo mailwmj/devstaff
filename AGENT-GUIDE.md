@@ -4,6 +4,8 @@
 
 安装后四个 Skill 位于同一个 `agent-skills/` 目录下。先解析 `site-builder` 的安装目录，再用相对它的路径运行脚本。
 
+本文件里的 Skill 相对路径都相对**分发根**。分发根在本仓库中是 `release/`，安装后是 `agent-skills/`：在仓库里读作 `release/site-builder/scripts/state.py`，安装后读作 `agent-skills/site-builder/scripts/state.py`。仓库根目录只放开发文件（`tests/`、`.github/`、README 等）。
+
 ## 一句话
 
 把自然语言想法变成可使用、可验证、且诚实交付的网站。
@@ -95,6 +97,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 ## 脚本
 
 ```text
+# 相对分发根；在源码仓库中为 release/ 下的同路径
 python3 site-builder/scripts/state.py <action> PROJECT
 python3 site-design/scripts/design.py <command> --root PROJECT
 python3 site-check/scripts/check.py <plan|validate-report> PROJECT

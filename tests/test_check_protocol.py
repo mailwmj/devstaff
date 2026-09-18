@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-CHECK = ROOT / "site-check" / "scripts" / "check.py"
+CHECK = ROOT / "release" / "site-check" / "scripts" / "check.py"
 SPEC = importlib.util.spec_from_file_location("site_check", CHECK)
 check = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

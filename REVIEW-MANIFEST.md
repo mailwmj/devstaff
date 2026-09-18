@@ -3,6 +3,8 @@
 本文件是交接材料，不是项目产物，审查结束后可删除。
 仓库无 git，无法提供 diff；下面给的是**精确锚点**，请直接按行号读当前文件核对。
 
+> 目录变更提示：四个 Skill 与 `AGENTS.md`、`skills.json`、`install.py` 已移入 `release/`，仓库根目录只保留开发文件。下文所有 `site-design/...`、`site-builder/...`、`AGENTS.md` 路径请加 `release/` 前缀；行号锚点不受影响。
+
 ## 0. 审查前必读：基线不确定性
 
 - 本仓库 `git status` = `fatal: not a git repository`，**没有版本历史**，无法用 diff 验证。
