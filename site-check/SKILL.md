@@ -1,29 +1,43 @@
 ---
 name: site-check
-description: 只验收或独立检查已有网站和 Web 应用的构建、核心任务、视觉及再次打开行为，输出有证据的结果但不修复源码；也由 site-builder 在正式交付前调用。“检查并修复”由 site-builder 编排。
+version: 1.0.0
+description: 只读验证。生成与校验检查计划/报告，按 L0-L5 轴只读验证核心任务和相称的静态、错误、移动端或再次打开行为，不修改源码。
 ---
-# 网站独立检查
+# 网站检查与验证
 
-## 协作契约
+检查轻量、确定、机器可读，本身不启动浏览器。先用 `check.py` 生成计划或校验报告协议，再按计划在浏览器里只读取证；`site-check` 的浏览器验证由宿主在独立 Checker 上下文完成。
 
-交接或恢复会话时读 [上下文契约](../site-brief/references/context-contract.md)。检查档位、证据类型、浏览器降级、矩阵和修复闭环以 [验证规则](references/verification.md) 为准；本 Skill 不复制命令级校验。
+## 协议
 
-| 字段 | 本 Skill 的接口 |
-| --- | --- |
-| `reads` | 冻结源码、brief、页面设计合同、实施计划、`state.py show` 与验证规则；第三方无状态项目不初始化 |
-| `writes` | 仅 `.site/checks/` 内自己的凭据；不写源码、状态或恢复快照 |
-| `schema` | `passed / failed / incomplete / blocked`；矩阵含 profile、browser、逐项 axis/status/blocking/evidence |
-| `handoff` | 矩阵与发现交回 `site-builder`；失败供受控修复，直接验收到报告为止 |
-| `evidence` | 命令/检查 `check_id`、产物哈希、操作记录与页面/状态/视口 |
+`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同与源码、算出 SHA-256 指纹，产出本轮要检查的轴、门禁顺序和（若给定 `--changed-from`）失效轴。`REF` 支持两种输入，无歧义：可读的旧计划/报告 JSON（直接取其指纹），或项目所属仓库中可解析的 git revision（分支/标签/提交，按该 revision 重算合同与源码指纹再比对本轮）。既非可读报告也非可解析 revision 的 `REF` 机器可读报错并保守升级 `guided-core`，绝不谎称无变化。git 解析仅用 stdlib 子进程、确定、不启浏览器。`check.py validate-report PROJECT REPORT.json` 校验一份检查报告是否符合协议，返回 `valid / overall / invalidated_axes / reverify / reverify_vas / browser_blocked / errors`，供 `state.py verify --report` 采用。
 
-## 执行
+六个层级、八条轴：
 
-1. **确定对象和范围。** 读取源码、原生说明、`.site` 记录和当前状态；页面设计合同是方向、页面、状态和视觉验收的共同接口。
-2. **建立矩阵。** 按 [验证规则](references/verification.md) 选择 `smoke`、`targeted` 或 `full`，声明浏览器能力，并把本轮适用承诺映射到检查项。`full` 的五个轴为 `static_build / core_task / visual_desktop / visual_mobile / reopen`。
-3. **执行检查。** 先跑项目原生静态/构建检查，再覆盖核心任务、关键视觉状态和再次打开；不能由当前能力证明的项保持 `not_run`，不根据源码推定通过。
-4. **视觉审查。** 有真实浏览器时调用 `site-design` 的只读分支；没有真实渲染时保留视觉轴的 `not_run`，不得补造方向匹配结论。
-5. **报告与交接。** 每项记录预期、实际、状态、影响和证据，生成内容寻址矩阵凭据并回传 `check_id`。失败只交回 `site-builder` 修复，Checker 不改源码。
+| 层级 | 轴 | 浏览器 |
+| --- | --- | --- |
+| L0 | `contract` | 否 |
+| L1 | `static_build` | 否 |
+| L2 | `core_task` | 是 |
+| L3 | `negative_path` | 是 |
+| L4 | `visual_desktop` / `visual_mobile` | 是 |
+| L5 | `reopen` / `risk` | 是 |
 
-## 协作回执
+guided 的下限是 `guided-core`（contract + static_build + core_task）外加一条最可能失败路径；strict 额外要求 `reopen` 与 `risk` 并独立验证。范围边界不明确时升级到 `guided-core`，不悄悄缩小覆盖。
 
-返回 `passed | failed | incomplete | blocked`、检查矩阵与 `check_id`、阻断项、非阻断建议、实际入口、未执行项及恢复条件。连续两次复验没有新证据时返回 `blocked`。
+## 失败与复验规则
+
+- **静态门禁**：L0/L1 失败不启动浏览器；浏览器轴必须为 `not_run`，overall 为 `blocked`。
+- **视觉复验范围**：视觉轴失败只复验受影响页面/状态/视口（报告里记 `failed_vas`），不重跑全部视口。
+- **哈希失效**：合同 SHA-256 改变使全部轴失效；源码 SHA-256 改变使 L1-L5 失效（合同在 `.site` 下单独指纹，源码改不动 L0）。
+- **轴依赖**：一条轴失败使其依赖轴需要复验（L0→全部，L1→L2-L5，L2→L3-L5，L3/L4→L5）。
+- **模式**：guided 可诚实 `limited`；strict 不得 `limited`，且 `verified` 必须带 `independent`。`independent` 只在宿主用独立 Checker 上下文实际完成检查后成立；做不到时返回 `blocked`，不自行打标。
+
+## 五字段回执
+
+`status / summary / artifacts / evidence / limitations` 返回发现、证据和限制后停止，不修源码、不改需求、不宣布交付。状态使用 `verified`、`limited` 或 `blocked`：
+
+- `verified`：本轮核心任务已实际完成并有证据。
+- `limited`：核心任务已实现，但有明确未验证项；允许 guided 交付，必须披露限制。
+- `blocked`：核心任务失败或缺少使结论成立的关键证据。
+
+存在 `.site/design/surface-brief.md` 时，以其中适用的页面、状态、视口和 `VA-*` 为项目特定依据；视觉检查调用 `site-design` 的只读审查分支，不重新发明方向。先按风险选择最小充分范围：局部修改只查静态和受影响结果；普通首版查核心任务成功路径与一个最可能失败反例；严格项目查核心任务、关键反例、适用视口、再次打开和权限/隐私风险并独立取证。

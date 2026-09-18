@@ -1,95 +1,115 @@
 # 渐进式建站 Skills
 
-一套面向非技术中文用户、作为整体安装和协作运行的 Coding Agent Skills。用户只需用自然语言描述想法、参考、现有项目或修改目标，不需要记住 Skill 名称和开发阶段。
+一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.0.0）。
 
-## 协作结构
+## 定位
+
+用户不需要理解 Skill、阶段或技术栈。用户只需要说清楚想做什么，Agent 负责把它收敛成一个能完成核心任务的首版，并诚实说明验证范围。
+
+默认体验只有一条短路径：
 
 ```text
-site-builder（默认入口、全部正式修改和实施）
-├── site-brief（调查、首版收敛及协作记录）
-├── site-design（视觉/流程体验稿与只读视觉审查）
-│   └── site-brief（补齐背景、记录确认结果）
-└── site-check（静态、业务、视觉与再次打开验证）
-    └── site-design（只读视觉审查，不重新访谈）
+理解核心任务 → 展示一个方向 → 用户确认 → 实现 → 验证核心任务 → 交付
 ```
 
-四个 Skill 应一起安装。`site-builder` 在完整建设、修改和修复请求中自动协调其余 Skill；用户明确只要需求梳理、体验稿或验收时，可由 Agent 直接选择对应 Skill。`site-brief` 集中写入 `.site/brief.md` 与 `.site/state.json`，避免多个 Skill 用旧状态覆盖彼此。
+复杂度服务于风险，不服务于流程完整感。
 
-`skills.json` 只描述一个 Skill 可能调用的静态能力依赖；子 Skill 把协作回执返回原调用者不构成反向依赖。builder 根据 check 结果修复再复验属于有界工作流，连续两轮无新证据或进展即停止并标记 `blocked`。
+## 三档路径
 
-四个 Skill 在正文声明 `reads / writes / schema / handoff / evidence`，共用 [上下文与交接契约](site-brief/references/context-contract.md)。交接只引用既有成果，不复制规格；门禁工具派生 `.site/session-state.json` 帮助跨会话恢复，真实状态仍以 `state.py show` 取得的状态、租约、指纹和检查凭据为准，Checker 不写恢复快照。
-
-## 整套安装
-
-用户侧安装交付**两个东西**，缺一不可：
-
-1. **四个 Skill 目录**——`site-builder`、`site-brief`、`site-design`、`site-check` 必须一起复制，不能只装其中几个。`site-brief` 里放着全部协作状态的门禁脚本 `scripts/state.py`，漏装它整套都会失效；
-2. **一份指令文件**——[`templates/AGENTS.md`](templates/AGENTS.md)。四个 `description` 只提供"被发现"的机会，路由和停位规则靠这份文件"被遵守"；不装它，用户第一句"帮我做个网站"就可能被直接读成"开干"。
-
-按宿主分别放置：
-
-| 宿主 | Skill 目录 | 指令文件 |
+| 路径 | 适用 | 用户能感知的流程 |
 | --- | --- | --- |
-| Claude Code | `~/.claude/skills/`（或项目内 `.claude/skills/`） | `~/.claude/CLAUDE.md` 里**追加一行** `@<绝对路径>/AGENTS.md`；Claude Code 明确不读 `AGENTS.md` |
-| Codex | `~/.agents/skills/`（或仓库根 `.agents/skills/`） | `~/.codex/AGENTS.md`（`AGENTS.override.md` 优先）；正文直接放这里 |
+| `quick` | 文案、颜色、间距和明确 Bug | 修改 → 相称检查 → 说明结果 |
+| `guided` | 新建小网站、普通工具和多页面首版 | 核心任务 → 一个可见方向 → 实现 → 核心检查 |
+| `strict` | 权限、支付、隐私、共享数据、公开部署和多人协作 | guided + 独立检查和适用风险证据 |
 
-写指令文件时**幂等追加，绝不覆盖**用户已有配置：用带标记的块包裹内容；已有标记就只替换标记内内容（可重复安装、可升级）；无标记且文件已存在就追加到末尾；文件不存在才创建。Claude Code 侧只追加那一行 import，**不要**把正文粘进 `CLAUDE.md`——正文留在本仓库的模板里，升级时只动这一份。逐宿主的差异、体积上限与三层验收方法见 [`templates/hosts/README.md`](templates/hosts/README.md)。
+`quick` 是无状态捷径；默认状态模式是 `guided`。只有真实风险或协作关系要求时才使用 `strict`。
 
-## 维护者工具
-
-`scripts/install.py` 是**开发侧**的装配校验器，**不是用户安装方法**：它只处理上面第 1 项，从不落地 `AGENTS.md`，所以它单独跑完不等于装好了。仓库维护者在自己机器上校验这套 Skill 能否原子装配时使用：
-
-```text
-python scripts/install.py /absolute/path/to/agent/skills
-```
-
-更新整套时使用 `--replace`；脚本先在临时目录复制并校验四个 manifest，成功后才整体替换，拒绝只覆盖其中一个 Skill。
-正式用户仍按上表手动复制 Skill 并幂等追加指令文件；本项目不会自动写入用户的全局 Agent 配置。
-
-## 关键约束
-
-- 先确认首个可验证版本，再为新建或重大变化制作低成本可见实验；
-- 确认模型统一分为方案确认、结构确认（仅多结构比较时）、视觉确认和开发授权四类记录；用户选了页面结构不等于确认了视觉风格，开发授权也不替代前三类决定；详见 [`CONTEXT.md`](CONTEXT.md)；
-- 开发授权按完整请求与相邻问答的行动含义判断，不按关键词：直接要求建设正式成果的委托可在前置决定确认后继续生效；没有既有委托时，Agent 先说清“确认后进入开发”的后果，再理解用户紧接着的自然答复。当前答复不得倒填旧门禁，也不要求用户背“开始开发”口令；
-- 结构候选前先按任务形成轻量交互合同：`required / recommended / confirm / excluded` 约束对象生命周期、工作区、完整 Flow、本地化和范围；行业经验只能提出建议或待确认项，不能创造首版功能；
-- `site-design` 的目标是产出**高质量视觉方案**：先从活跃代码、现有产品、品牌与真实素材提取上下文；默认给一个有依据的页面结构和两个母题层不同的风格，只有新的重要取舍才增加候选；推荐要有依据但不能替用户确认；
-- `site-design` 内置经项目化改写的 `web-design-direction`、Impeccable 工艺规则、ClawHive 前端设计原则，以及 UI/UX Pro Max `2.13.0` 的 MIT 检索器和数据。统一通过 `scripts/design.py research` 调用，不依赖仓库根的参考资料或用户额外安装；
-- `.site/design/surface-brief.md` 是设计、建设和验收共用的一份页面设计合同：视觉确认后补全页面地图、区块、Token、响应式、组件状态、文案、素材和可观察验收标准，`site-builder` 与 `site-check` 都按同一组 ID 工作，不再各自猜测或复制规格；
-- 完整愿景保留方向，本轮按可独立体验的纵向切片实施；
-- 状态跃迁只走 `site-brief` 的门禁脚本：确认记录必须原样保留用户那句原话（`--quote`），规范化摘要只用于识别空白差异下的重复，同一句不能连过两道门禁；每次写状态都追加紧凑的前后摘要与可用的租约 owner；
-- **门禁记录的是声明，不是同意的证明。** 任何本地脚本都挡不住 Agent 自己写一句"用户同意了"；工具保证的是原话逐字留存、修订号递增、事后可比对。真正验证同意的是交付时把原话回放给用户本人核对（`consent_replay`），以及首轮就先提问的对话结构；
-- `site-check` 独立给出内容寻址的 `check_id` 矩阵凭据；每个档位必须说明 `profile_reason` 并声明真实浏览器是否可用。`full` 始终列出静态/构建、核心任务、桌面视觉、手机视觉与再次打开五轴：浏览器可用时五轴阻断，不可用时后三轴以非阻断 `not_run` 保留；静态/构建与受影响核心任务始终阻断。阻断项必须有截图、结果文件或命令凭据等可核验证据，交付时重新核对摘要与证据哈希；
-- 内容摘要、租约和状态历史用于防漏步骤、误覆盖和状态漂移，属于**可发现误改的工作流记录**，不是防御拥有本地写权限的恶意 Agent 的安全边界；语义、产品、视觉和“证据是否真的支持结论”仍由模型、Checker 与用户判断；
-- 简单修改和 Bug 按影响跳过无关阶段；
-- 系统级安装、费用、账号、密钥、真实敏感数据和公开部署按宿主能力分档拦截，不由状态机记录。
-
-## 能力与支持矩阵
-
-诚实的能力边界，避免把"能记录"读成"能验证"：
-
-| 能力 | 有宿主支持时 | 无宿主支持时 |
-| --- | --- | --- |
-| 用户原话留存 | 始终可用 | 始终可用（`--quote` 必填） |
-| 标注升级为 `quote-matched` | 会话记录可读且能定位到用户消息 | 降级为 `agent-reported`，**不阻塞**；未知格式只降级 |
-| 用户同意的验证 | **任何宿主都不提供** | 靠交付时回放原话 + 用户本人核对 |
-| artifact 误改发现 | 内容寻址 `check_id`、文件名/内部 ID/摘要复核 | 同样可用；不防拥有写权限者重新伪造整套记录 |
-| 真实浏览器检查 | 使用宿主已有的可控浏览器执行交互、桌面/手机视觉与再次打开 | 浏览器轴诚实标为非阻断 `not_run`；只能由浏览器证明的核心承诺仍阻断 |
-| 不可逆动作拦截 | T1 审批提示 / T2 沙箱边界 | T3 停下来问并等回答，且如实标注 |
-
-**没有任何一档能证明用户同意。** 各道确认门禁在所有宿主上都可执行，因为它们的输入是 Agent 抄录的原话，而不是宿主内部文件；因此不存在"环境不支持导致流程停摆"的分支。
-
-详细需求见 [`REQUIREMENTS.md`](REQUIREMENTS.md)，统一术语见 [`CONTEXT.md`](CONTEXT.md)。
-
-## 维护检查
+## 执行模型
 
 ```text
-python scripts/verify_skills.py .
-python scripts/test_check_protocol.py
-python scripts/test_session_state.py
-python site-design/scripts/design.py validate
-python site-design/scripts/design.py research "productivity tool novice calm" --design-system --project-name "Example"
+site-builder  唯一编排者，决定下一步并停在需要用户决定的地方
+├── site-brief  收敛一个核心任务和首版范围
+├── site-design 保留完整设计知识库，按需产出方向、体验稿和设计合同
+└── site-check  只读验证，返回实际证据和未验证项
 ```
 
-`verify_skills.py` 检查四个 Skill 的 frontmatter、协作依赖、相对链接、manifest 文件及哈希，并拒绝未列入包的残留文件。`test_check_protocol.py` 和 `test_session_state.py` 覆盖检查矩阵、证据、状态恢复与门禁回归；**它们不测、也无法测"用户是否真的同意"或"证据在语义上是否充分"**，这些判断仍交给用户与独立 Checker。`design.py validate` 同时检查本地 Token/Gallery 和内置 UI/UX Pro Max 数据完整性；`design.py research` 是唯一检索入口，并固定返回带来源与版本的 JSON。GitHub Actions 还会在干净 `git archive` 副本中把整套 Skill 安装到临时目录，验证发布包不依赖工作区残留。
+子 Skill 不继续调用其他 Skill，也不自行宣布交付。它们完成一个任务后只返回 `status / summary / artifacts / evidence / limitations` 五个字段；`site-builder` 重新读取状态后继续。
 
-**这些脚本都不能证明视觉质量。** 色对、字号与配方检查守的是目录默认值，不是渲染后的页面；工艺是否成立只能由评测者在实际渲染上按 [`site-design/references/craft-review.md`](site-design/references/craft-review.md) 的设计、任务状态与机械三路证据核对。
+## 第一性原理
+
+系统只解决三种失败：
+
+1. **做错东西**：先确认核心用户、任务和方向。
+2. **做不完东西**：按一条可完整体验的任务切首版。
+3. **误以为做完**：验证实际核心路径，并区分 `verified` 和 `limited`。
+
+严格模式仍使用同一个小状态接口，只额外要求独立验证和适用的风险证据；不复刻租约、源码指纹或逐项覆盖矩阵。它们只有在真实使用证明有必要后才应该加入。
+
+## 设计能力
+
+系统精简的是确认流程，不是设计专业能力。`site-design` 保留：
+
+- 从项目事实形成结构和视觉方向的方法；
+- 页面设计合同、流程体验稿和参考还原模板；
+- 排版、色彩、素材、构图、响应式、组件状态、无障碍与工艺审查规范；
+- Token、gallery、基础样式和可导出的校准配方；
+- `design-intelligence` `2.13.0` 的内置检索代码、数据与 MIT 许可。
+
+这些内容按任务分支加载。普通 guided 项目只填写设计合同的适用字段；完整模板不会变成新的用户门禁。内置 UI/UX 数据作为固定版本快照打包，保证独立安装和复现。
+
+## 安装
+
+使用安装器进行安装：
+
+```text
+python3 install.py /path/to/agent-skills
+```
+
+它会安装 `site-builder`、`site-brief`、`site-design`、`site-check`，并返回需要加入宿主项目指令的 `AGENTS.md` 路径。已有安装时，显式使用 `--replace` 整套替换。状态脚本随 `site-builder` 一起安装。
+
+## 状态接口
+
+状态只有五种：`discovering / decided / building / blocked / delivered`。Agent 每轮执行同一个控制回路：
+
+```text
+preflight → 执行 next_action → 写入结果 → 再次 preflight
+```
+
+示例：
+
+```text
+python3 site-builder/scripts/state.py init PROJECT --mode guided
+python3 site-builder/scripts/state.py preflight PROJECT
+python3 site-builder/scripts/state.py decide PROJECT \
+  --task "登记库存并查看剩余数量" \
+  --direction "单工作台展示当前库存和新增入口" \
+  --quote "就按这个方向做"
+python3 site-builder/scripts/state.py start PROJECT
+python3 site-builder/scripts/state.py verify PROJECT \
+  --status verified \
+  --evidence "新增一条库存并刷新后仍可见"
+```
+
+`limited` 必须写明 `--limitation`；strict 的 `verified` 必须带 `--independent`。局部修改不初始化 `.site`。
+
+新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选并生成轻量骨架预览（优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
+
+```text
+python3 site-builder/scripts/state.py discover PROJECT \
+  --structure choice --reason "信息架构差异：看板流 vs 向导流" \
+  --candidate "看板全景流" --candidate "任务向导流"
+python3 site-builder/scripts/state.py select-structure PROJECT \
+  --candidate "看板全景流" --quote "选看板流"
+```
+
+视觉风格选定并微调后，执行 `decide` 锁定方向，`select-structure` 与 `decide` 的两句原话不能相同。局部修改或已有成熟规范的局部修复不触发结构选择。
+
+状态工具只防止顺序错误、空证据和不满足模式要求的跃迁。它不能判断用户原话的真实语义，也不能证明证据内容属实；strict 的 `--independent` 只能在独立 Checker 上下文实际完成检查后使用。
+
+## 维护与测试
+
+```text
+python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest discover -s site-design/scripts/tests -p 'test_*.py'
+python3 site-design/scripts/design.py validate
+```

@@ -1,719 +1,685 @@
-"""Static, command and matrix checks for collaborative site skills. Python 3.10+, standard library only.
+#!/usr/bin/env python3
+"""Lightweight, deterministic check protocol for site-check.
 
-Every run gets a ``check_id`` and, when the project has ``.site`` metadata, is
-persisted under ``.site/checks/<check_id>.json`` together with the source
-fingerprint.  ``site-builder`` accepts delivery only through a ``matrix``
-artifact whose fingerprint still matches the frozen source. ``check_id`` is the
-SHA-256 of canonical artifact content (excluding its derived id/path), so accidental
-edits are detected on every load. This is tamper-evident bookkeeping, not a signature
-or a defense against an agent that can rewrite the whole project.
+Generates a verification plan and validates check reports against the check protocol.
+It never starts a browser: it only reads the contract and source,
+computes SHA-256 fingerprints, and checks that a report conforms to the
+gating, dependency, hash-invalidation and mode rules. Python 3.10+, stdlib only.
 
-The matrix does not take a bare ``evidence`` sentence.  Each item declares
-where its evidence comes from:
+The protocol is organized in six levels (L0-L5) over eight axes:
 
-``artifact``
-    Named files (screenshots, JSON/HTML results, logs) that exist inside the
-    project.  Their sha256 is recorded, so delivery can prove they were not
-    edited after the check.
-``command``
-    ``check_id`` values of earlier ``check.py run`` results that exited 0 and
-    match the current source.
-``check``
-    ``check_id`` values of passing ``static`` or ``command`` results that match
-    the current source. Use this to cite ``check.py static`` directly.
-``observation``
-    Machine-usable result from something that cannot be archived, e.g. reading
-    a clipboard by hand.
-``declared``
-    A claim only.  It is recorded for the report but never counts as evidence,
-    so it is refused for blocking items.
+    L0  contract          static, no browser
+    L1  static_build      static, no browser
+    L2  core_task         browser
+    L3  negative_path     browser
+    L4  visual_desktop / visual_mobile   browser, per viewport
+    L5  reopen / risk     browser
 
-Only ``artifact``, ``command`` and ``check`` may carry a blocking item; anything else has
-to be reported as ``not_run`` instead of ``passed``.
-
-Every matrix needs a non-empty ``profile_reason``, a browser capability
-declaration and an ``axis`` on each item. Full verification always represents
-static/build, core-task, desktop visual, mobile visual and reopening axes. The
-browser-dependent axes are blocking only when a real browser is available;
-static/build and the affected core task remain blocking in every environment.
+Rules encoded here:
+  * L0/L1 failure does not start the browser; browser axes must be ``not_run``.
+  * A visual failure only re-verifies the affected page/state/viewport (VA),
+    not every viewport; failed VAs are carried in the report.
+  * A contract SHA-256 change invalidates every axis; a source SHA-256 change
+    invalidates L1-L5 (the contract lives under ``.site`` and is hashed
+    separately, so L0 stays valid when only source changes).
+  * guided may honestly report ``limited``; strict cannot be ``limited`` and a
+    strict ``verified`` requires independent verification.
+  * When an axis dependency is ambiguous, the scope escalates to guided-core
+    (contract + static_build + core_task) rather than silently shrinking.
+  * --changed-from REF accepts two kinds of input with no ambiguity: a path to
+    a prior check-report.json or a git commit reference (e.g. HEAD~1).
 """
+from __future__ import annotations
+
 import argparse
 import hashlib
-from html.parser import HTMLParser
+import io
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
-import sys
-import tempfile
+import tarfile
 from datetime import datetime, timezone
-from urllib.parse import unquote, urlsplit
+from pathlib import Path
 
-SKIP = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.next', '.cache'}
-CHECK_STATUSES = ('passed', 'failed', 'not_run', 'not_applicable')
-CHECK_ARTIFACT_DIR = 'checks'
-CHECK_PROFILES = ('smoke', 'targeted', 'full')
-FULL_REQUIRED_AXES = ('static_build', 'core_task', 'visual_desktop', 'visual_mobile', 'reopen')
-ALWAYS_BLOCKING_AXES = ('static_build', 'core_task')
-BROWSER_AXES = ('visual_desktop', 'visual_mobile', 'reopen')
-EVIDENCE_KINDS = ('artifact', 'command', 'check', 'observation', 'declared')
-DEFAULT_EVIDENCE_KIND = 'declared'
-VERIFIABLE_EVIDENCE_KINDS = ('artifact', 'command', 'check')
-PATH_KEYS = ('paths', 'artifacts', 'files', 'screenshots')
-EMOJI_PATTERN = re.compile(r'[\U0001F000-\U0001FAFF\u2600-\u27BF]')
-EMOJI_SINK_PATTERN = re.compile(
-    r'(?i)\b(?:alert|confirm|showToast|innerHTML|textContent|innerText|insertAdjacentHTML)\b[^;\n]*'
+CONTRACT_REL_PATH = '.site/design/surface-brief.md'
+STATE_REL_PATH = '.site/state.json'
+CONTRACT_BLOCK_RE = re.compile(r'```(?:site-contract|v3-contract)\n(.*?)\n```', re.DOTALL)
+ID_TOKEN_RE = re.compile(r'`([A-Z]{2}-\d{2})`')
+
+AXES = ('contract', 'static_build', 'core_task', 'negative_path',
+        'visual_desktop', 'visual_mobile', 'reopen', 'risk')
+STATIC_AXES = ('contract', 'static_build')
+BROWSER_AXES = ('core_task', 'negative_path', 'visual_desktop',
+                'visual_mobile', 'reopen', 'risk')
+# Non-negotiable guided floor; "依赖不明确时升级 guided-core".
+GUIDED_CORE = ('contract', 'static_build', 'core_task')
+VA_AXIS_VALUES = ('core_task', 'visual_desktop', 'visual_mobile', 'reopen')
+VERIFY_STATUSES = ('verified', 'limited', 'blocked', 'not_run')
+DELIVERABLE_STATUSES = ('verified', 'limited', 'blocked')
+
+LEVELS = (
+    {'level': 'L0', 'axes': ['contract'], 'browser': False, 'depends_on': []},
+    {'level': 'L1', 'axes': ['static_build'], 'browser': False, 'depends_on': ['L0']},
+    {'level': 'L2', 'axes': ['core_task'], 'browser': True, 'depends_on': ['L1']},
+    {'level': 'L3', 'axes': ['negative_path'], 'browser': True, 'depends_on': ['L2']},
+    {'level': 'L4', 'axes': ['visual_desktop', 'visual_mobile'], 'browser': True, 'depends_on': ['L2']},
+    {'level': 'L5', 'axes': ['reopen', 'risk'], 'browser': True, 'depends_on': ['L3', 'L4']},
 )
-UI_TAGS = {'a', 'button', 'nav', 'th'}
-UI_CLASS_TOKENS = {
-    'badge', 'btn', 'brand-logo', 'icon', 'metric-icon-box', 'nav-item', 'tab-item',
+# If an axis fails, its dependents must be re-verified.
+DEPENDENTS = {
+    'contract': ['static_build', 'core_task', 'negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk'],
+    'static_build': ['core_task', 'negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk'],
+    'core_task': ['negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk'],
+    'negative_path': ['reopen', 'risk'],
+    'visual_desktop': ['reopen', 'risk'],
+    'visual_mobile': ['reopen', 'risk'],
+    'reopen': [],
+    'risk': [],
 }
-UI_ROLES = {'button', 'img', 'tab'}
+# A source SHA-256 change invalidates everything built on the source; the
+# contract is a separate file under .site, so L0 stays valid when only source changes.
+SOURCE_INVALIDATES = ('static_build', 'core_task', 'negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk')
+
+SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store'}
 
 
-def now():
-    return datetime.now(timezone.utc).isoformat()
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
 
-def files(root):
-    for directory, dirs, names in os.walk(root, followlinks=False):
-        dirs[:] = sorted(
-            name for name in dirs
-            if name not in SKIP and not name.startswith('.') and not Path(directory, name).is_symlink()
-        )
-        for name in sorted(names):
-            path = Path(directory, name)
-            if name != '.DS_Store' and not path.is_symlink():
-                yield path
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def fingerprint(root):
-    digest = hashlib.sha256()
-    paths = list(files(root))
-    metadata = root / '.site'
-    if metadata.is_symlink():
-        raise ValueError('Project metadata must not be a symlink')
-    design = metadata / 'design'
-    if design.exists() and (design.is_symlink() or not design.is_dir()):
-        raise ValueError('Project design metadata must be a regular directory')
-    if design.is_dir():
-        paths.extend(path for path in files(design) if path.is_file())
-    for name in ('brief.md', 'implementation-plan.md', 'contract.md', 'work.md', 'preview.py'):
-        path = metadata / name
-        if path.is_file() and not path.is_symlink():
-            paths.append(path)
-    for path in sorted(set(paths)):
-        digest.update(path.relative_to(root).as_posix().encode())
-        digest.update(b'\0')
-        digest.update(path.read_bytes())
-        digest.update(b'\0')
-    return digest.hexdigest()
+def contract_path(root) -> Path:
+    for rel in (CONTRACT_REL_PATH, '.SITE/design/surface-brief.md', '.v3/design/surface-brief.md'):
+        candidate = Path(root) / rel
+        if candidate.is_file():
+            return candidate
+    return Path(root) / CONTRACT_REL_PATH
 
 
-def artifact_digest(data):
-    canonical = {
-        key: value for key, value in data.items()
-        if key not in ('check_id', 'artifact')
-    }
-    encoded = json.dumps(
-        canonical,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(',', ':'),
-        allow_nan=False,
-    ).encode('utf-8')
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def validate_artifact_identity(artifact, check_id, path):
-    if artifact.get('check_id') != check_id or path.stem != check_id:
-        raise ValueError(f'Damaged check artifact {check_id!r}: filename and internal check_id differ')
-    if artifact_digest(artifact) != check_id:
-        raise ValueError(f'Damaged check artifact {check_id!r}: content digest does not match check_id')
-    expected = f'.site/{CHECK_ARTIFACT_DIR}/{check_id}.json'
-    if artifact.get('artifact') != expected:
-        raise ValueError(f'Damaged check artifact {check_id!r}: artifact path does not match its filename')
-
-
-def write_artifact(root, data):
-    """Persist the evidence under .site/checks/ so site-builder can bind delivery to it.
-
-    Projects without .site metadata are left untouched: this tool never initializes
-    or rewrites a third-party project.
-    """
-    metadata = root / '.site'
-    if metadata.is_symlink() or not metadata.is_dir():
-        return None
-    folder = metadata / CHECK_ARTIFACT_DIR
-    if folder.is_symlink():
-        raise ValueError('Check artifact directory must not be a symlink')
-    folder.mkdir(exist_ok=True)
-    path = folder / f"{data['check_id']}.json"
-    with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=folder, delete=False) as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-        handle.write('\n')
-        temporary = handle.name
-    os.replace(temporary, path)
-    return path.relative_to(root).as_posix()
-
-
-def finalize(root, data):
-    data.pop('check_id', None)
-    data.pop('artifact', None)
-    data.pop('artifact_note', None)
-    metadata = root / '.site'
-    persists = metadata.is_dir() and not metadata.is_symlink()
-    if not persists:
-        data['artifact'] = None
-        data['artifact_note'] = 'No .site metadata; the evidence was reported but not persisted'
-    data['check_id'] = artifact_digest(data)
-    if persists:
-        data['artifact'] = f'.site/{CHECK_ARTIFACT_DIR}/{data["check_id"]}.json'
-        data['artifact'] = write_artifact(root, data)
+def _parse_contract_block(text: str) -> dict:
+    match = CONTRACT_BLOCK_RE.search(text)
+    if not match:
+        raise ValueError('contract block is missing')
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'contract block is not valid JSON: {exc}') from exc
+    if not isinstance(data, dict):
+        raise ValueError('contract block must be a JSON object')
     return data
 
 
-def artifact_rows(root, values):
-    """Resolve declared evidence paths inside the project and hash them."""
-    rows, problems = [], []
-    for raw in values:
-        if not isinstance(raw, str) or not raw.strip():
-            problems.append('artifact path must be a non-empty string')
-            continue
-        candidate = Path(raw.strip()).expanduser()
-        if not candidate.is_absolute():
-            candidate = root / candidate
-        resolved = candidate.resolve()
-        relative = os.path.relpath(resolved, root)
-        if relative.startswith('..'):
-            problems.append(f'artifact outside the project: {raw}')
-            continue
-        display = Path(relative).as_posix()
-        if candidate.is_symlink():
-            problems.append(f'artifact must not be a symlink: {display}')
-            continue
-        if not resolved.is_file():
-            problems.append(f'artifact does not exist: {display}')
-            continue
-        try:
-            data = resolved.read_bytes()
-        except OSError as error:
-            problems.append(f'artifact cannot be read: {display} ({error})')
-            continue
-        rows.append({'path': display, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)})
-    return rows, problems
+def _strip_contract_block(text: str) -> str:
+    return CONTRACT_BLOCK_RE.sub('', text)
 
 
-def load_check_artifact(root, check_id):
-    if not isinstance(check_id, str) or not check_id.strip():
-        raise ValueError('command evidence needs a non-empty check_id')
-    check_id = check_id.strip()
-    if any(part in check_id for part in ('/', '\\', '..')):
-        raise ValueError(f'check_id must be a plain identifier: {check_id!r}')
-    path = root / '.site' / CHECK_ARTIFACT_DIR / f'{check_id}.json'
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f'No stored check artifact for check_id {check_id!r}')
+def _contract_lists(data: dict) -> dict:
+    lists = {}
+    for key in ('acceptance', 'intentional_exceptions'):
+        value = data.get(key, [])
+        if not isinstance(value, list):
+            raise ValueError(f'contract field {key} must be a list')
+        lists[key] = [str(item) for item in value]
+    return lists
+
+
+def _split_row(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip('|').split('|')]
+
+
+def _table(body: str, *header_markers: str) -> tuple[list[str], list[list[str]]]:
+    """First markdown table whose header contains every marker; (header, rows)."""
+    lines = body.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.strip().startswith('|') and index + 1 < len(lines):
+            separator = lines[index + 1].strip()
+            if separator.startswith('|') and set(separator) <= set('|:- '):
+                header = _split_row(line)
+                if all(any(marker in cell for cell in header) for marker in header_markers):
+                    index += 2
+                    rows = []
+                    while index < len(lines) and lines[index].strip().startswith('|'):
+                        rows.append(_split_row(lines[index]))
+                        index += 1
+                    return header, rows
+        index += 1
+    return [], []
+
+
+def _column(header: list[str], *markers: str):
+    for position, cell in enumerate(header):
+        if any(marker in cell for marker in markers):
+            return position
+    return None
+
+
+def _acceptance_vas(body: str, exempt: set[str]) -> list[dict]:
+    """Parse the 视觉验收标准 table into per-VA check targets.
+
+    Each VA binds a page/state/viewport cell, an axis and a blocking flag, so a
+    visual failure can be re-verified for just the affected target instead of
+    re-running every viewport.
+    """
+    header, rows = _table(body, '可观察标准', '检查轴')
+    id_col = _column(header, 'ID')
+    target_col = _column(header, '页面', '状态', '视口')
+    axis_col = _column(header, '检查轴')
+    blocking_col = _column(header, '阻断')
+    if id_col is None or target_col is None or axis_col is None:
+        return []
+    vas = []
+    for row in rows:
+        if id_col >= len(row):
+            continue
+        ids = ID_TOKEN_RE.findall(row[id_col])
+        if not ids:
+            continue
+        axis = row[axis_col].strip().strip('`').strip() if axis_col < len(row) else ''
+        if axis not in VA_AXIS_VALUES:
+            continue
+        target = row[target_col].strip() if target_col < len(row) else ''
+        blocking = False
+        if blocking_col is not None and blocking_col < len(row):
+            blocking = row[blocking_col].strip().strip('`').strip().lower() == 'yes'
+        for vid in ids:
+            vas.append({'id': vid, 'target': target, 'axis': axis,
+                        'blocking': blocking, 'exempt': vid in exempt})
+    return vas
+
+
+def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
+    """Return (contract_sha256, parsed_block, acceptance_vas) for a contract file."""
+    if not path.is_file():
+        raise ValueError(f'contract not found: {path}')
+    text = path.read_text(encoding='utf-8')
+    sha = _sha256_bytes(text.encode('utf-8'))
+    data = _parse_contract_block(text)
+    lists = _contract_lists(data)
+    body = _strip_contract_block(text)
+    exempt = set(lists['intentional_exceptions'])
+    vas = _acceptance_vas(body, exempt)
+    return sha, data, vas
+
+
+def _iter_source_files(root: Path):
+    for path in sorted(root.rglob('*')):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in SOURCE_IGNORE for part in rel.parts):
+            continue
+        yield path
+
+
+def _manifest_sha256(entries) -> str:
+    """Deterministic SHA-256 over (rel_path, content) pairs, sorted by path.
+
+    Shared by the working-tree and git-tree source scans so the two
+    fingerprints are directly comparable: path (POSIX) + NUL + sha256(content)
+    + LF, in sorted path order.
+    """
+    hasher = hashlib.sha256()
+    found = False
+    for rel, content in sorted(entries, key=lambda e: e[0]):
+        found = True
+        hasher.update(rel.encode('utf-8'))
+        hasher.update(b'\0')
+        hasher.update(hashlib.sha256(content).digest())
+        hasher.update(b'\n')
+    return hasher.hexdigest() if found else _sha256_bytes(b'')
+
+
+def source_sha256(root) -> str:
+    """SHA-256 over a deterministic manifest of project source files.
+
+    The contract lives under .site and is excluded, so contract and source
+    fingerprints move independently.
+    """
+    root = Path(root)
+    entries = []
+    for path in _iter_source_files(root):
+        rel = path.relative_to(root).as_posix()
+        entries.append((rel, path.read_bytes()))
+    return _manifest_sha256(entries)
+
+
+def read_mode(root) -> str:
+    """Project mode from .site/state.json, or 'guided' when there is no state."""
+    path = None
+    for candidate in (Path(root) / STATE_REL_PATH, Path(root) / '.SITE/state.json', Path(root) / '.v3/state.json'):
+        if candidate.is_file():
+            path = candidate
+            break
+    if not path or not path.is_file():
+        return 'guided'
     try:
-        artifact = json.loads(path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError as error:
-        raise ValueError(f'Damaged check artifact {check_id!r}: {error}') from error
-    if not isinstance(artifact, dict):
-        raise ValueError(f'Damaged check artifact {check_id!r}')
-    validate_artifact_identity(artifact, check_id, path)
-    return artifact
+        state = json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError:
+        return 'guided'
+    mode = state.get('mode')
+    return mode if mode in ('guided', 'strict') else 'guided'
 
 
-def validate_evidence(root, item, identifier, current, cache):
-    """Return (evidence, artifacts, problem) for one matrix item."""
-    raw = item.get('evidence')
-    if isinstance(raw, dict):
-        kind = str(raw.get('kind') or DEFAULT_EVIDENCE_KIND).strip().lower()
-        summary = str(raw.get('summary') or '').strip()
-        paths = [value for key in PATH_KEYS for value in (raw.get(key) or [])]
-        commands = list(raw.get('commands') or [])
-        checks = list(raw.get('checks') or [])
-    elif isinstance(raw, str) and raw.strip():
-        kind, summary, paths, commands, checks = DEFAULT_EVIDENCE_KIND, raw.strip(), [], [], []
-    else:
-        raise ValueError(
-            f"Matrix item {identifier!r} needs evidence; use an object with kind "
-            f"{EVIDENCE_KINDS} plus summary/paths/commands/checks, or a plain summary string"
-        )
-    if kind not in EVIDENCE_KINDS:
-        raise ValueError(f'Matrix item {identifier!r} evidence kind must be one of {EVIDENCE_KINDS}, got {kind!r}')
-    if item['blocking'] and kind not in VERIFIABLE_EVIDENCE_KINDS:
-        raise ValueError(
-            f'Matrix item {identifier!r} is blocking but its evidence kind is {kind!r}; '
-            'blocking items need artifact, command or check evidence, otherwise report not_run'
-        )
-    entries, problems = [], []
-    for value in paths:
-        key = str(value)
-        if key not in cache:
-            cache[key] = artifact_rows(root, [value])
-        rows, issue = cache[key]
-        entries.extend(rows)
-        problems.extend(issue)
-    for check_id in commands:
-        artifact = load_check_artifact(root, check_id)
-        if artifact.get('kind') != 'command':
-            problems.append(f'command evidence {check_id!r} is a {artifact.get("kind")!r} artifact, not a command result')
-            continue
-        if artifact.get('exit_code') != 0:
-            problems.append(f'command evidence {check_id!r} exited {artifact.get("exit_code")!r}')
-            continue
-        if artifact.get('fingerprint') != current or artifact.get('source_changed'):
-            problems.append(f'command evidence {check_id!r} was recorded against different source')
-            continue
-        entries.append({
-            'command_check_id': check_id,
-            'command': artifact.get('command'),
-            'exit_code': artifact.get('exit_code'),
-        })
-    for check_id in checks:
-        artifact = load_check_artifact(root, check_id)
-        check_kind = artifact.get('kind')
-        if check_kind not in ('static', 'command') or artifact.get('status') != 'passed':
-            problems.append(f'check evidence {check_id!r} is not a passing static or command result')
-            continue
-        if check_kind == 'command' and artifact.get('exit_code') != 0:
-            problems.append(f'check evidence {check_id!r} did not exit 0')
-            continue
-        if artifact.get('fingerprint') != current or artifact.get('source_changed'):
-            problems.append(f'check evidence {check_id!r} was recorded against different source')
-            continue
-        entries.append({'check_id': check_id, 'check_kind': check_kind})
-    if kind == 'artifact' and not any('sha256' in row for row in entries):
-        problems.append('artifact evidence names no readable file')
-    if kind == 'command' and not any('command_check_id' in row for row in entries):
-        problems.append('command evidence names no passing command result')
-    if kind == 'check' and not any('check_id' in row for row in entries):
-        problems.append('check evidence names no passing static or command result')
-    evidence = {
-        'kind': kind,
-        'summary': summary,
-        'items': entries,
-        'verified': kind in VERIFIABLE_EVIDENCE_KINDS and not problems,
-    }
-    return evidence, entries, problems
+def required_axes(mode: str, vas: list[dict]) -> list[str]:
+    """Axes a project must verify. Never drops below guided-core; when a scope
+    boundary is ambiguous the floor (guided-core) wins rather than silently
+    shrinking coverage."""
+    axes = set(GUIDED_CORE)
+    axes.add('negative_path')  # guided+: one most likely failure path
+    for va in vas:
+        if va['axis'] in AXES:
+            axes.add(va['axis'])
+    if mode == 'strict':
+        axes.add('reopen')
+        axes.add('risk')
+    return [axis for axis in AXES if axis in axes]
 
 
-def matrix_check(root, payload, label=None, save_evidence=False, profile=None):
-    payload_profile = payload.get('profile') if isinstance(payload, dict) else None
-    profile = profile or payload_profile or 'full'
-    if profile not in CHECK_PROFILES:
-        raise ValueError(f'Check profile must be one of {CHECK_PROFILES}, got {profile!r}')
-    profile_reason = ''
-    if isinstance(payload, dict):
-        profile_reason = str(payload.get('profile_reason') or '').strip()
-    if not profile_reason:
-        raise ValueError('Check matrix needs a non-empty profile_reason explaining why this scope was selected')
-    browser = payload.get('browser') if isinstance(payload, dict) else None
-    if not isinstance(browser, dict) or not isinstance(browser.get('available'), bool):
-        raise ValueError('Check matrix needs browser.available as a boolean capability declaration')
-    browser = {
-        'available': browser['available'],
-        'provider': str(browser.get('provider') or '').strip(),
-        'limitation': str(browser.get('limitation') or '').strip(),
-    }
-    if browser['available'] and not browser['provider']:
-        raise ValueError('Available browser capability needs a non-empty provider')
-    if not browser['available'] and not browser['limitation']:
-        raise ValueError('Unavailable browser capability needs a non-empty limitation')
-    items = payload.get('items') if isinstance(payload, dict) else payload
-    if not isinstance(items, list) or not items:
-        raise ValueError('Check matrix needs a non-empty list of items')
-    before = fingerprint(root)
-    seen = set()
-    normalized = []
-    artifacts: dict[str, dict] = {}
-    failures = []
-    evidence_dir = root / '.site' / CHECK_ARTIFACT_DIR / 'evidence'
-    for index, item in enumerate(items, 1):
-        if not isinstance(item, dict):
-            raise ValueError(f'Matrix item {index} must be an object')
-        identifier = item.get('id')
-        if not isinstance(identifier, str) or not identifier.strip():
-            raise ValueError(f'Matrix item {index} needs a non-empty string "id"')
-        identifier = identifier.strip()
-        if identifier in seen:
-            raise ValueError(f'Duplicate matrix item id: {identifier!r}')
-        seen.add(identifier)
-        status = item.get('status')
-        if status not in CHECK_STATUSES:
-            raise ValueError(f'Matrix item {identifier!r} status must be one of {CHECK_STATUSES}')
-        if not isinstance(item.get('blocking'), bool):
-            raise ValueError(f'Matrix item {identifier!r} needs a boolean "blocking"')
-        axis = item.get('axis')
-        if not isinstance(axis, str) or not axis.strip():
-            raise ValueError(f'Matrix item {identifier!r} needs a non-empty string "axis"')
-        axis = axis.strip()
-        try:
-            evidence, entries, problems = validate_evidence(root, item, identifier, before, {})
-        except ValueError as error:
-            failures.append({'id': identifier, 'reason': f'unverifiable evidence: {error}'})
-            evidence, entries, problems = {'kind': 'declared', 'summary': '', 'items': [], 'verified': False}, [], []
-        if evidence['kind'] in VERIFIABLE_EVIDENCE_KINDS and status == 'passed' and problems:
-            failures.append({'id': identifier, 'reason': '; '.join(problems)})
-        if item['blocking'] and status == 'passed' and not evidence['verified']:
-            failures.append({
-                'id': identifier,
-                'reason': 'blocking item is passed without verified evidence',
-            })
-        for row in entries:
-            if 'sha256' in row:
-                artifacts[row['path']] = row
-        normalized.append({
-            'id': identifier,
-            'axis': axis,
-            'title': str(item.get('title') or identifier),
-            'status': status,
-            'blocking': item['blocking'],
-            'evidence': evidence,
-        })
-    represented_axes = {item['axis'] for item in normalized}
-    required_axes = FULL_REQUIRED_AXES if profile == 'full' else ('core_task',)
-    missing_axes = [axis for axis in required_axes if axis not in represented_axes]
-    if missing_axes:
-        raise ValueError(
-            f'Profile {profile!r} is missing required axes: {", ".join(missing_axes)}'
+def _git(root: Path, *args, stdin=None):
+    """Run git in ``root`` without ever prompting. Returns (rc, stdout, stderr).
+
+    Treats a missing git binary, timeouts, and other OS errors as "no git
+    available" so callers can fall back to a conservative result instead of
+    raising. Deterministic; never starts a browser.
+    """
+    env = {'GIT_TERMINAL_PROMPT': '0'}
+    try:
+        proc = subprocess.run(
+            ['git', '-C', str(root), *args],
+            capture_output=True, env=env, input=stdin, timeout=30,
         )
-    blocking_axes = {item['axis'] for item in normalized if item['blocking']}
-    required_blocking_axes = (
-        FULL_REQUIRED_AXES if profile == 'full' and browser['available']
-        else ALWAYS_BLOCKING_AXES if profile == 'full'
-        else ('core_task',)
-    )
-    missing_blocking_axes = [axis for axis in required_blocking_axes if axis not in blocking_axes]
-    if missing_blocking_axes:
-        raise ValueError(
-            f'Profile {profile!r} is missing required blocking axes: {", ".join(missing_blocking_axes)}'
-        )
-    if profile == 'full' and not browser['available']:
-        for axis in BROWSER_AXES:
-            axis_items = [item for item in normalized if item['axis'] == axis]
-            if not any(item['status'] == 'not_run' for item in axis_items):
-                raise ValueError(
-                    f'Unavailable browser capability requires a not_run item for axis {axis!r}'
-                )
-    if not browser['available']:
-        blocking_browser_items = [
-            item['id'] for item in normalized
-            if item['axis'] in BROWSER_AXES and item['blocking']
-        ]
-        if blocking_browser_items:
-            raise ValueError(
-                'When browser.available is false, browser-dependent axes must be non-blocking: '
-                + ', '.join(blocking_browser_items)
-            )
-    if save_evidence:
-        for row in artifacts.values():
-            source = root / row['path']
-            if '.site' in Path(row['path']).parts:
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return 128, b'', b''
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def _git_repo_paths(root: Path):
+    """Return (toplevel, prefix) if ``root`` is inside a git repo, else None.
+
+    ``prefix`` is the path of ``root`` within the repo (with a trailing slash,
+    possibly empty when ``root`` is the repo toplevel).
+    """
+    rc, out, _ = _git(root, 'rev-parse', '--show-toplevel', '--show-prefix')
+    if rc != 0:
+        return None
+    lines = out.decode('utf-8', 'replace').splitlines()
+    if len(lines) < 2:
+        return None
+    return lines[0], lines[1]
+
+
+def _git_source_sha256(root: Path, ref: str, prefix: str):
+    """Source manifest at ``ref``, mirroring :func:`source_sha256`.
+
+    Materializes the tracked tree under the project subtree at ``ref`` via a
+    single in-memory ``git archive`` (no disk extraction, no browser), applies
+    the same ignore rules, and reuses :func:`_manifest_sha256` so the result is
+    directly comparable to the working-tree fingerprint. Returns ``None`` when
+    no source files exist at ``ref``.
+    """
+    pathspec = ['--', prefix] if prefix else []
+    rc, out, _ = _git(root, 'archive', '--format=tar', ref, *pathspec)
+    if rc != 0 or not out:
+        return None  # unreadable tree at ref → caller treats ref as unresolvable
+    entries = []
+    try:
+        tar = tarfile.open(fileobj=io.BytesIO(out), mode='r:')
+    except tarfile.TarError:
+        return None
+    with tar:
+        for member in tar.getmembers():
+            if not member.isfile():
                 continue
-            destination = evidence_dir / Path(row['path']).name
-            counter = 2
-            while destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() != row['sha256']:
-                destination = evidence_dir / f'{Path(row["path"]).stem}-{counter}{Path(row["path"]).suffix}'
-                counter += 1
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(source.read_bytes())
-            row['saved_as'] = destination.relative_to(root).as_posix()
-    after = fingerprint(root)
-    blocking_not_passed = [
-        item['id'] for item in normalized if item['blocking'] and item['status'] != 'passed'
-    ]
-    counts = {status: sum(1 for item in normalized if item['status'] == status) for status in CHECK_STATUSES}
-    return {
-        'schema_version': 1,
-        'kind': 'matrix',
-        'created_at': now(),
-        'label': label or '',
-        'profile': profile,
-        'profile_reason': profile_reason,
-        'browser': browser,
-        'input_fingerprint': before,
-        'fingerprint': after,
-        'source_changed': before != after,
-        'items': normalized,
-        'artifacts': artifacts,
-        'evidence_failures': failures,
-        'counts': counts,
-        'blocking_not_passed': blocking_not_passed,
-        'status': 'failed' if (blocking_not_passed or failures or before != after) else 'passed',
-        'limits': [
-            'The matrix verifies that declared evidence exists and is unchanged; it does not execute browser, visual or reopening checks by itself',
-            'Only artifact, command and check evidence can carry a blocking item; declared and observation evidence is reported but never proves a pass',
-            'Content-addressed artifacts expose accidental edits but are not signed or hostile-writer-proof',
-            'An unavailable browser may leave visual and reopening axes non-blocking and not_run; affected core tasks still require blocking evidence',
-        ],
-        'follow_up': ['Fix blocking failures in site-builder', 'Re-run the whole matrix against a newly frozen fingerprint'],
-    }
+            name = member.name
+            if prefix and name.startswith(prefix):
+                name = name[len(prefix):]
+            name = name.lstrip('/')
+            if not name:
+                continue
+            if any(part in SOURCE_IGNORE for part in Path(name).parts):
+                continue
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                continue
+            entries.append((name, extracted.read()))
+    # Mirror source_sha256(): an empty tree yields the empty manifest hash so
+    # both sides stay directly comparable.
+    return _manifest_sha256(entries)
 
 
-def css_urls(text):
-    pattern = r'''url\(\s*(["']?)(.*?)\1\s*\)|@import\s+["']([^"']+)["']'''
-    for match in re.finditer(pattern, text, re.I):
-        value = match.group(2) if match.group(2) is not None else match.group(3)
-        yield value, text.count('\n', 0, match.start())
+def _resolve_git_ref(root: Path, ref: str, contract_rel_to_root):
+    """Resolve ``ref`` as a git revision and re-fingerprint at that revision.
+
+    Returns a result dict (``resolved``, ``source='git'``, ``commit``,
+    ``contract_sha256``, ``source_sha256``) or ``None`` when ``root`` is not in
+    a git repo or ``ref`` does not resolve to a commit. The contract is read
+    via ``git show``; when it is absent from the tree at ``ref`` (e.g. the
+    contract was committed after that revision) ``contract_sha256`` is ``None``,
+    which the caller treats conservatively as a contract change.
+    """
+    repo = _git_repo_paths(root)
+    if repo is None:
+        return None
+    _toplevel, prefix = repo
+    rc, out, _ = _git(root, 'rev-parse', '--verify', f'{ref}^{{commit}}')
+    if rc != 0 or not out.strip():
+        return None
+    commit = out.decode('utf-8', 'replace').strip()
+    prior_contract = None
+    if contract_rel_to_root is not None:
+        rc, out, _ = _git(root, 'show', f'{ref}:{prefix + contract_rel_to_root}')
+        if rc == 0:
+            prior_contract = _sha256_bytes(out)
+        # rc != 0 means the contract is absent from the tree at ref (e.g. it
+        # was committed after that revision); the caller conservatively treats
+        # an absent contract as changed rather than silently dropping L0.
+    prior_source = _git_source_sha256(root, ref, prefix)
+    if prior_source is None:
+        # The source tree at ref was unreadable; the ref is not safely
+        # resolvable, so fall back to the conservative invalid-ref path.
+        return None
+    return {'resolved': True, 'source': 'git', 'commit': commit,
+            'contract_sha256': prior_contract, 'source_sha256': prior_source,
+            'error': None}
 
 
-class Page(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.ids = {}
-        self.idrefs = []
-        self.refs = []
-        self.in_style = False
-        self.tag_stack = []
-        self.emoji_hits = []
+def _resolve_prior(ref: str, root: Path, contract_rel_to_root):
+    """Resolve a ``--changed-from`` REF into prior fingerprints.
 
-    def handle_startendtag(self, tag, attrs):
-        self.handle_starttag(tag, attrs)
-        if self.tag_stack and self.tag_stack[-1][0] == tag:
-            self.tag_stack.pop()
+    REF is interpreted without ambiguity:
 
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        line = self.getpos()[0]
-        class_tokens = set((attrs.get('class') or '').split())
-        is_ui = (
-            tag in UI_TAGS
-            or bool(class_tokens & UI_CLASS_TOKENS)
-            or attrs.get('role') in UI_ROLES
-            or 'data-lucide' in attrs
-        )
-        self.tag_stack.append((tag, is_ui, line))
-        if attrs.get('id'):
-            self.ids.setdefault(attrs['id'], []).append(line)
-        for key in ('for', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-errormessage', 'list', 'headers'):
-            for value in (attrs.get(key) or '').split():
-                self.idrefs.append((value, line))
-        keys = {'src', 'poster', 'href', 'data'} if tag == 'object' else {'src', 'poster', 'href'}
-        for key in keys:
-            if key in attrs:
-                self.refs.append((attrs[key] or '', tag not in ('a', 'area'), line))
-        srcset = attrs.get('srcset') or ''
-        if srcset and not srcset.strip().startswith('data:'):
-            for entry in srcset.split(','):
-                if entry.strip():
-                    self.refs.append((entry.strip().split()[0], True, line))
-        for value, offset in css_urls(attrs.get('style') or ''):
-            self.refs.append((value, True, line + offset))
-        self.in_style = tag == 'style' or self.in_style
+      * a path to a readable JSON plan/report carrying ``contract_sha256``
+        and/or ``source_sha256`` — those fingerprints are reused as-is; or
+      * a git revision (branch / tag / commit) resolvable in the project's
+        repository — the contract and source tree are re-fingerprinted at that
+        revision so they are directly comparable to the current plan.
 
-    def handle_endtag(self, tag):
-        if tag == 'style':
-            self.in_style = False
-        for index in range(len(self.tag_stack) - 1, -1, -1):
-            if self.tag_stack[index][0] == tag:
-                del self.tag_stack[index:]
-                break
-
-    def handle_data(self, data):
-        if self.in_style:
-            for value, offset in css_urls(data):
-                self.refs.append((value, True, self.getpos()[0] + offset))
-        if any(is_ui for _, is_ui, _ in self.tag_stack):
-            match = EMOJI_PATTERN.search(data)
-            if match:
-                self.emoji_hits.append((self.getpos()[0], match.group(0)))
-
-
-def static_check(root, offline=False, web_root=None):
-    if web_root:
-        requested_web = root / web_root
-        if requested_web.is_symlink():
-            raise ValueError('Web root must be a regular directory inside the project')
-        web = requested_web.resolve()
-    else:
-        web = root / 'web' if (root / 'web').is_dir() else root
-    if not web.is_dir() or not web.is_relative_to(root) or web.is_symlink():
-        raise ValueError('Web root must be a regular directory inside the project')
-    issues = []
-    pages = {}
-
-    def issue(code, path, line, message, level='error'):
-        row = {
-            'code': code,
-            'file': path.relative_to(root).as_posix(),
-            'line': line,
-            'message': message,
-            'level': level,
-        }
-        if row not in issues:
-            issues.append(row)
-
-    for path in files(web):
-        if path.suffix.lower() not in ('.html', '.htm', '.css'):
-            continue
+    Returns a dict with ``resolved`` (False when REF is neither), the prior
+    fingerprints, and an ``error`` string explaining why when unresolvable.
+    """
+    path = Path(ref)
+    if path.is_file():
         try:
-            content = path.read_text(encoding='utf-8')
-        except UnicodeError:
-            issue('invalid-encoding', path, 1, 'Expected UTF-8')
-            continue
-        if path.suffix.lower() in ('.html', '.htm'):
-            page = Page()
-            page.feed(content)
-            pages[path.resolve()] = page
-            for line, glyph in page.emoji_hits:
-                issue(
-                    'emoji-in-ui',
-                    path,
-                    line,
-                    f'UI content contains {glyph}; use a Lucide icon or a documented product-specific exception',
-                )
-            for match in EMOJI_SINK_PATTERN.finditer(content):
-                glyph = EMOJI_PATTERN.search(match.group(0))
-                if glyph:
-                    issue(
-                        'emoji-in-ui-sink',
-                        path,
-                        content.count('\n', 0, match.start()) + 1,
-                        f'UI text sink contains {glyph.group(0)}; use a Lucide icon or a documented product-specific exception',
-                    )
-            for value, lines in page.ids.items():
-                if len(lines) > 1:
-                    issue('duplicate-id', path, lines[1], value)
-            for value, line in page.idrefs:
-                if value not in page.ids:
-                    issue('missing-id-reference', path, line, value)
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict) and (
+                'contract_sha256' in data or 'source_sha256' in data):
+            return {'resolved': True, 'source': 'json', 'commit': None,
+                    'contract_sha256': data.get('contract_sha256'),
+                    'source_sha256': data.get('source_sha256'), 'error': None}
+        # A readable file that is not a usable report/plan: fall through to git
+        # so a stray file never silently zeroes the invalidation scope.
+    git_result = _resolve_git_ref(root, ref, contract_rel_to_root)
+    if git_result is not None:
+        return git_result
+    return {'resolved': False, 'source': None, 'commit': None,
+            'contract_sha256': None, 'source_sha256': None,
+            'error': f'ref is neither a readable JSON report/plan nor a '
+                     f'resolvable git revision: {ref}'}
+
+
+def plan(root, contract_rel: str | None = None, changed_from: str | None = None) -> dict:
+    root = Path(root).resolve()
+    if contract_rel is None:
+        contract_file = contract_path(root)
+        try:
+            contract_rel = contract_file.relative_to(root).as_posix()
+        except ValueError:
+            contract_rel = str(contract_file)
+    else:
+        contract_file = Path(contract_rel) if Path(contract_rel).is_absolute() else root / contract_rel
+    sha, _data, vas = read_contract_file(contract_file)
+    mode = read_mode(root)
+    src_sha = source_sha256(root)
+    required = required_axes(mode, vas)
+
+    changed = None
+    if changed_from:
+        try:
+            contract_rel_to_root = contract_file.relative_to(root).as_posix()
+        except ValueError:
+            contract_rel_to_root = None  # contract outside root; git can't see it
+        prior = _resolve_prior(changed_from, root, contract_rel_to_root)
+        if not prior['resolved']:
+            # Invalid REF: stay machine-readable AND conservative. The protocol
+            # never silently shrinks coverage when a dependency is ambiguous, so
+            # upgrade to the guided-core floor rather than claiming nothing
+            # changed.
+            changed = {
+                'ref': changed_from,
+                'available': False,
+                'error': prior.get('error'),
+                'invalidated_axes': list(GUIDED_CORE),
+            }
         else:
-            page = Page()
-            page.refs = [(value, True, line + 1) for value, line in css_urls(content)]
+            prior_contract = prior['contract_sha256']
+            prior_source = prior['source_sha256']
+            if prior['source'] == 'git':
+                # Git re-fingerprinted the tree at ref. A contract/source that
+                # is absent at ref but present now was added since ref, so treat
+                # absence conservatively as a change rather than silently
+                # dropping the affected levels.
+                contract_changed = prior_contract is None or prior_contract != sha
+                source_changed = prior_source is None or prior_source != src_sha
+            else:  # JSON report/plan: only compare fields it actually recorded
+                contract_changed = prior_contract is not None and prior_contract != sha
+                source_changed = prior_source is not None and prior_source != src_sha
+            if contract_changed:
+                invalidated = list(AXES)
+            elif source_changed:
+                invalidated = list(SOURCE_INVALIDATES)
+            else:
+                invalidated = []
+            changed = {
+                'ref': changed_from,
+                'available': True,
+                'source': prior['source'],
+                'commit': prior.get('commit'),
+                'contract_changed': contract_changed,
+                'source_changed': source_changed,
+                'invalidated_axes': invalidated,
+            }
 
-        for value, asset, line in page.refs:
-            value = value.strip()
-            if not value or value == '#':
-                issue('empty-reference', path, line, 'Use a real destination or a button')
-                continue
-            parsed = urlsplit(value)
-            if parsed.scheme in ('http', 'https') or value.startswith('//'):
-                if offline and asset:
-                    issue('external-offline-dependency', path, line, value)
-                continue
-            if parsed.scheme in ('data', 'blob', 'mailto', 'tel'):
-                continue
-            if parsed.scheme:
-                issue('unsupported-url-scheme', path, line, parsed.scheme, 'warning')
-                continue
-            local = unquote(parsed.path)
-            target = (web / local.lstrip('/') if local.startswith('/') else path.parent / local) if local else path
-            resolved = target.resolve()
-            if not resolved.is_relative_to(web):
-                issue('outside-web-root', path, line, value)
-            elif target.is_symlink():
-                issue('symlink-resource', path, line, value)
-            elif target.is_dir() and (target / 'index.html').is_file():
-                pass
-            elif not target.is_file():
-                if not asset and local and not Path(local).suffix:
-                    issue('unverified-client-route', path, line, value, 'warning')
-                else:
-                    issue('missing-local-target', path, line, value)
-
-    for path, page in pages.items():
-        for value, asset, line in page.refs:
-            parsed = urlsplit(value)
-            if asset or parsed.scheme or not parsed.fragment or value.startswith('//'):
-                continue
-            local = unquote(parsed.path)
-            target = (web / local.lstrip('/') if local.startswith('/') else path.parent / local) if local else path
-            if target.is_dir():
-                target = target / 'index.html'
-            other = pages.get(target.resolve())
-            if other is not None and unquote(parsed.fragment) not in other.ids:
-                issue('missing-fragment', path, line, value)
-
-    if not pages:
-        issue('no-html-files', web, 1, 'Run project-native build and browser checks', 'warning')
-    errors = sum(item['level'] == 'error' for item in issues)
     return {
-        'schema_version': 1,
-        'kind': 'static',
-        'created_at': now(),
-        'fingerprint': fingerprint(root),
-        'status': 'failed' if errors else ('not_applicable' if not pages else 'passed'),
-        'issues': issues,
-        'limits': ['No JavaScript execution, runtime interaction, full CSS parsing, security audit or visual verification'],
-        'follow_up': ['Run project-native checks', 'Exercise required user tasks', 'Request site-design visual review', 'Verify reopening and data'],
+        'project_root': str(root),
+        'mode': mode,
+        'contract_path': contract_rel,
+        'contract_sha256': sha,
+        'source_sha256': src_sha,
+        'levels': [dict(level) for level in LEVELS],
+        'required_axes': required,
+        'acceptance': vas,
+        'rules': {
+            'browser_blocked_below': 'L1',
+            'static_failure_blocks_browser': True,
+            'visual_reverify_scope': 'affected_va_only',
+            'contract_change_invalidates': list(AXES),
+            'source_change_invalidates': list(SOURCE_INVALIDATES),
+            'guided_allows_limited': True,
+            'strict_requires_independent_verified': True,
+        },
+        'changed_from': changed,
+        'generated_at': now(),
     }
 
 
-def run_check(root, command, timeout):
-    if command and command[0] == '--':
-        command = command[1:]
-    if not command:
-        raise ValueError('Provide an actual check command after --')
-    before = fingerprint(root)
+def _axis_status(axes: dict, axis: str) -> str | None:
+    result = axes.get(axis)
+    if not isinstance(result, dict):
+        return None
+    status = result.get('status')
+    return status if status in VERIFY_STATUSES else None
+
+
+def validate_report(root, report_path) -> dict:
+    root = Path(root).resolve()
     try:
-        result = subprocess.run(
-            command,
-            cwd=root,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-            errors='replace',
-        )
-        code, stdout, stderr = result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        code, stdout, stderr = None, '', 'Check timed out; inspect child processes before retrying'
-    after = fingerprint(root)
+        report = json.loads(Path(report_path).read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {'project_root': str(root), 'valid': False,
+                'errors': [f'report unreadable: {exc}']}
+    if not isinstance(report, dict):
+        return {'project_root': str(root), 'valid': False,
+                'errors': ['report must be a JSON object']}
+
+    errors: list[str] = []
+    if Path(str(report.get('project_root', ''))).resolve() != root:
+        errors.append('project_root does not match')
+    mode = report.get('mode')
+    if mode not in ('guided', 'strict'):
+        errors.append('mode must be guided or strict')
+    overall = report.get('overall')
+    if overall not in DELIVERABLE_STATUSES:
+        errors.append('overall must be verified, limited or blocked')
+
+    # Current fingerprints; if the contract is unreadable the hash check is
+    # skipped (it cannot prove or disprove the report on its own).
+    required: list[str] = []
+    contract_ok = source_ok = None
+    try:
+        cur_contract, _data, vas = read_contract_file(contract_path(root))
+        cur_source = source_sha256(root)
+        contract_ok = report.get('contract_sha256') == cur_contract
+        source_ok = report.get('source_sha256') == cur_source
+        if mode in ('guided', 'strict'):
+            required = required_axes(mode, vas)
+    except (OSError, ValueError):
+        pass
+
+    invalidated: list[str] = []
+    if contract_ok is not None and source_ok is not None:
+        if not contract_ok:
+            invalidated = list(AXES)
+        elif not source_ok:
+            invalidated = list(SOURCE_INVALIDATES)
+
+    axes = report.get('axes')
+    if not isinstance(axes, dict):
+        errors.append('axes must be an object')
+        axes = {}
+
+    # Gating: an L0/L1 failure must not start the browser.
+    static_failed = any(_axis_status(axes, a) == 'blocked' for a in STATIC_AXES)
+    browser_blocked = static_failed
+    if static_failed:
+        for a in BROWSER_AXES:
+            status = _axis_status(axes, a)
+            if status in ('verified', 'limited', 'blocked'):
+                errors.append(f'{a} must be not_run when a static gate failed')
+
+    # Required axes must be present with a valid status.
+    for a in required:
+        if _axis_status(axes, a) is None:
+            errors.append(f'{a} missing or invalid status')
+
+    # Re-verification scope: failures invalidate their dependents; visual
+    # failures scope to the affected VA only. Hash-invalidated axes are added
+    # wholesale. The scope is bounded by what the project actually requires.
+    reverify: set[str] = set(invalidated)
+    reverify_vas: list[dict] = []
+    required_set = set(required)
+    for axis in AXES:
+        if _axis_status(axes, axis) != 'blocked':
+            continue
+        if axis in required_set or axis in invalidated:
+            reverify.add(axis)
+        dependents = DEPENDENTS.get(axis)
+        if dependents is None:
+            dependents = list(GUIDED_CORE)
+        for dep in dependents:
+            if dep in required_set:
+                reverify.add(dep)
+        if axis in ('visual_desktop', 'visual_mobile'):
+            result = axes.get(axis) or {}
+            for vid in result.get('failed_vas', []) or []:
+                reverify_vas.append({'axis': axis, 'va': vid})
+
+    independent = bool(report.get('independent', False))
+    evidence = report.get('evidence', [])
+    limitations = report.get('limitations', [])
+    if not isinstance(evidence, list):
+        evidence = []
+    if not isinstance(limitations, list):
+        limitations = []
+    if overall == 'limited' and not limitations:
+        errors.append('limited overall requires limitations')
+    if overall in ('verified', 'limited') and not evidence:
+        errors.append('verified/limited overall requires evidence')
+    if mode == 'strict':
+        if overall == 'limited':
+            errors.append('strict mode cannot be delivered with limited')
+        if overall == 'verified' and not independent:
+            errors.append('strict mode requires independent verification')
+
+    # Overall must agree with the worst required-axis status.
+    if required:
+        statuses = [_axis_status(axes, a) for a in required]
+        if any(s == 'blocked' for s in statuses):
+            computed = 'blocked'
+        elif any(s == 'limited' for s in statuses):
+            computed = 'limited'
+        elif all(s == 'verified' for s in statuses):
+            computed = 'verified'
+        else:
+            computed = 'blocked'  # not_run / missing cannot deliver
+        if computed != overall:
+            errors.append(f'overall {overall} does not match axis results ({computed})')
+
+    valid = not errors and not invalidated
     return {
-        'schema_version': 1,
-        'kind': 'command',
-        'created_at': now(),
-        'command': command,
-        'input_fingerprint': before,
-        'fingerprint': after,
-        'source_changed': before != after,
-        'exit_code': code,
-        'stdout': stdout[-20000:],
-        'stderr': stderr[-20000:],
-        'status': 'passed' if code == 0 and before == after else 'failed',
-        'limits': ['Command success only; not automatic business, visual or reopening acceptance'],
+        'project_root': str(root),
+        'valid': valid,
+        'mode': mode,
+        'overall': overall,
+        'independent': independent,
+        'hash': {'contract_valid': contract_ok, 'source_valid': source_ok},
+        'invalidated_axes': invalidated,
+        'reverify': [a for a in AXES if a in reverify],
+        'reverify_vas': reverify_vas,
+        'browser_blocked': browser_blocked,
+        'errors': errors,
     }
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest='action', required=True)
-    static = commands.add_parser('static')
-    static.add_argument('root', type=Path)
-    static.add_argument('--offline', action='store_true')
-    static.add_argument('--web-root')
-    run = commands.add_parser('run')
-    run.add_argument('root', type=Path)
-    run.add_argument('--timeout', type=int, default=120)
-    run.add_argument('command', nargs=argparse.REMAINDER)
-    matrix = commands.add_parser('matrix')
-    matrix.add_argument('root', type=Path)
-    matrix.add_argument('--input', required=True, help='JSON file with the checked items and their evidence')
-    matrix.add_argument('--label')
-    matrix.add_argument('--profile', choices=CHECK_PROFILES,
-                        help='scope of this verification: smoke, targeted, or full (default: full)')
-    matrix.add_argument('--save-evidence', action='store_true',
-                        help='copy referenced evidence into .site/checks/evidence so re-runs cannot overwrite it')
-    args = parser.parse_args()
+    sub = parser.add_subparsers(dest='command', required=True)
 
+    plan_p = sub.add_parser('plan', help='generate a verification plan from the project contract')
+    plan_p.add_argument('root', type=Path, help='project root')
+    plan_p.add_argument('--contract', default=CONTRACT_REL_PATH,
+                        help='contract path relative to the project root')
+    plan_p.add_argument('--changed-from', default=None,
+                        help='a prior plan/report JSON path OR a git revision '
+                             '(branch/tag/commit) to diff fingerprints against; '
+                             'an REF that is neither is reported and conservatively '
+                             'upgrades to guided-core')
+
+    val_p = sub.add_parser('validate-report', help='validate a check report against the protocol')
+    val_p.add_argument('root', type=Path, help='project root')
+    val_p.add_argument('report', type=Path, help='check report JSON to validate')
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     try:
-        root = args.root.resolve(strict=True)
-        if not root.is_dir():
-            raise ValueError('Project root must be a directory')
-        if args.action == 'static':
-            output = static_check(root, args.offline, args.web_root)
-        elif args.action == 'run':
-            output = run_check(root, args.command, args.timeout)
+        if args.command == 'plan':
+            result = plan(args.root, args.contract, args.changed_from)
         else:
-            payload = json.loads(Path(args.input).expanduser().read_text(encoding='utf-8'))
-            output = matrix_check(root, payload, args.label, args.save_evidence, args.profile)
-        output = finalize(root, output)
-        print(json.dumps(output, ensure_ascii=False, indent=2))
-        return 1 if output.get('status') == 'failed' else 0
-    except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
-        print(json.dumps({'error': str(error)}, ensure_ascii=False), file=sys.stderr)
+            result = validate_report(args.root, args.report)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(json.dumps({'error': str(exc)}, ensure_ascii=False))
         return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 if __name__ == '__main__':

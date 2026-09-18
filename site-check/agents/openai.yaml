@@ -1,4 +1,0 @@
-interface:
-  display_name: "网站独立检查"
-  short_description: "验证构建、核心任务、视觉和再次打开行为"
-  default_prompt: "使用 $site-check 独立检查这个网站，按实际证据报告通过、失败和未执行项。"

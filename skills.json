@@ -1,35 +1,31 @@
 {
-  "schema_version": 1,
-  "bundle": "collaborative-site-skills",
-  "version": "0.16.0",
+  "version": "1.0.0",
+  "bundle": "progressive-site-skills",
+  "default_mode": "guided",
   "skills": {
     "site-builder": {
-      "version": "0.16.0",
-      "role": "default entry, all production changes, orchestration and implementation",
-      "dependencies": [
-        "site-brief",
-        "site-design",
-        "site-check"
-      ]
+      "version": "1.0.0",
+      "directory": "site-builder",
+      "role": "唯一编排与正式实施入口",
+      "depends_on": ["site-brief", "site-design", "site-check"]
     },
     "site-brief": {
-      "version": "0.16.0",
-      "role": "fact finding, first-version brief and coordinated project records",
-      "dependencies": []
+      "version": "1.0.0",
+      "directory": "site-brief",
+      "role": "核心任务与首版范围收敛",
+      "depends_on": []
     },
     "site-design": {
-      "version": "0.16.0",
-      "role": "visual and flow prototypes, shared design contract and read-only visual review",
-      "dependencies": [
-        "site-brief"
-      ]
+      "version": "1.0.0",
+      "directory": "site-design",
+      "role": "完整设计知识、可见方向、体验稿、合同与只读审查",
+      "depends_on": ["site-brief"]
     },
     "site-check": {
-      "version": "0.16.0",
-      "role": "independent acceptance across build, behavior, visual and reopening",
-      "dependencies": [
-        "site-design"
-      ]
+      "version": "1.0.0",
+      "directory": "site-check",
+      "role": "只读核心任务与视觉验证",
+      "depends_on": ["site-design"]
     }
   }
 }

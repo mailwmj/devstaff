@@ -1,4 +1,0 @@
-interface:
-  display_name: "渐进式建站"
-  short_description: "自动协调需求、体验稿、开发与独立检查"
-  default_prompt: "使用 $site-builder 从我的自然语言想法或现有工程开始，自动协调首版澄清、体验确认、开发和验证。"
