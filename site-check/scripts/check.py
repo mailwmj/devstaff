@@ -38,9 +38,16 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stdin, 'reconfigure'):
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
 
 CONTRACT_REL_PATH = '.site/design/surface-brief.md'
 STATE_REL_PATH = '.site/state.json'

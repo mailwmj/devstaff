@@ -13,6 +13,12 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stdin, 'reconfigure'):
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+
 GROUPS = {'palette': 'palettes', 'typography': 'typographies', 'density': 'densities',
           'shape': 'shapes', 'layout': 'layouts'}
 INTELLIGENCE_VERSION = '2.13.0'
@@ -40,6 +46,8 @@ def intelligence_root():
 def intelligence_environment():
     environment = os.environ.copy()
     environment['PYTHONDONTWRITEBYTECODE'] = '1'
+    environment['PYTHONUTF8'] = '1'
+    environment['PYTHONIOENCODING'] = 'utf-8'
     return environment
 
 
@@ -214,7 +222,8 @@ def research(args):
         command.extend(('--max-results', str(args.max_results)))
 
     completed = subprocess.run(
-        command, text=True, capture_output=True, env=intelligence_environment())
+        command, text=True, capture_output=True, env=intelligence_environment(),
+        encoding='utf-8', errors='replace')
     if completed.returncode:
         detail = completed.stderr.strip() or completed.stdout.strip() or 'unknown error'
         raise ValueError('Bundled design intelligence failed: ' + detail)
@@ -266,7 +275,7 @@ def validate_intelligence():
         raise ValueError('Bundled design intelligence license or validator is missing')
     completed = subprocess.run(
         [sys.executable, str(validator)], text=True, capture_output=True,
-        env=intelligence_environment())
+        env=intelligence_environment(), encoding='utf-8', errors='replace')
     if completed.returncode:
         detail = completed.stdout.strip() or completed.stderr.strip() or 'unknown error'
         raise ValueError('Bundled design intelligence validation failed: ' + detail)
@@ -789,7 +798,9 @@ LINT_UI_EXTENSIONS = ('.html', '.htm', '.css', '.js', '.mjs', '.cjs',
                       '.jsx', '.ts', '.tsx', '.vue', '.svelte', '.astro')
 LINT_IGNORE_DIRS = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store',
                     'dist', 'build', '.next', '.nuxt', '.svelte-kit',
-                    '.output', 'coverage', '.turbo', '.vercel', '.astro'}
+                    '.output', 'coverage', '.turbo', '.vercel', '.astro',
+                    'prototypes', 'prototype', 'demos', 'demo', 'mockups',
+                    'playground', 'scratch', 'experiments'}
 LINT_FIXTURE_DIR_PARTS = {'tests', 'test', '__tests__', '__mocks__',
                           'fixtures', 'e2e', 'storybook', 'stories',
                           'snapshots', '__snapshots__'}
@@ -1440,7 +1451,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('list')
-    commands.add_parser('validate')
+    validate_cmd = commands.add_parser('validate')
+    validate_cmd.add_argument('--auto-sync', action='store_true', help='automatically synchronize gallery catalog payload if stale')
     commands.add_parser('catalog', help='list bundled design domains, stacks, and query contract')
     lookup = commands.add_parser('research', help='query the bundled UI/UX design intelligence')
     lookup.add_argument('query', help='2-5 terms describing one design intent')
@@ -1530,10 +1542,16 @@ def main():
                     try:
                         actual_payload = json.loads(match.group(2))
                         expected_payload = json.loads(expected)
-                        if not _payload_equal(actual_payload, expected_payload):
-                            drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
+                        payload_is_stale = not _payload_equal(actual_payload, expected_payload)
                     except Exception:
-                        drift = 'Gallery catalog payload is stale; run: design.py sync-gallery'
+                        payload_is_stale = True
+                    if payload_is_stale:
+                        if getattr(args, 'auto_sync', False):
+                            sync_gallery(data, gallery)
+                            print(f"[Auto-Sync] Gallery catalog payload was stale and has been updated in {gallery.resolve()}")
+                        else:
+                            script_name = Path(sys.argv[0]).name or 'design.py'
+                            drift = f'Gallery catalog payload is stale; run: python {script_name} sync-gallery --gallery "{gallery.resolve()}" (or run validate with --auto-sync)'
             if drift:
                 raise ValueError(drift)
             intelligence = validate_intelligence()

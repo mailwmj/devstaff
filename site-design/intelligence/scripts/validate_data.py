@@ -24,6 +24,11 @@ import math
 import re
 import statistics
 import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, urlsplit

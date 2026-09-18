@@ -85,8 +85,10 @@ class StateCliTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
-        self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+        self.assertEqual(result.returncode, expected, (result.stdout or '') + (result.stderr or ''))
         return json.loads(result.stdout)
 
     def write_contract_report(self, root):
@@ -99,6 +101,7 @@ class StateCliTests(unittest.TestCase):
             [sys.executable, str(DESIGN), "check-contract", "--root", str(root),
              "--phase", "prebuild", "--out", str(report)],
             check=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         return report
 

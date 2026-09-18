@@ -7,6 +7,10 @@ import sys
 import unittest
 import hashlib
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 SKILL_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = SKILL_ROOT / "scripts" / "design.py"
 TEMPLATE = SKILL_ROOT / "references" / "surface-brief.md"
@@ -26,6 +30,8 @@ def run_json(*args):
         text=True,
         capture_output=True,
         check=True,
+        encoding="utf-8",
+        errors="replace",
     )
     return json.loads(completed.stdout)
 
@@ -292,6 +298,7 @@ class CheckContractTests(unittest.TestCase):
             [sys.executable, str(SCRIPT), "check-contract",
              "--root", str(self.root), "--phase", "prebuild"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         elapsed = time.perf_counter() - start
         self.assertEqual(completed.returncode, 0)
@@ -306,6 +313,8 @@ class DesignIntelligenceContractTests(unittest.TestCase):
             cwd=SKILL_ROOT.parent,
             text=True,
             capture_output=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         self.assertNotEqual(completed.returncode, 0)
@@ -596,6 +605,17 @@ class LintUiTests(unittest.TestCase):
         self.assertEqual(report["scanned_files"], ["index.html"])
         self.assertTrue(report["passed"], report["blockers"])
 
+    def test_prototypes_and_demos_are_excluded_from_lint(self):
+        self._write(files={
+            "index.html": "<h1>ok</h1>",
+            "prototypes/index.html": "<button><span>↓</span></button>",
+            "demos/preview.html": "<button><span>→</span></button>",
+            "experiments/test.html": "<button><span>✓</span></button>",
+        })
+        report = self._lint()
+        self.assertEqual(report["scanned_files"], ["index.html"])
+        self.assertTrue(report["passed"], report["blockers"])
+
     def test_intentional_exceptions_exempt_files(self):
         self._write(contract_json=self._contract(
             intentional_exceptions=["legacy/*"]),
@@ -665,7 +685,8 @@ class LintUiTests(unittest.TestCase):
         completed = subprocess.run(
             [sys.executable, str(SCRIPT), "lint-ui", "--root", str(self.root),
              "--out", str(out)],
-            cwd=SKILL_ROOT.parent, capture_output=True, text=True)
+            cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
         self.assertEqual(completed.returncode, 0, completed.stderr)
         report = json.loads(completed.stdout)
         self.assertTrue(report["passed"])
@@ -678,6 +699,38 @@ class LintUiTests(unittest.TestCase):
         start = time.perf_counter()
         self._lint()
         self.assertLess(time.perf_counter() - start, 5.0)
+
+    def test_validate_auto_sync_fixes_drift(self):
+        gallery = design.resources() / "gallery.html"
+        if not gallery.is_file():
+            return
+        original = gallery.read_text(encoding="utf-8")
+        try:
+            # Intentionally inject a stale catalog block into gallery.html
+            stale = design.CATALOG_BLOCK.sub(r'\1{}\3', original, count=1)
+            gallery.write_text(stale, encoding="utf-8")
+
+            # Validate without --auto-sync should fail with friendly message
+            failed = subprocess.run(
+                [sys.executable, str(SCRIPT), "validate"],
+                cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+                encoding="utf-8", errors="replace"
+            )
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("Gallery catalog payload is stale", failed.stderr)
+            self.assertIn("--auto-sync", failed.stderr)
+
+            # Validate with --auto-sync should repair it and pass
+            repaired = subprocess.run(
+                [sys.executable, str(SCRIPT), "validate", "--auto-sync"],
+                cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+                encoding="utf-8", errors="replace"
+            )
+            self.assertEqual(repaired.returncode, 0, repaired.stderr)
+            self.assertIn("[Auto-Sync]", repaired.stdout)
+            self.assertIn("gallery catalog in sync", repaired.stdout)
+        finally:
+            gallery.write_text(original, encoding="utf-8")
 
 
 class LintUiGitRefTests(unittest.TestCase):
