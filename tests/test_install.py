@@ -40,6 +40,23 @@ class InstallTests(unittest.TestCase):
                 installer.install(RELEASE, destination)
             installer.install(RELEASE, destination, replace=True)
 
+    def test_installed_builder_finds_the_installed_protocol_script(self):
+        # verify --report is gated on check.py; if the two skills stop being
+        # installed as siblings, that gate must fail loudly rather than
+        # silently accepting any report.
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            installer.install(RELEASE, destination)
+            state_file = destination / "site-builder" / "scripts" / "state.py"
+            spec = importlib.util.spec_from_file_location("installed_state", state_file)
+            installed = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(installed)
+            resolved = installed._check_script()
+            self.assertIsNotNone(resolved)
+            self.assertEqual(resolved,
+                             (destination / "site-check" / "scripts" / "check.py").resolve())
+
 
 if __name__ == "__main__":
     unittest.main()

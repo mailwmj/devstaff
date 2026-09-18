@@ -77,7 +77,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 | 截图 / 网址参考的判读 | `site-design` | 用户提供参考 | `replicate / adapt / behavior-only` 结论 + 可见依据 |
 | 页面设计合同（方向、实现、验收共用接口） | `site-design` → 全链路 | 进入实现前 | `.site/design/surface-brief.md` |
 | 静态 UI 纪律检查 | `site-design`（`lint-ui`） | 有源码与合同 | 检查报告 |
-| 纵向切片实现与闭环打勾 | `site-builder` | 进入 `building` | 合同"纵向切片"表内的单行事实证据 |
+| 纵向切片实现与闭环打勾 | `site-builder` | 进入 `building` | `.site/journal.md` 内的单行事实证据 |
 | 只读验证：核心任务、失败路径、视口、再次打开、风险 | `site-check` | 有可运行版本 | 检查计划与检查报告 |
 
 **一件能力只有一个权威来源。** 需要"怎么写"时读对应的 reference，不要凭字段名猜标准：
@@ -110,11 +110,12 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 | `state.py init / preflight` | 建立状态；每轮读取下一步 |
 | `state.py discover / select-structure` | 登记结构判断（`single` 或 `choice`）与用户选定的候选 |
 | `state.py decide / start` | 记录方向确认原话；凭通过的 prebuild 合同报告进入构建 |
-| `state.py verify / block / resume / reopen` | 记录验证结论、阻断、恢复与重开 |
+| `state.py begin-check / cancel-check` | 开一轮验证并在这一轮内禁写源码；要回去修就带 `--reason` 取消这一轮 |
+| `state.py verify / block / resume / reopen` | 记录验证结论、阻断、恢复与重开；`verify` 只收检查报告，报告先过协议校验 |
 | `design.py catalog / research` | 看能力目录；按一个问题检索领域或技术栈 |
 | `design.py check-contract --phase direction|prebuild|precheck` | 合同门禁；默认加 `--summary` 先看摘要，完整报告落盘 |
 | `design.py lint-ui` | 按合同静态扫描 UI 源码 |
-| `check.py plan / validate-report` | 生成验证计划（含指纹与失效轴）；校验检查报告 |
+| `check.py plan / validate-report` | 生成验证计划（含指纹、排除路径与变更文件）；校验检查报告，`state.py verify` 以此为准入门禁 |
 
 参数与返回以 `--help` 与实际输出为准。状态工具只防止顺序错误、空证据和不满足模式要求的跃迁，它不判断用户原话的真实语义，也不能证明证据内容属实。
 
@@ -122,7 +123,7 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 
 1. 核心任务和方向未确认前，不写正式源码。
 2. 高影响选择未确认前，不替用户决定。
-3. 合同未就绪不进入构建；未实现的切片不打勾。
+3. 合同未就绪不进入构建；未实现的切片不打勾。切片状态记在 `.site/journal.md`，不回写合同。
 4. 没有实际验证就不说"已验证"；必须区分 `verified`、`limited`、`blocked`。
 5. 体验稿与视觉预览阶段坚守轻量边界：不堆砌业务逻辑，不跑重度测试。
 6. 素材记录来源、许可与 alt；缺失时诚实呈现，不编造社会证明。
@@ -135,16 +136,18 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 
 按纵向切片推进，不先铺完整数据层、接口或所有页面。每轮三步：
 
-1. **读表锁定**：先读 `.site/design/surface-brief.md` 的纵向切片表，取首个未完成切片标记为 `[-]`，不跳步、不跨切片。
+1. **读表锁定**：先读 `.site/design/surface-brief.md` 的纵向切片表，到 `.site/journal.md` 看首个未完成切片，标记为 `[-]`，不跳步、不跨切片。
 2. **微计划与最小增量**：明确触碰文件、评估对已完成切片的爆炸半径，只做局部增量；UI 工程纪律以 `site-design/references/craft-review.md` §4-§6 为唯一数值与写法来源。
-3. **事实与打勾**：合同引用检查、typecheck/lint、受影响单测、最短行为检查在当条切片内通过，并在切片表写一行客观事实后才打 `[x]`。
+3. **事实与打勾**：合同引用检查、typecheck/lint、受影响单测、最短行为检查在当条切片内通过，并在 `.site/journal.md` 写一行客观事实（写清查了多少个对象，比如"扫了 24 个文字节点"而不是"检查通过"）后才打 `[x]`。
 
-所有切片打勾后做一次集成构建，再交 `site-check` 只读浏览器验证；首次浏览器验证前，合同、类型、构建和受影响测试必须已通过。
+切片状态、验证证据、发现的缺陷和被推翻的假设都写 `.site/journal.md`：合同参与指纹，改一个字节就作废已经跑过的验证，而日志每轮都在追加。
+
+所有切片打勾后做一次集成构建，用 `state.py begin-check` 开一轮验证，再交 `site-check` 只读浏览器验证；首次浏览器验证前，合同、类型、构建和受影响测试必须已通过。这一轮关掉之前源码是禁写的，要回去修就先 `cancel-check --reason`。
 
 ## 交付与沟通
 
 - 对用户说的话按 `AGENTS.md` 的《说人话》写：不用大词、不凑三连、不写没有信息量的开场和收尾、不硬缝转折。
-- 只说明：入口、完成的核心任务、实际检查内容、未检查内容、数据位置与限制。
+- 只说明：入口、完成的核心任务、实际检查内容、未检查内容、是自检还是独立检查、数据位置与限制。
 - 不把"构建成功"说成"产品已验证"；`limited` 必须点名未验证项。
 - 用户全程不需要看到状态名、路径、模式、回执字段或证据 ID。给用户的是他能看懂的结果、能打开的东西和诚实的边界。
 

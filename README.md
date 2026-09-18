@@ -45,7 +45,19 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 2. **做不完东西**：按一条可完整体验的任务切首版。
 3. **误以为做完**：验证实际核心路径，并区分 `verified` 和 `limited`。
 
-严格模式仍使用同一个小状态接口，只额外要求独立验证和适用的风险证据；不复刻租约、源码指纹或逐项覆盖矩阵。它们只有在真实使用证明有必要后才应该加入。
+指纹是身份检查，不是重跑清单。合同和产品源码各有一个 SHA-256，报告必须带上当前这一份：对不上就说明报告说的不是这个产物，不能靠"只重验受影响的部分"救回来。至于改动之后要重跑哪些轴，交给判断，不交给文件后缀——一条 `display:none` 能让核心任务消失，和挪一个像素的代价一样。没重跑的轴如实记 `limited`。
+
+指纹只覆盖产品源码，跑起来才会变的东西（数据库、日志、构建产物）排除在外，否则卖出一瓶水就能让报告过期。代价是随产品发布的只读库和运行期状态在指纹里长得一样，机器分不出来，所以 `plan` 会把排除清单列出来让人读一遍。
+
+空样本是这套流程里唯一能静默通过的错误：选择器没命中时对象是 0 个，`every()` 对空列表恒真，手上那些断言会全部通过。报告字段拦不住它——填一个数进去没人能核对。拦得住它的只有两处：探针自己扫到 0 个对象时判失败，和另一个验证者。验证期间源码禁写也是同一个道理：对象在验证途中被移动，那轮结论就不成立。
+
+一条规则只有当工具能不依赖 agent 配合地判定它时，才做成门禁。指纹、状态跃迁、模式要求都合格——工具自己算得出来，agent 说什么都不影响结论。
+
+要求 agent 在报告里填字段的，按字段性质分开：**描述**留，**自证**删。`observed` 和 `evidence` 是描述，下一个读报告的人和独立验证者靠它们判断发生了什么，为空说明这份报告没话可说，值得拦。`subjects: 24` 这类数字是自证，读者无法核对，却长得像测量结果——它把未经核实的说法洗成了证据的样子，比不写更糟。拦不住存心的，只会让照做的人多填几个空，还让读报告的人以为有人核过了。
+
+这条线以下的东西都只是文档里的一句话，而且只有一处。
+
+严格模式仍使用同一个小状态接口，只额外要求独立验证和适用的风险证据；不复刻租约和逐项覆盖矩阵。它们只有在真实使用证明有必要后才应该加入。
 
 ## 设计能力
 
@@ -106,12 +118,13 @@ python3 release/site-builder/scripts/state.py decide PROJECT \
   --direction "单工作台展示当前库存和新增入口" \
   --quote "就按这个方向做"
 python3 release/site-builder/scripts/state.py start PROJECT
-python3 release/site-builder/scripts/state.py verify PROJECT \
-  --status verified \
-  --evidence "新增一条库存并刷新后仍可见"
+python3 release/site-builder/scripts/state.py begin-check PROJECT
+python3 release/site-builder/scripts/state.py verify PROJECT --report .site/check/report.json
 ```
 
-`limited` 必须写明 `--limitation`；strict 的 `verified` 必须带 `--independent`。局部修改不初始化 `.site`。
+`begin-check` 开一轮验证，这一轮关掉之前源码是禁写的；要回去修就先 `cancel-check --reason`。
+
+`verify` 只收检查报告，不收手写的 `--status`：状态由报告里的轴算出来，报告先过 `check.py validate-report` 这一关，指纹对不上当前源码、或某条轴没写清自己查了什么，都不算数。没重跑的轴在报告里如实记 `limited` 并写明是哪条，strict 的 `limited` 不能交付。局部修改不初始化 `.site`。
 
 新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选，并复制 `site-design/assets/design/preview-shell.html` 写成单文件骨架预览（色板与深色切换条用现成的，正文按项目自己搭，两版只在结构上不同，优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（同一骨架、同一顶栏，轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
 

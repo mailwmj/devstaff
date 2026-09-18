@@ -11,6 +11,62 @@ state = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(state)
 
+CHECK_PATH = Path(__file__).parents[1] / "release" / "site-check" / "scripts" / "check.py"
+CHECK_SPEC = importlib.util.spec_from_file_location("site_check_for_state", CHECK_PATH)
+check = importlib.util.module_from_spec(CHECK_SPEC)
+assert CHECK_SPEC.loader is not None
+CHECK_SPEC.loader.exec_module(check)
+
+
+def _verify(root: Path, report=None):
+    """Run the real two-step flow: open a round if none is open, then record.
+
+    A rejected report deliberately leaves the round open — the builder is still
+    verifying, and must either produce a report that holds or say why it is
+    going back to fixing.
+    """
+    if state.verification_phase(state.read_state(root)) != "checking":
+        state.begin_check(root)
+    return state.verify(root, report=report)
+
+
+def _measured(what, **extra):
+    """A passing axis: just what it examined."""
+    entry = {"status": "verified", "observed": what}
+    entry.update(extra)
+    return entry
+
+
+def _valid_check_report(root: Path, *, overall="verified", independent=False,
+                        limitations=None, evidence=None, axes=None,
+                        project_root=None, write=True):
+    """Write a check report the protocol accepts for ``root`` as it is now.
+
+    Fingerprints come from the protocol itself, so these tests exercise the
+    same gate the CLI does instead of a hand-typed status.
+    """
+    root = Path(root)
+    plan = check.plan(root)
+    axes = dict(axes) if axes is not None else {
+        axis: _measured(f"{axis} 覆盖") for axis in plan["required_axes"]
+    }
+    report = {
+        "project_root": str((project_root or root).resolve()),
+        "mode": plan["mode"],
+        "overall": overall,
+        "independent": independent,
+        "contract_sha256": plan["contract_sha256"],
+        "source_sha256": plan["source_sha256"],
+        "axes": axes,
+        "evidence": ["核心任务通过"] if evidence is None else evidence,
+        "limitations": list(limitations or []),
+    }
+    if not write:
+        return report
+    path = root / ".site" / "check-report.json"
+    path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    return path
+
 
 def _write_contract(root: Path) -> str:
     """Write a minimal contract file under the project and return its SHA-256."""
@@ -87,18 +143,24 @@ class StateProtocolTests(unittest.TestCase):
             "verify_core_task",
         )
 
+    def verify(self, report=None):
+        return _verify(self.root, report=report)
+
     def test_guided_limited_delivery_names_limitations(self):
         self.decide_and_start()
+        # A limited report without limitations is rejected by the protocol.
+        report = _valid_check_report(self.root, overall="limited", evidence=["核心任务通过"])
         with self.assertRaises(ValueError):
-            state.verify(self.root, "limited", ["新增库存成功"], [], False)
+            self.verify(report=report)
 
-        result = state.verify(
-            self.root,
-            "limited",
-            ["新增库存成功"],
-            ["尚未检查移动端"],
-            False,
+        axes = {axis: _measured(f"{axis} 覆盖") for axis in
+                check.plan(self.root)["required_axes"]}
+        axes["negative_path"] = {"status": "limited"}
+        report = _valid_check_report(
+            self.root, overall="limited", evidence=["核心任务通过"],
+            limitations=["尚未检查移动端"], axes=axes,
         )
+        result = self.verify(report=report)
         self.assertEqual(result["stage"], "delivered")
         self.assertEqual(result["next_action"], "report_delivery")
 
@@ -110,36 +172,121 @@ class StateProtocolTests(unittest.TestCase):
     def test_strict_requires_independent_verified_evidence(self):
         self.decide_and_start("strict")
         with self.assertRaises(ValueError):
-            state.verify(self.root, "limited", ["页面可见"], ["未独立检查"], False)
-        with self.assertRaises(ValueError):
-            state.verify(self.root, "verified", ["核心任务通过"], [], False)
+            self.verify(report=_valid_check_report(
+                self.root, overall="limited", evidence=["页面可见"],
+                limitations=["未独立检查"]))
 
-        result = state.verify(self.root, "verified", ["独立检查核心任务通过"], [], True)
+        strict_axes = {axis: _measured(f"{axis} 覆盖") for axis in
+                       ("contract", "static_build", "core_task", "negative_path",
+                        "visual_desktop", "visual_mobile", "reopen", "risk")}
+        with self.assertRaises(ValueError):
+            self.verify(report=_valid_check_report(
+                self.root, independent=False, axes=strict_axes))
+
+        result = self.verify(report=_valid_check_report(
+            self.root, independent=True, axes=strict_axes))
         self.assertEqual(result["stage"], "delivered")
 
     def test_blocked_verification_can_resume_building(self):
         self.decide_and_start()
-        result = state.verify(
-            self.root,
-            "blocked",
-            ["保存操作返回错误"],
-            ["修复保存错误后复验"],
-            False,
+        report = _valid_check_report(
+            self.root, overall="blocked", evidence=["保存操作返回错误"],
+            limitations=["修复保存错误后复验"],
+            axes={axis: {"status": "not_run"} for axis in
+                  check.plan(self.root)["required_axes"]},
         )
+        result = self.verify(report=report)
         self.assertEqual(result["stage"], "blocked")
         self.assertEqual(state.resume(self.root)["stage"], "building")
 
     def test_reopen_clears_old_decision_and_verification(self):
         self.decide_and_start()
-        state.verify(self.root, "verified", ["核心任务通过"], [], False)
+        self.verify(report=_valid_check_report(self.root))
         result = state.reopen(self.root, "核心范围改变")
         self.assertEqual(result["stage"], "discovering")
         self.assertIn("confirmed_direction", result["missing"])
 
-    def test_invalid_status_is_rejected_for_direct_callers(self):
+    def test_verify_requires_a_report(self):
         self.decide_and_start()
+        state.begin_check(self.root)
+        with self.assertRaises(ValueError) as caught:
+            state.verify(self.root)
+        self.assertIn("--report", str(caught.exception))
+
+    def test_verification_round_blocks_source_writes(self):
+        # The failure this exists for: the checker read db.js, the builder
+        # edited it twice mid-round, and the whole round was thrown away.
+        self.decide_and_start()
+        opened = state.begin_check(self.root)
+        self.assertEqual(opened["next_action"], "finish_verification")
+        self.assertIn("write_source", opened["blocked_actions"])
+        self.assertNotIn("write_source", opened["allowed_actions"])
+        self.assertIn("check_report", opened["missing"])
+
+    def test_verify_requires_an_open_round(self):
+        self.decide_and_start()
+        with self.assertRaises(ValueError) as caught:
+            state.verify(self.root, report=_valid_check_report(self.root))
+        self.assertIn("begin-check", str(caught.exception))
+
+    def test_cancel_check_reopens_writes_with_a_reason(self):
+        self.decide_and_start()
+        state.begin_check(self.root)
         with self.assertRaises(ValueError):
-            state.verify(self.root, "unknown", ["看起来正常"], [], False)
+            state.cancel_check(self.root, "   ")
+        result = state.cancel_check(self.root, "VA-05 对比度 4.21:1")
+        self.assertIn("write_source", result["allowed_actions"])
+        history = state.read_state(self.root)["history"]
+        self.assertEqual(history[-1]["action"], "cancel-check")
+        self.assertEqual(history[-1]["note"], "VA-05 对比度 4.21:1")
+
+    def test_round_cannot_open_twice_or_while_not_building(self):
+        self.decide_and_start()
+        state.begin_check(self.root)
+        with self.assertRaises(ValueError):
+            state.begin_check(self.root)
+        self.assertNotIn("cancel-check", state.preflight_state(
+            state.read_state(self.root))["blocked_actions"])
+        # A cancelled round can be reopened.
+        state.cancel_check(self.root, "修完再来")
+        self.assertEqual(state.begin_check(self.root)["next_action"],
+                         "finish_verification")
+
+    def test_a_rejected_report_keeps_the_round_open(self):
+        # A report that does not hold must not quietly hand the tree back to
+        # editing: the builder either writes one that holds or says why not.
+        self.decide_and_start()
+        state.begin_check(self.root)
+        bad = _valid_check_report(self.root, evidence=[])
+        with self.assertRaises(ValueError):
+            state.verify(self.root, report=bad)
+        still = state.preflight_state(state.read_state(self.root))
+        self.assertEqual(still["next_action"], "finish_verification")
+        self.assertIn("write_source", still["blocked_actions"])
+
+    def test_resume_clears_an_open_round(self):
+        self.decide_and_start()
+        state.begin_check(self.root)
+        state.block(self.root, "保存接口返回错误")
+        result = state.resume(self.root)
+        self.assertEqual(result["stage"], "building")
+        self.assertIn("write_source", result["allowed_actions"])
+
+    def test_init_creates_the_work_journal(self):
+        # The journal is where slice state and evidence go, because writing
+        # them into the contract would void every verification already run.
+        state.init(self.root, "guided")
+        journal = self.root / ".site" / "journal.md"
+        self.assertTrue(journal.is_file())
+        self.assertIn("| 时间 | 对象 | 客观事实 | 影响 |",
+                      journal.read_text(encoding="utf-8"))
+
+    def test_journal_is_never_overwritten(self):
+        state.init(self.root, "guided")
+        journal = self.root / ".site" / "journal.md"
+        journal.write_text("# 我写的\n", encoding="utf-8")
+        state.ensure_journal(self.root)
+        self.assertEqual(journal.read_text(encoding="utf-8"), "# 我写的\n")
 
     def test_init_requires_existing_project_root(self):
         missing = self.root / "missing"
@@ -147,10 +294,12 @@ class StateProtocolTests(unittest.TestCase):
             state.init(missing, "guided")
         self.assertFalse(missing.exists())
 
-    def test_blank_evidence_is_rejected(self):
+    def test_evidence_free_report_is_rejected(self):
         self.decide_and_start()
-        with self.assertRaises(ValueError):
-            state.verify(self.root, "verified", ["   "], [], False)
+        report = _valid_check_report(self.root, evidence=[])
+        with self.assertRaises(ValueError) as caught:
+            self.verify(report=report)
+        self.assertIn("evidence", str(caught.exception))
 
     def test_state_is_valid_json(self):
         state.init(self.root, "guided")
@@ -450,40 +599,30 @@ class VerifyReportTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def _check_report(self, *, overall="verified", independent=False,
-                      limitations=None, evidence=None, mode="guided",
-                      project_root=None):
-        rep = {
-            "project_root": str((project_root or self.root).resolve()),
-            "mode": mode,
-            "overall": overall,
-            "evidence": evidence or ["核心任务通过"],
-            "limitations": limitations or [],
-            "independent": independent,
-        }
-        path = self.root / ".site" / "check-report.json"
-        path.write_text(json.dumps(rep, ensure_ascii=False), encoding="utf-8")
-        return path
+    def verify(self, path, root=None):
+        return _verify(root or self.root, report=path)
 
     def test_verify_from_report_delivers(self):
-        path = self._check_report()
-        result = state.verify(self.root, report=path)
+        path = _valid_check_report(self.root)
+        result = self.verify(path)
         self.assertEqual(result["stage"], "delivered")
         self.assertEqual(result["next_action"], "report_delivery")
 
     def test_verify_from_report_blocked_stays_blocked(self):
-        path = self._check_report(
-            overall="blocked", evidence=["保存操作返回错误"],
+        path = _valid_check_report(
+            self.root, overall="blocked", evidence=["保存操作返回错误"],
             limitations=["修复保存错误后复验"],
+            axes={axis: {"status": "not_run"} for axis in
+                  check.plan(self.root)["required_axes"]},
         )
-        result = state.verify(self.root, report=path)
+        result = self.verify(path)
         self.assertEqual(result["stage"], "blocked")
 
     def test_verify_report_rejects_wrong_project_root(self):
         other = Path(tempfile.mkdtemp())
-        path = self._check_report(project_root=other)
+        path = _valid_check_report(self.root, project_root=other)
         with self.assertRaises(ValueError) as caught:
-            state.verify(self.root, report=path)
+            self.verify(path)
         self.assertIn("project_root", str(caught.exception))
         other.rmdir()
 
@@ -491,19 +630,46 @@ class VerifyReportTests(unittest.TestCase):
         bad = self.root / ".site" / "bad.json"
         bad.write_text("{not json", encoding="utf-8")
         with self.assertRaises(ValueError):
-            state.verify(self.root, report=bad)
+            self.verify(bad)
 
-    def test_verify_requires_either_report_or_status(self):
+    def test_verify_rejects_a_report_for_an_earlier_tree(self):
+        # The failure this gate exists for: a report was written, then the
+        # product changed (here: the demo database, which is runtime state and
+        # no longer fingerprinted).
+        path = _valid_check_report(self.root)
+        (self.root / "index.html").write_text("<html>改过了</html>", encoding="utf-8")
         with self.assertRaises(ValueError) as caught:
-            state.verify(self.root)
-        self.assertIn("either --report or --status", str(caught.exception))
+            self.verify(path)
+        message = str(caught.exception)
+        self.assertIn("fresh report", message)
+        self.assertNotEqual(state.read_state(self.root)["stage"], "delivered")
 
-    def test_old_evidence_path_still_works(self):
-        # Transitional --status/--evidence path is unchanged.
-        result = state.verify(
-            self.root, status="verified", evidence=["核心任务通过"], limitations=[], independent=False
-        )
-        self.assertEqual(result["stage"], "delivered")
+    def test_verify_rejects_an_axis_that_says_nothing(self):
+        plan = check.plan(self.root)
+        axes = {axis: _measured(f"{axis} 覆盖") for axis in plan["required_axes"]}
+        axes["core_task"] = {"status": "verified"}
+        path = _valid_check_report(self.root, axes=axes)
+        with self.assertRaises(ValueError) as caught:
+            self.verify(path)
+        self.assertIn("what was observed", str(caught.exception))
+
+    def test_verify_needs_no_hand_typed_status(self):
+        with self.assertRaises(TypeError):
+            state.verify(self.root, "verified", ["核心任务通过"], [], False)
+
+    def test_verify_fails_closed_without_the_protocol_script(self):
+        # No validator, no verification: a missing site-check must not degrade
+        # into "accept whatever the report claims".
+        path = _valid_check_report(self.root)
+        original = state._check_script
+        state._check_script = lambda: None
+        try:
+            with self.assertRaises(ValueError) as caught:
+                self.verify(path)
+            self.assertIn("check.py", str(caught.exception))
+            self.assertEqual(state.read_state(self.root)["stage"], "building")
+        finally:
+            state._check_script = original
 
     def test_strict_verify_report_requires_independent(self):
         strict_root = Path(tempfile.mkdtemp())
@@ -511,24 +677,16 @@ class VerifyReportTests(unittest.TestCase):
             state.init(strict_root, "strict")
             state.decide(strict_root, "登记库存", "单工作台", "就按这个方向做", [], [])
             state.start(strict_root, contract_report=_report_path(strict_root))
-            report = strict_root / ".site" / "check-report.json"
-            report.write_text(json.dumps({
-                "project_root": str(strict_root.resolve()),
-                "mode": "strict", "overall": "verified",
-                "evidence": ["核心任务通过"], "limitations": [],
-                "independent": False,
-            }, ensure_ascii=False), encoding="utf-8")
+            axes = {axis: _measured(f"{axis} 覆盖") for axis in
+                    ("contract", "static_build", "core_task", "negative_path",
+                     "visual_desktop", "visual_mobile", "reopen", "risk")}
+            report = _valid_check_report(strict_root, independent=False, axes=axes)
             with self.assertRaises(ValueError) as caught:
-                state.verify(strict_root, report=report)
+                self.verify(report, root=strict_root)
             self.assertIn("independent", str(caught.exception))
             # With independent it delivers.
-            report.write_text(json.dumps({
-                "project_root": str(strict_root.resolve()),
-                "mode": "strict", "overall": "verified",
-                "evidence": ["独立检查核心任务通过"], "limitations": [],
-                "independent": True,
-            }, ensure_ascii=False), encoding="utf-8")
-            self.assertEqual(state.verify(strict_root, report=report)["stage"], "delivered")
+            report = _valid_check_report(strict_root, independent=True, axes=axes)
+            self.assertEqual(self.verify(report, root=strict_root)["stage"], "delivered")
         finally:
             import shutil
             shutil.rmtree(strict_root, ignore_errors=True)

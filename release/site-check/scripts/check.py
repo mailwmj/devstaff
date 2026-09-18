@@ -21,13 +21,20 @@ Rules encoded here:
     not every viewport; failed VAs are carried in the report.
   * A contract SHA-256 change invalidates every axis; a source SHA-256 change
     invalidates L1-L5 (the contract lives under ``.site`` and is hashed
-    separately, so L0 stays valid when only source changes).
+    separately, so L0 stays valid when only source changes). Fingerprints are
+    an identity check: a report whose fingerprints do not match the current
+    tree is not valid, and a fresh report is written for the current tree
+    rather than an old one being re-scoped.
+  * An axis that claims ``verified`` must record what it examined.
   * guided may honestly report ``limited``; strict cannot be ``limited`` and a
     strict ``verified`` requires independent verification.
   * When an axis dependency is ambiguous, the scope escalates to guided-core
     (contract + static_build + core_task) rather than silently shrinking.
   * --changed-from REF accepts two kinds of input with no ambiguity: a path to
-    a prior check-report.json or a git commit reference (e.g. HEAD~1).
+    a prior check report/plan JSON or a git commit reference (e.g. HEAD~1). It
+    reports the files that changed; deciding what to re-verify stays with the
+    agent, because a file→axis mapping cannot be trusted (a CSS rule can hide
+    the core task just as easily as it can move a pixel).
 """
 from __future__ import annotations
 
@@ -88,7 +95,19 @@ DEPENDENTS = {
 # contract is a separate file under .site, so L0 stays valid when only source changes.
 SOURCE_INVALIDATES = ('static_build', 'core_task', 'negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk')
 
+# Tooling and VCS bookkeeping: never product source, at any depth.
 SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store'}
+# Runtime state and build output. These names are matched only at the project
+# root, so a product directory such as ``src/data/`` stays in the fingerprint
+# while the store's ``data/inventory.db`` does not: the product writing its own
+# data must not invalidate a report about the product's code.
+SOURCE_IGNORE_ROOT = {'data', 'uploads', 'dist', 'build', '.cache', '.next', 'coverage'}
+# Files that change while the product is being used, wherever they sit.
+SOURCE_IGNORE_SUFFIXES = ('.db', '.db-wal', '.db-shm', '.db-journal',
+                          '.sqlite', '.sqlite3', '.log')
+# plan reports the excluded paths so a wrong exclusion is visible, not silent.
+SOURCE_EXCLUDED_LIMIT = 50
+CHANGED_FILES_LIMIT = 50
 
 
 def now() -> str:
@@ -214,30 +233,62 @@ def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
     return sha, data, vas
 
 
-def _iter_source_files(root: Path):
+def _source_rule(rel_parts: tuple[str, ...]) -> str | None:
+    """Which ignore rule excludes a project-relative path, if any.
+
+    Three rules, narrowest first: bookkeeping directories at any depth, runtime
+    or build directories at the project root only, and state-file suffixes
+    anywhere.
+    """
+    if any(part in SOURCE_IGNORE for part in rel_parts):
+        return 'tooling'
+    if rel_parts and rel_parts[0] in SOURCE_IGNORE_ROOT:
+        return 'runtime_or_build'
+    if rel_parts and rel_parts[-1].endswith(SOURCE_IGNORE_SUFFIXES):
+        return 'state_file'
+    return None
+
+
+def source_manifest(root) -> tuple[dict[str, str], list[str]]:
+    """Fingerprint input for the working tree.
+
+    Returns ``(rel_path -> sha256 hex of content, notable exclusions)``. Only
+    paths excluded by a judgment about the project's shape are listed as
+    exclusions: tooling directories are structural and would bury the signal,
+    while a rule that swallowed product source is indistinguishable from a
+    correct one unless it is reported.
+    """
+    root = Path(root)
+    manifest: dict[str, str] = {}
+    excluded: list[str] = []
     for path in sorted(root.rglob('*')):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
-        if any(part in SOURCE_IGNORE for part in rel.parts):
+        rule = _source_rule(rel.parts)
+        if rule is not None:
+            if rule != 'tooling':
+                excluded.append(rel.as_posix())
             continue
-        yield path
+        manifest[rel.as_posix()] = _sha256_bytes(path.read_bytes())
+    return manifest, excluded
 
 
-def _manifest_sha256(entries) -> str:
-    """Deterministic SHA-256 over (rel_path, content) pairs, sorted by path.
+def _manifest_sha256(manifest: dict[str, str]) -> str:
+    """Deterministic SHA-256 over an already-hashed path/content manifest.
 
-    Shared by the working-tree and git-tree source scans so the two
-    fingerprints are directly comparable: path (POSIX) + NUL + sha256(content)
-    + LF, in sorted path order.
+    path (POSIX) + NUL + sha256(content) + LF, in sorted path order. Shared by
+    the working-tree and git-tree scans so the two fingerprints are directly
+    comparable, and by every diff, so a change list and a fingerprint can never
+    disagree about what counts as source.
     """
     hasher = hashlib.sha256()
     found = False
-    for rel, content in sorted(entries, key=lambda e: e[0]):
+    for rel in sorted(manifest):
         found = True
         hasher.update(rel.encode('utf-8'))
         hasher.update(b'\0')
-        hasher.update(hashlib.sha256(content).digest())
+        hasher.update(bytes.fromhex(manifest[rel]))
         hasher.update(b'\n')
     return hasher.hexdigest() if found else _sha256_bytes(b'')
 
@@ -246,14 +297,26 @@ def source_sha256(root) -> str:
     """SHA-256 over a deterministic manifest of project source files.
 
     The contract lives under .site and is excluded, so contract and source
-    fingerprints move independently.
+    fingerprints move independently. Runtime state and build output are
+    excluded too; :func:`plan` reports which paths that covered.
     """
-    root = Path(root)
-    entries = []
-    for path in _iter_source_files(root):
-        rel = path.relative_to(root).as_posix()
-        entries.append((rel, path.read_bytes()))
-    return _manifest_sha256(entries)
+    return _manifest_sha256(source_manifest(root)[0])
+
+
+def _file_diff(prior: dict[str, str], current: dict[str, str]) -> dict:
+    """Which files were added, removed or modified between two manifests."""
+    added = sorted(set(current) - set(prior))
+    removed = sorted(set(prior) - set(current))
+    modified = sorted(rel for rel in set(prior) & set(current)
+                      if prior[rel] != current[rel])
+    truncated = any(len(items) > CHANGED_FILES_LIMIT
+                    for items in (added, removed, modified))
+    return {
+        'added': added[:CHANGED_FILES_LIMIT],
+        'removed': removed[:CHANGED_FILES_LIMIT],
+        'modified': modified[:CHANGED_FILES_LIMIT],
+        'truncated': truncated,
+    }
 
 
 def read_mode(root) -> str:
@@ -321,20 +384,19 @@ def _git_repo_paths(root: Path):
     return lines[0], lines[1]
 
 
-def _git_source_sha256(root: Path, ref: str, prefix: str):
-    """Source manifest at ``ref``, mirroring :func:`source_sha256`.
+def _git_source_manifest(root: Path, ref: str, prefix: str):
+    """Source manifest at ``ref``, mirroring :func:`source_manifest`.
 
     Materializes the tracked tree under the project subtree at ``ref`` via a
     single in-memory ``git archive`` (no disk extraction, no browser), applies
-    the same ignore rules, and reuses :func:`_manifest_sha256` so the result is
-    directly comparable to the working-tree fingerprint. Returns ``None`` when
-    no source files exist at ``ref``.
+    the same ignore rules, and returns ``rel_path -> sha256 hex``. Returns
+    ``None`` when the tree at ``ref`` is unreadable.
     """
     pathspec = ['--', prefix] if prefix else []
     rc, out, _ = _git(root, 'archive', '--format=tar', ref, *pathspec)
     if rc != 0 or not out:
         return None  # unreadable tree at ref → caller treats ref as unresolvable
-    entries = []
+    manifest: dict[str, str] = {}
     try:
         tar = tarfile.open(fileobj=io.BytesIO(out), mode='r:')
     except tarfile.TarError:
@@ -349,26 +411,35 @@ def _git_source_sha256(root: Path, ref: str, prefix: str):
             name = name.lstrip('/')
             if not name:
                 continue
-            if any(part in SOURCE_IGNORE for part in Path(name).parts):
+            if _source_rule(tuple(Path(name).parts)) is not None:
                 continue
             extracted = tar.extractfile(member)
             if extracted is None:
                 continue
-            entries.append((name, extracted.read()))
+            manifest[name] = _sha256_bytes(extracted.read())
+    return manifest
+
+
+def _git_source_sha256(root: Path, ref: str, prefix: str):
+    """Source fingerprint at ``ref``; ``None`` when the tree is unreadable."""
+    manifest = _git_source_manifest(root, ref, prefix)
+    if manifest is None:
+        return None
     # Mirror source_sha256(): an empty tree yields the empty manifest hash so
     # both sides stay directly comparable.
-    return _manifest_sha256(entries)
+    return _manifest_sha256(manifest)
 
 
 def _resolve_git_ref(root: Path, ref: str, contract_rel_to_root):
     """Resolve ``ref`` as a git revision and re-fingerprint at that revision.
 
     Returns a result dict (``resolved``, ``source='git'``, ``commit``,
-    ``contract_sha256``, ``source_sha256``) or ``None`` when ``root`` is not in
-    a git repo or ``ref`` does not resolve to a commit. The contract is read
-    via ``git show``; when it is absent from the tree at ``ref`` (e.g. the
-    contract was committed after that revision) ``contract_sha256`` is ``None``,
-    which the caller treats conservatively as a contract change.
+    ``contract_sha256``, ``source_sha256``, ``source_manifest``) or ``None``
+    when ``root`` is not in a git repo or ``ref`` does not resolve to a commit.
+    The contract is read via ``git show``; when it is absent from the tree at
+    ``ref`` (e.g. the contract was committed after that revision)
+    ``contract_sha256`` is ``None``, which the caller treats conservatively as a
+    contract change.
     """
     repo = _git_repo_paths(root)
     if repo is None:
@@ -386,14 +457,32 @@ def _resolve_git_ref(root: Path, ref: str, contract_rel_to_root):
         # rc != 0 means the contract is absent from the tree at ref (e.g. it
         # was committed after that revision); the caller conservatively treats
         # an absent contract as changed rather than silently dropping L0.
-    prior_source = _git_source_sha256(root, ref, prefix)
-    if prior_source is None:
+    prior_manifest = _git_source_manifest(root, ref, prefix)
+    if prior_manifest is None:
         # The source tree at ref was unreadable; the ref is not safely
         # resolvable, so fall back to the conservative invalid-ref path.
         return None
     return {'resolved': True, 'source': 'git', 'commit': commit,
-            'contract_sha256': prior_contract, 'source_sha256': prior_source,
-            'error': None}
+            'contract_sha256': prior_contract,
+            'source_sha256': _manifest_sha256(prior_manifest),
+            'source_manifest': prior_manifest, 'error': None}
+
+
+def _read_source_manifest(data: dict):
+    """A prior plan/report's own manifest, when it carries a usable one.
+
+    Values must be 64-hex digests: a malformed manifest would otherwise diff as
+    "every file modified", which reads like a real finding.
+    """
+    manifest = data.get('source_manifest')
+    if not isinstance(manifest, dict) or not manifest:
+        return None
+    for key, value in manifest.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            return None
+        if len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+            return None
+    return manifest
 
 
 def _resolve_prior(ref: str, root: Path, contract_rel_to_root):
@@ -402,7 +491,8 @@ def _resolve_prior(ref: str, root: Path, contract_rel_to_root):
     REF is interpreted without ambiguity:
 
       * a path to a readable JSON plan/report carrying ``contract_sha256``
-        and/or ``source_sha256`` — those fingerprints are reused as-is; or
+        and/or ``source_sha256`` — those fingerprints are reused as-is (and its
+        ``source_manifest`` when present, so the change list stays available); or
       * a git revision (branch / tag / commit) resolvable in the project's
         repository — the contract and source tree are re-fingerprinted at that
         revision so they are directly comparable to the current plan.
@@ -420,7 +510,8 @@ def _resolve_prior(ref: str, root: Path, contract_rel_to_root):
                 'contract_sha256' in data or 'source_sha256' in data):
             return {'resolved': True, 'source': 'json', 'commit': None,
                     'contract_sha256': data.get('contract_sha256'),
-                    'source_sha256': data.get('source_sha256'), 'error': None}
+                    'source_sha256': data.get('source_sha256'),
+                    'source_manifest': _read_source_manifest(data), 'error': None}
         # A readable file that is not a usable report/plan: fall through to git
         # so a stray file never silently zeroes the invalidation scope.
     git_result = _resolve_git_ref(root, ref, contract_rel_to_root)
@@ -428,6 +519,7 @@ def _resolve_prior(ref: str, root: Path, contract_rel_to_root):
         return git_result
     return {'resolved': False, 'source': None, 'commit': None,
             'contract_sha256': None, 'source_sha256': None,
+            'source_manifest': None,
             'error': f'ref is neither a readable JSON report/plan nor a '
                      f'resolvable git revision: {ref}'}
 
@@ -444,7 +536,8 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
         contract_file = Path(contract_rel) if Path(contract_rel).is_absolute() else root / contract_rel
     sha, _data, vas = read_contract_file(contract_file)
     mode = read_mode(root)
-    src_sha = source_sha256(root)
+    manifest, excluded = source_manifest(root)
+    src_sha = _manifest_sha256(manifest)
     required = required_axes(mode, vas)
 
     changed = None
@@ -455,15 +548,14 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
             contract_rel_to_root = None  # contract outside root; git can't see it
         prior = _resolve_prior(changed_from, root, contract_rel_to_root)
         if not prior['resolved']:
-            # Invalid REF: stay machine-readable AND conservative. The protocol
-            # never silently shrinks coverage when a dependency is ambiguous, so
-            # upgrade to the guided-core floor rather than claiming nothing
-            # changed.
+            # Invalid REF: stay machine-readable. The plan reports that it could
+            # not tell what changed instead of guessing a scope; the report gate
+            # still refuses any report whose fingerprints do not match this tree.
             changed = {
                 'ref': changed_from,
                 'available': False,
                 'error': prior.get('error'),
-                'invalidated_axes': list(GUIDED_CORE),
+                'changed_files': None,
             }
         else:
             prior_contract = prior['contract_sha256']
@@ -478,12 +570,7 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
             else:  # JSON report/plan: only compare fields it actually recorded
                 contract_changed = prior_contract is not None and prior_contract != sha
                 source_changed = prior_source is not None and prior_source != src_sha
-            if contract_changed:
-                invalidated = list(AXES)
-            elif source_changed:
-                invalidated = list(SOURCE_INVALIDATES)
-            else:
-                invalidated = []
+            prior_manifest = prior.get('source_manifest')
             changed = {
                 'ref': changed_from,
                 'available': True,
@@ -491,8 +578,17 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
                 'commit': prior.get('commit'),
                 'contract_changed': contract_changed,
                 'source_changed': source_changed,
-                'invalidated_axes': invalidated,
+                # The fact this plan exists to report. What to re-verify is the
+                # agent's call: a file→axis map would be a guess (see docstring).
+                'changed_files': (_file_diff(prior_manifest, manifest)
+                                  if prior_manifest is not None else None),
             }
+            if prior_manifest is None:
+                changed['changed_files_note'] = (
+                    'this REF records only aggregate fingerprints; for a '
+                    'per-file change list use a git revision or a plan/report '
+                    'that carries source_manifest'
+                )
 
     return {
         'project_root': str(root),
@@ -500,6 +596,10 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
         'contract_path': contract_rel,
         'contract_sha256': sha,
         'source_sha256': src_sha,
+        'source_files': len(manifest),
+        'source_excluded': excluded[:SOURCE_EXCLUDED_LIMIT],
+        'source_excluded_truncated': len(excluded) > SOURCE_EXCLUDED_LIMIT,
+        'source_manifest': manifest,
         'levels': [dict(level) for level in LEVELS],
         'required_axes': required,
         'acceptance': vas,
@@ -526,6 +626,15 @@ def _axis_status(axes: dict, axis: str) -> str | None:
 
 
 def validate_report(root, report_path) -> dict:
+    """Check a report against the protocol for the tree as it is right now.
+
+    Fingerprints are an identity check, not a re-run schedule: a report whose
+    ``contract_sha256``/``source_sha256`` differ from the current tree is not
+    valid and cannot be re-scoped into validity. The answer is a fresh report
+    for the current tree, with any axis that was not re-run reported honestly
+    as ``limited``. A report that still reuses an earlier tree's fingerprints
+    is the failure this gate exists to catch.
+    """
     root = Path(root).resolve()
     try:
         report = json.loads(Path(report_path).read_text(encoding='utf-8'))
@@ -550,22 +659,17 @@ def validate_report(root, report_path) -> dict:
     # skipped (it cannot prove or disprove the report on its own).
     required: list[str] = []
     contract_ok = source_ok = None
+    excluded: list[str] = []
     try:
         cur_contract, _data, vas = read_contract_file(contract_path(root))
-        cur_source = source_sha256(root)
+        manifest, excluded = source_manifest(root)
+        cur_source = _manifest_sha256(manifest)
         contract_ok = report.get('contract_sha256') == cur_contract
         source_ok = report.get('source_sha256') == cur_source
         if mode in ('guided', 'strict'):
             required = required_axes(mode, vas)
     except (OSError, ValueError):
         pass
-
-    invalidated: list[str] = []
-    if contract_ok is not None and source_ok is not None:
-        if not contract_ok:
-            invalidated = list(AXES)
-        elif not source_ok:
-            invalidated = list(SOURCE_INVALIDATES)
 
     axes = report.get('axes')
     if not isinstance(axes, dict):
@@ -586,9 +690,25 @@ def validate_report(root, report_path) -> dict:
         if _axis_status(axes, a) is None:
             errors.append(f'{a} missing or invalid status')
 
+    # An axis that claims success has to say what it looked at. This is for
+    # whoever reads the report next, not a check on whether it is true: no
+    # field can carry that, and a field that claims to is worse than none.
+    for a in AXES:
+        result = axes.get(a)
+        if not isinstance(result, dict) or result.get('status') != 'verified':
+            continue
+        if not str(result.get('observed') or '').strip():
+            errors.append(f'{a} verified without recording what was observed')
+
     # Re-verification scope: failures invalidate their dependents; visual
     # failures scope to the affected VA only. Hash-invalidated axes are added
     # wholesale. The scope is bounded by what the project actually requires.
+    invalidated: list[str] = []
+    if contract_ok is not None and source_ok is not None:
+        if not contract_ok:
+            invalidated = list(AXES)
+        elif not source_ok:
+            invalidated = list(SOURCE_INVALIDATES)
     reverify: set[str] = set(invalidated)
     reverify_vas: list[dict] = []
     required_set = set(required)
@@ -617,8 +737,10 @@ def validate_report(root, report_path) -> dict:
         limitations = []
     if overall == 'limited' and not limitations:
         errors.append('limited overall requires limitations')
-    if overall in ('verified', 'limited') and not evidence:
-        errors.append('verified/limited overall requires evidence')
+    if not evidence:
+        # Every deliverable status names what it looked at; a blocked report
+        # without evidence leaves the blocker unknown to whoever resumes.
+        errors.append('overall requires at least one evidence item')
     if mode == 'strict':
         if overall == 'limited':
             errors.append('strict mode cannot be delivered with limited')

@@ -36,6 +36,13 @@ CONTRACT = """# 页面设计合同
 """
 
 
+def _measured(what, **extra):
+    """A passing axis: just what it examined."""
+    entry = {"status": "verified", "observed": what}
+    entry.update(extra)
+    return entry
+
+
 class _ProjectBase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -65,12 +72,12 @@ class _ProjectBase(unittest.TestCase):
             "limitations": [],
             "independent": False,
             "axes": {
-                "contract": {"status": "verified"},
-                "static_build": {"status": "verified"},
-                "core_task": {"status": "verified", "failed_vas": []},
-                "negative_path": {"status": "verified"},
-                "visual_desktop": {"status": "verified", "failed_vas": []},
-                "visual_mobile": {"status": "verified", "failed_vas": []},
+                "contract": _measured("合同块与 3 条 VA"),
+                "static_build": _measured("构建与类型检查"),
+                "core_task": _measured("登记链路", failed_vas=[]),
+                "negative_path": _measured("空数量提交"),
+                "visual_desktop": _measured("1440px 首屏", failed_vas=[]),
+                "visual_mobile": _measured("375px 首屏", failed_vas=[]),
             },
         }
         report.update(overrides)
@@ -103,38 +110,77 @@ class PlanTests(_ProjectBase):
                          ["VA-01", "VA-02", "VA-03"])
         self.assertTrue(result["rules"]["static_failure_blocks_browser"])
 
-    def test_plan_changed_from_invalidates_on_contract_change(self):
+    def test_plan_changed_from_reports_contract_change(self):
         prior = self._write_report(self.plan, "prior.json")
         path = self.root / ".site" / "design" / "surface-brief.md"
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         result = check.plan(self.root, ".site/design/surface-brief.md", changed_from=str(prior))
-        self.assertTrue(result["changed_from"]["contract_changed"])
-        self.assertFalse(result["changed_from"]["source_changed"])
-        self.assertEqual(result["changed_from"]["invalidated_axes"], list(check.AXES))
+        cf = result["changed_from"]
+        self.assertTrue(cf["contract_changed"])
+        self.assertFalse(cf["source_changed"])
+        # The plan reports the fact; it does not decide which axes to re-run.
+        self.assertNotIn("invalidated_axes", cf)
+        self.assertEqual(cf["changed_files"], {"added": [], "removed": [],
+                                               "modified": [], "truncated": False})
 
-    def test_plan_changed_from_invalidates_on_source_change(self):
+    def test_plan_changed_from_reports_source_change(self):
         prior = self._write_report(self.plan, "prior.json")
         (self.root / "index.html").write_text("<html><body></body></html>", encoding="utf-8")
         result = check.plan(self.root, ".site/design/surface-brief.md", changed_from=str(prior))
-        self.assertTrue(result["changed_from"]["source_changed"])
-        self.assertFalse(result["changed_from"]["contract_changed"])
-        invalidated = result["changed_from"]["invalidated_axes"]
-        self.assertIn("static_build", invalidated)
-        self.assertIn("core_task", invalidated)
-        self.assertIn("visual_mobile", invalidated)
-        self.assertNotIn("contract", invalidated)
+        cf = result["changed_from"]
+        self.assertTrue(cf["source_changed"])
+        self.assertFalse(cf["contract_changed"])
+        self.assertEqual(cf["changed_files"]["modified"], ["index.html"])
+        self.assertEqual(cf["changed_files"]["added"], [])
 
     def test_plan_changed_from_unavailable_ref_is_honest(self):
         result = check.plan(self.root, ".site/design/surface-brief.md",
                             changed_from=str(self.root / "missing.json"))
         # An REF that is neither a readable report nor a resolvable git
-        # revision is reported machine-readably and, per the protocol's
-        # "never silently shrink coverage" rule, conservatively upgrades to
-        # the guided-core floor rather than claiming nothing changed.
-        self.assertFalse(result["changed_from"]["available"])
-        self.assertTrue(result["changed_from"]["error"])
-        self.assertEqual(result["changed_from"]["invalidated_axes"],
-                         list(check.GUIDED_CORE))
+        # revision is reported machine-readably instead of guessing a scope.
+        # The report gate still refuses anything that does not match this tree.
+        cf = result["changed_from"]
+        self.assertFalse(cf["available"])
+        self.assertTrue(cf["error"])
+        self.assertIsNone(cf["changed_files"])
+
+    def test_plan_reports_what_it_excluded(self):
+        (self.root / "data").mkdir()
+        (self.root / "data" / "inventory.db").write_bytes(b"state")
+        (self.root / "src").mkdir()
+        (self.root / "src" / "data.json").write_text("{}", encoding="utf-8")
+        (self.root / "notes.log").write_text("x", encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md")
+        self.assertIn("data/inventory.db", result["source_excluded"])
+        self.assertIn("notes.log", result["source_excluded"])
+        # A product directory that merely happens to be called data/ stays in.
+        self.assertIn("src/data.json", result["source_manifest"])
+        self.assertNotIn("src/data.json", result["source_excluded"])
+        self.assertEqual(result["source_files"], len(result["source_manifest"]))
+
+    def test_runtime_state_does_not_invalidate_a_report(self):
+        # The failure this replaces: the shopkeeper sells one bottle, the
+        # database changes, and every axis is invalidated.
+        baseline = check.plan(self.root, ".site/design/surface-brief.md")
+        report = self._validate(self._guided_report())
+        self.assertTrue(report["valid"], report["errors"])
+        (self.root / "data").mkdir()
+        (self.root / "data" / "inventory.db").write_bytes(b"sold one bottle")
+        after = check.plan(self.root, ".site/design/surface-brief.md")
+        self.assertEqual(after["source_sha256"], baseline["source_sha256"])
+        self.assertTrue(self._validate(self._guided_report())["valid"])
+
+    def test_editing_a_check_script_is_a_source_change(self):
+        # Check scripts are evidence, not bookkeeping: changing one invalidates
+        # the report it produced, because the PASS came from the old script.
+        (self.root / "app").mkdir()
+        (self.root / "app" / "check.mjs").write_text("run()", encoding="utf-8")
+        prior = check.plan(self.root, ".site/design/surface-brief.md")
+        (self.root / "app" / "check.mjs").write_text("run(2)", encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from=self._write_report(prior, "prior.json"))
+        self.assertEqual(result["changed_from"]["changed_files"]["modified"],
+                         ["app/check.mjs"])
 
 
 class GitRefTests(_ProjectBase):
@@ -167,7 +213,8 @@ class GitRefTests(_ProjectBase):
         self.assertTrue(cf["commit"])
         self.assertFalse(cf["contract_changed"])
         self.assertFalse(cf["source_changed"])
-        self.assertEqual(cf["invalidated_axes"], [])
+        self.assertEqual(cf["changed_files"], {"added": [], "removed": [],
+                                               "modified": [], "truncated": False})
 
     def test_git_ref_source_only_change(self):
         (self.root / "index.html").write_text(
@@ -177,12 +224,19 @@ class GitRefTests(_ProjectBase):
         cf = result["changed_from"]
         self.assertTrue(cf["source_changed"])
         self.assertFalse(cf["contract_changed"])
-        invalidated = cf["invalidated_axes"]
-        self.assertIn("static_build", invalidated)
-        self.assertIn("core_task", invalidated)
-        self.assertIn("visual_mobile", invalidated)
-        self.assertNotIn("contract", invalidated)
-        self.assertEqual(invalidated, list(check.SOURCE_INVALIDATES))
+        self.assertEqual(cf["changed_files"]["modified"], ["index.html"])
+        self.assertEqual(result["source_sha256"],
+                         check.source_sha256(self.root))
+
+    def test_git_ref_lists_added_and_removed_files(self):
+        (self.root / "extra.css").write_text("body{}", encoding="utf-8")
+        (self.root / "index.html").unlink()
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]["changed_files"]
+        self.assertEqual(cf["added"], ["extra.css"])
+        self.assertEqual(cf["removed"], ["index.html"])
+        self.assertEqual(cf["modified"], [])
 
     def test_git_ref_contract_change(self):
         path = self.root / ".site" / "design" / "surface-brief.md"
@@ -194,12 +248,12 @@ class GitRefTests(_ProjectBase):
         # The contract lives under .site (ignored by the source scan), so a
         # contract-only edit must not also trip the source gate.
         self.assertFalse(cf["source_changed"])
-        self.assertEqual(cf["invalidated_axes"], list(check.AXES))
+        self.assertEqual(cf["changed_files"]["modified"], [])
 
     def test_git_ref_contract_added_since_ref(self):
         # Baseline ref predates the contract: the contract is absent at ref but
-        # present now, which must conservatively invalidate every axis (never
-        # silently drop L0).
+        # present now, which must conservatively count as a contract change
+        # (never silently drop L0).
         contract = self.root / ".site" / "design" / "surface-brief.md"
         contents = contract.read_text(encoding="utf-8")
         contract.unlink()
@@ -211,15 +265,14 @@ class GitRefTests(_ProjectBase):
         cf = result["changed_from"]
         self.assertTrue(cf["available"])
         self.assertTrue(cf["contract_changed"])
-        self.assertEqual(cf["invalidated_axes"], list(check.AXES))
 
-    def test_git_ref_invalid_revision_is_conservative(self):
+    def test_git_ref_invalid_revision_is_honest(self):
         result = check.plan(self.root, ".site/design/surface-brief.md",
                             changed_from="not-a-real-ref-xyz")
         cf = result["changed_from"]
         self.assertFalse(cf["available"])
         self.assertTrue(cf["error"])
-        self.assertEqual(cf["invalidated_axes"], list(check.GUIDED_CORE))
+        self.assertIsNone(cf["changed_files"])
 
 
 class ValidateReportTests(_ProjectBase):
@@ -229,6 +282,151 @@ class ValidateReportTests(_ProjectBase):
         self.assertEqual(result["overall"], "verified")
         self.assertTrue(result["hash"]["contract_valid"])
         self.assertTrue(result["hash"]["source_valid"])
+
+    def test_verified_axis_needs_to_say_what_it_looked_at(self):
+        report = self._guided_report()
+        report["axes"]["visual_desktop"] = {"status": "verified"}
+        result = self._validate(report)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("what was observed" in e for e in result["errors"]))
+
+    def test_runtime_state_does_not_invalidate_a_report(self):
+        # The failure this replaces: the shopkeeper sells one bottle, the
+        # database changes, and every axis is invalidated.
+        baseline = check.plan(self.root, ".site/design/surface-brief.md")
+        report = self._validate(self._guided_report())
+        self.assertTrue(report["valid"], report["errors"])
+        (self.root / "data").mkdir()
+        (self.root / "data" / "inventory.db").write_bytes(b"sold one bottle")
+        after = check.plan(self.root, ".site/design/surface-brief.md")
+        self.assertEqual(after["source_sha256"], baseline["source_sha256"])
+        self.assertTrue(self._validate(self._guided_report())["valid"])
+
+    def test_editing_a_check_script_is_a_source_change(self):
+        # Check scripts are evidence, not bookkeeping: changing one invalidates
+        # the report it produced, because the PASS came from the old script.
+        (self.root / "app").mkdir()
+        (self.root / "app" / "check.mjs").write_text("run()", encoding="utf-8")
+        prior = check.plan(self.root, ".site/design/surface-brief.md")
+        (self.root / "app" / "check.mjs").write_text("run(2)", encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from=self._write_report(prior, "prior.json"))
+        self.assertEqual(result["changed_from"]["changed_files"]["modified"],
+                         ["app/check.mjs"])
+
+
+class GitRefTests(_ProjectBase):
+    """--changed-from also accepts a git revision; the project subtree is
+    re-fingerprinted at that revision and compared to the working tree."""
+
+    def _git(self, *args):
+        import subprocess
+        env = {"GIT_TERMINAL_PROMPT": "0",
+               "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+        subprocess.run(["git", "-C", str(self.root), *args],
+                        capture_output=True, env=env, timeout=30, check=True)
+
+    def setUp(self):
+        super().setUp()
+        # Commit the plan's contract + source so HEAD is a usable baseline.
+        self._git("init")
+        self._git("add", "-A")
+        self._git("-c", "commit.gpgsign=false", "commit", "-m", "baseline")
+        # Re-derive the plan against the now-committed working tree.
+        self.plan = check.plan(self.root, ".site/design/surface-brief.md")
+
+    def test_git_ref_no_change(self):
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]
+        self.assertTrue(cf["available"])
+        self.assertEqual(cf["source"], "git")
+        self.assertTrue(cf["commit"])
+        self.assertFalse(cf["contract_changed"])
+        self.assertFalse(cf["source_changed"])
+        self.assertEqual(cf["changed_files"], {"added": [], "removed": [],
+                                               "modified": [], "truncated": False})
+
+    def test_git_ref_source_only_change(self):
+        (self.root / "index.html").write_text(
+            "<html><body>changed</body></html>", encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]
+        self.assertTrue(cf["source_changed"])
+        self.assertFalse(cf["contract_changed"])
+        self.assertEqual(cf["changed_files"]["modified"], ["index.html"])
+        self.assertEqual(result["source_sha256"],
+                         check.source_sha256(self.root))
+
+    def test_git_ref_lists_added_and_removed_files(self):
+        (self.root / "extra.css").write_text("body{}", encoding="utf-8")
+        (self.root / "index.html").unlink()
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]["changed_files"]
+        self.assertEqual(cf["added"], ["extra.css"])
+        self.assertEqual(cf["removed"], ["index.html"])
+        self.assertEqual(cf["modified"], [])
+
+    def test_git_ref_contract_change(self):
+        path = self.root / ".site" / "design" / "surface-brief.md"
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]
+        self.assertTrue(cf["contract_changed"])
+        # The contract lives under .site (ignored by the source scan), so a
+        # contract-only edit must not also trip the source gate.
+        self.assertFalse(cf["source_changed"])
+        self.assertEqual(cf["changed_files"]["modified"], [])
+
+    def test_git_ref_contract_added_since_ref(self):
+        # Baseline ref predates the contract: the contract is absent at ref but
+        # present now, which must conservatively count as a contract change
+        # (never silently drop L0).
+        contract = self.root / ".site" / "design" / "surface-brief.md"
+        contents = contract.read_text(encoding="utf-8")
+        contract.unlink()
+        self._git("add", "-A")
+        self._git("-c", "commit.gpgsign=false", "commit", "-m", "no-contract")
+        contract.write_text(contents, encoding="utf-8")
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="HEAD")
+        cf = result["changed_from"]
+        self.assertTrue(cf["available"])
+        self.assertTrue(cf["contract_changed"])
+
+    def test_git_ref_invalid_revision_is_honest(self):
+        result = check.plan(self.root, ".site/design/surface-brief.md",
+                            changed_from="not-a-real-ref-xyz")
+        cf = result["changed_from"]
+        self.assertFalse(cf["available"])
+        self.assertTrue(cf["error"])
+        self.assertIsNone(cf["changed_files"])
+
+
+class ValidateReportTests(_ProjectBase):
+    def test_valid_guided_verified_report(self):
+        result = self._validate(self._guided_report())
+        self.assertTrue(result["valid"], result["errors"])
+        self.assertEqual(result["overall"], "verified")
+        self.assertTrue(result["hash"]["contract_valid"])
+        self.assertTrue(result["hash"]["source_valid"])
+
+    def test_verified_axis_needs_to_say_what_it_measured(self):
+        report = self._guided_report()
+        report["axes"]["visual_desktop"] = {"status": "verified"}
+        result = self._validate(report)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("what was observed" in e for e in result["errors"]))
+
+    def test_runtime_state_does_not_invalidate_a_report(self):
+        (self.root / "data").mkdir()
+        (self.root / "data" / "inventory.db").write_bytes(b"state")
+        result = self._validate(self._guided_report())
+        self.assertTrue(result["valid"], result["errors"])
 
     def test_guided_allows_limited(self):
         report = self._guided_report(
@@ -262,7 +460,7 @@ class ValidateReportTests(_ProjectBase):
         report = self._guided_report()
         report["axes"]["static_build"] = {"status": "blocked"}
         # core_task ran despite the static gate failing.
-        report["axes"]["core_task"] = {"status": "verified", "failed_vas": []}
+        report["axes"]["core_task"] = _measured("登记链路", failed_vas=[])
         report["overall"] = "blocked"
         report["evidence"] = ["构建失败"]
         report["limitations"] = ["构建未通过"]
@@ -273,7 +471,7 @@ class ValidateReportTests(_ProjectBase):
     def test_mobile_single_axis_failure_reverifies_affected_va_only(self):
         report = self._guided_report()
         report["axes"]["visual_mobile"] = {"status": "blocked", "failed_vas": ["VA-03"]}
-        report["axes"]["visual_desktop"] = {"status": "verified", "failed_vas": []}
+        report["axes"]["visual_desktop"] = _measured("1440px 首屏", failed_vas=[])
         report["overall"] = "blocked"
         report["evidence"] = ["窄屏信息丢失"]
         report["limitations"] = ["移动端未通过"]
@@ -320,8 +518,8 @@ class StrictModeTests(_ProjectBase):
         report = self._guided_report()
         report["mode"] = "strict"
         report["independent"] = True
-        report["axes"]["reopen"] = {"status": "verified"}
-        report["axes"]["risk"] = {"status": "verified"}
+        report["axes"]["reopen"] = _measured("刷新后数据保持")
+        report["axes"]["risk"] = _measured("密钥与公开数据面")
         report.update(overrides)
         return report
 

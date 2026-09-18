@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ if hasattr(sys.stdin, 'reconfigure'):
 MODES = {"guided", "strict"}
 VERIFY_STATUSES = {"verified", "limited", "blocked"}
 STAGES = {"discovering", "decided", "building", "blocked", "delivered"}
+VERIFICATION_PHASES = {"idle", "checking"}
 CONTRACT_REL_PATH = ".site/design/surface-brief.md"
 # Mirrors site-design/scripts/design.py: presence of this fenced block is what
 # check-contract treats as "contract present". state.py only checks presence
@@ -65,6 +67,12 @@ def read_state(root: Path) -> dict:
     # memory so new structure-choice logic can run without forcing a re-init.
     if "discovery" not in state:
         state["discovery"] = default_discovery()
+    verification = state.get("verification")
+    if not isinstance(verification, dict):
+        state["verification"] = blank_verification()
+    elif verification.get("phase") not in VERIFICATION_PHASES:
+        # States written before verification rounds existed: no round is open.
+        verification["phase"] = "idle"
     return state
 
 
@@ -83,10 +91,58 @@ def write_state(root: Path, state: dict) -> None:
             os.unlink(temp_name)
 
 
-def record(state: dict, action: str, from_stage: str) -> None:
-    state["history"].append(
-        {"action": action, "from": from_stage, "to": state["stage"], "at": now()}
-    )
+def record(state: dict, action: str, from_stage: str, note: str | None = None) -> None:
+    entry = {"action": action, "from": from_stage, "to": state["stage"], "at": now()}
+    if note:
+        entry["note"] = note
+    state["history"].append(entry)
+
+
+JOURNAL_HEADER = (
+    "# 工作日志\n"
+    "\n"
+    "切片勾选、验证证据、发现的缺陷和被推翻的假设都写在这里，只追加，不改旧行。\n"
+    "`.site/design/surface-brief.md` 参与指纹，改它会作废已经跑过的验证，所以这些内容不写进合同。\n"
+    "\n"
+    "| 时间 | 对象 | 客观事实 | 影响 |\n"
+    "| --- | --- | --- | --- |\n"
+)
+
+
+def journal_path(root: Path) -> Path:
+    return state_path(root).parent / "journal.md"
+
+
+def ensure_journal(root: Path) -> Path:
+    """Create the append-only work log if absent. Never rewrites an existing one."""
+    path = journal_path(root)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(JOURNAL_HEADER, encoding="utf-8")
+    return path
+
+
+def blank_verification() -> dict:
+    """Fresh verification block.
+
+    ``phase`` tracks whether a check round is open. ``checking`` exists so the
+    control loop can block ``write_source`` while a checker is reading the tree:
+    a verification whose subject moves underneath it is a round thrown away, and
+    the fingerprint gate only finds out once the round is already lost.
+    """
+    return {
+        "phase": "idle",
+        "status": None,
+        "evidence": [],
+        "limitations": [],
+        "independent": False,
+        "checked_at": None,
+    }
+
+
+def verification_phase(state: dict) -> str:
+    phase = (state.get("verification") or {}).get("phase")
+    return phase if phase in VERIFICATION_PHASES else "idle"
 
 
 def clean_items(items: list[str]) -> list[str]:
@@ -150,7 +206,7 @@ def preflight_state(state: dict) -> dict:
         ),
         "building": (
             "verify_core_task",
-            ["write_source", "run_checks", "site-check", "verify", "block"],
+            ["write_source", "run_checks", "site-check", "begin-check", "block"],
             ["deliver"],
         ),
         "blocked": (
@@ -167,6 +223,13 @@ def preflight_state(state: dict) -> dict:
     action, allowed, blocked = actions[state["stage"]]
     if state["stage"] == "discovering":
         action = discovery_next_action(state.get("discovery", {}))
+    checking = state["stage"] == "building" and verification_phase(state) == "checking"
+    if checking:
+        # A check round is open. Writing source now moves the subject the
+        # checker is reading, which voids the round it is in the middle of.
+        action = "finish_verification"
+        allowed = ["verify", "cancel-check", "block"]
+        blocked = ["write_source", "deliver"]
     missing = []
     if not state["decision"]["confirmed"]:
         missing.append("confirmed_direction")
@@ -174,6 +237,8 @@ def preflight_state(state: dict) -> dict:
     structure = discovery.get("structure", {})
     if structure.get("mode") == "choice" and not structure.get("selected"):
         missing.append("structure_selection")
+    if checking:
+        missing.append("check_report")
     if state["mode"] == "strict" and state["stage"] == "building":
         missing.append("independent_verification")
     return {
@@ -217,18 +282,16 @@ def init(root: Path, mode: str) -> dict:
             "exclude": [],
             "quote": "",
         },
-        "verification": {
-            "status": None,
-            "evidence": [],
-            "limitations": [],
-            "independent": False,
-            "checked_at": None,
-        },
+        "verification": blank_verification(),
         "history": [],
         "created_at": now(),
         "updated_at": now(),
     }
     write_state(root, state)
+    # The work log is where slice state and evidence live: the contract
+    # participates in the fingerprint, so writing progress into it would void
+    # every verification already run.
+    ensure_journal(root)
     return preflight_state(state)
 
 
@@ -260,13 +323,7 @@ def decide(
         "quote": quote.strip(),
     }
     state["stage"] = "decided"
-    state["verification"] = {
-        "status": None,
-        "evidence": [],
-        "limitations": [],
-        "independent": False,
-        "checked_at": None,
-    }
+    state["verification"] = blank_verification()
     record(state, "decide", old)
     write_state(root, state)
     return preflight_state(state)
@@ -453,14 +510,57 @@ def start(root: Path, contract_report=None) -> dict:
     return result
 
 
-def _load_check_report(report_path, root: Path) -> dict:
-    """Derive verification fields from a site-check report.
+def _check_script() -> Path | None:
+    """Locate the site-check protocol script installed next to this skill.
 
-    The report's top-level ``overall``/``evidence``/``limitations``/
-    ``independent`` are the checker's honest summary; the per-axis detail is
-    validated by ``check.py validate-report``. state.py only needs the summary
-    plus a project_root match so a report from another project cannot be
-    attached here.
+    Both layouts are the same relative hop: the four skills are siblings, in
+    the repository (``release/site-builder``) and after installation
+    (``agent-skills/site-builder``).
+    """
+    candidate = (Path(__file__).resolve().parent.parent.parent
+                 / "site-check" / "scripts" / "check.py")
+    return candidate if candidate.is_file() else None
+
+
+def _check_verdict(root: Path, report_path) -> dict:
+    """Ask the site-check protocol whether a report holds for this tree.
+
+    The protocol owns the rules; state.py must not re-derive them, or the two
+    drift and a report the protocol rejects can still be recorded as
+    delivered. Fail closed: no validator, no verification.
+    """
+    script = _check_script()
+    if script is None:
+        raise ValueError(
+            "cannot validate the check report: site-check/scripts/check.py was "
+            "not found next to site-builder; install the skills as a bundle"
+        )
+    try:
+        interpreter = sys.executable or "python3"
+        proc = subprocess.run(
+            [interpreter, str(script), "validate-report", str(root), str(report_path)],
+            capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot validate the check report: {exc}") from exc
+    try:
+        verdict = json.loads(proc.stdout.decode("utf-8", "replace"))
+    except json.JSONDecodeError as exc:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(
+            f"check report validation produced no verdict: {exc} {detail}".strip()
+        ) from exc
+    if not isinstance(verdict, dict) or "error" in verdict:
+        raise ValueError(f"cannot validate the check report: {verdict}")
+    return verdict
+
+
+def _load_check_report(report_path, root: Path) -> dict:
+    """Read a site-check report's summary fields.
+
+    Rules are not repeated here: ``check.py validate-report`` has already
+    accepted the report for this tree (see :func:`_check_verdict`). This only
+    carries the checker's honest summary into the state file.
     """
     try:
         report = json.loads(Path(report_path).read_text(encoding="utf-8"))
@@ -489,42 +589,76 @@ def _load_check_report(report_path, root: Path) -> dict:
     }
 
 
-def verify(
-    root: Path,
-    status: str | None = None,
-    evidence: list[str] | None = None,
-    limitations: list[str] | None = None,
-    independent: bool = False,
-    report=None,
-) -> dict:
-    """Record verification while building.
+def begin_check(root: Path) -> dict:
+    """Open a verification round and stop source writes until it closes.
 
-    ``--report`` is the preferred path: it derives status, evidence,
-    limitations and independent from a site-check report. ``--status`` with
-    ``--evidence`` is kept as a transitional path for callers that have not yet
-    adopted the report protocol. Either way the three deliverable statuses
-    (verified / limited / blocked) and the mode rules are enforced the same.
+    Handing the tree to a checker and then editing it invalidates the round
+    already in progress; this puts that rule where the control loop reads it
+    instead of leaving it as prose the agent has to remember.
+    """
+    state = read_state(root)
+    if state["stage"] != "building":
+        raise ValueError("a verification round only opens while building")
+    if verification_phase(state) == "checking":
+        raise ValueError("a verification round is already open")
+    state["verification"]["phase"] = "checking"
+    record(state, "begin-check", state["stage"])
+    write_state(root, state)
+    return preflight_state(state)
+
+
+def cancel_check(root: Path, reason: str) -> dict:
+    """Close an open round without a verdict and go back to fixing.
+
+    The reason is what the round found; it goes into the history, because a
+    round that ends without a verdict still produced a fact worth keeping.
+    """
+    state = read_state(root)
+    if state["stage"] != "building" or verification_phase(state) != "checking":
+        raise ValueError("there is no open verification round to cancel")
+    if not reason.strip():
+        raise ValueError("a reason is required: what did the round find?")
+    state["verification"]["phase"] = "idle"
+    record(state, "cancel-check", state["stage"], note=reason.strip())
+    write_state(root, state)
+    return preflight_state(state)
+
+
+def verify(root: Path, report=None) -> dict:
+    """Record verification while building, from a validated site-check report.
+
+    The report is the evidence. A status typed in by hand says nothing about
+    what was actually checked, so there is no path to ``delivered`` that skips
+    the protocol: the report must match this tree's fingerprints, respect the
+    gating rules and state what each passing axis examined.
     """
     state = read_state(root)
     if state["stage"] != "building":
         raise ValueError("verification can only be recorded while building")
-    if report is not None:
-        derived = _load_check_report(report, root)
-        status = derived["status"]
-        evidence = derived["evidence"]
-        limitations = derived["limitations"]
-        independent = derived["independent"]
-    else:
-        if status is None:
-            raise ValueError("either --report or --status is required")
-        if status not in VERIFY_STATUSES:
-            raise ValueError(f"status must be one of: {', '.join(sorted(VERIFY_STATUSES))}")
-    evidence = clean_items(evidence or [])
-    limitations = clean_items(limitations or [])
+    if verification_phase(state) != "checking":
+        raise ValueError(
+            "open a verification round first: state.py begin-check PROJECT"
+        )
+    if report is None:
+        raise ValueError("verification requires --report, a site-check report")
+    verdict = _check_verdict(root, report)
+    if not verdict.get("valid"):
+        reasons = list(verdict.get("errors") or [])
+        if verdict.get("invalidated_axes"):
+            reasons.append(
+                "the report's fingerprints do not match the current tree; re-run "
+                "the affected checks and write a fresh report for this tree"
+            )
+        raise ValueError(
+            "check report does not hold for this tree: " + "; ".join(reasons or ["unknown"])
+        )
+    derived = _load_check_report(report, root)
+    status = derived["status"]
+    evidence = clean_items(derived["evidence"])
+    limitations = clean_items(derived["limitations"])
+    independent = derived["independent"]
     if not evidence:
         raise ValueError("at least one concrete evidence item is required")
-    if status == "limited" and not limitations:
-        raise ValueError("limited verification must name its limitations")
     if state["mode"] == "strict" and status == "limited":
         raise ValueError("strict mode cannot be delivered with limited verification")
     if state["mode"] == "strict" and status == "verified" and not independent:
@@ -532,6 +666,7 @@ def verify(
 
     old = state["stage"]
     state["verification"] = {
+        **blank_verification(),
         "status": status,
         "evidence": evidence,
         "limitations": limitations,
@@ -577,6 +712,8 @@ def resume(root: Path) -> dict:
     old = state["stage"]
     state["stage"] = state.pop("resume_stage")
     state.pop("blocked_reason", None)
+    # Coming back means going back to fixing, so no round is open any more.
+    state["verification"]["phase"] = "idle"
     record(state, "resume", old)
     write_state(root, state)
     return preflight_state(state)
@@ -597,13 +734,7 @@ def reopen(root: Path, reason: str) -> dict:
         "quote": "",
     }
     state["discovery"] = default_discovery()
-    state["verification"] = {
-        "status": None,
-        "evidence": [],
-        "limitations": [],
-        "independent": False,
-        "checked_at": None,
-    }
+    state["verification"] = blank_verification()
     state["reopen_reason"] = reason.strip()
     state.pop("blocked_reason", None)
     state.pop("resume_stage", None)
@@ -652,19 +783,26 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--candidate", required=True)
     command.add_argument("--quote", required=True)
 
+    command = sub.add_parser(
+        "begin-check",
+        help="open a verification round; source writes stay blocked until it closes",
+    )
+    command.add_argument("root", type=Path)
+
+    command = sub.add_parser(
+        "cancel-check",
+        help="close an open round without a verdict and go back to fixing",
+    )
+    command.add_argument("root", type=Path)
+    command.add_argument("--reason", required=True)
+
     command = sub.add_parser("verify")
     command.add_argument("root", type=Path)
     command.add_argument(
-        "--status", choices=sorted(VERIFY_STATUSES), default=None,
-        help="deliverable status; transitional, mutually exclusive with --report",
+        "--report", type=Path, required=True,
+        help="path to a site-check report; validated against this tree by "
+             "site-check/scripts/check.py before it is recorded",
     )
-    command.add_argument(
-        "--report", type=Path, default=None,
-        help="path to a site-check report; derives status/evidence/limitations/independent",
-    )
-    command.add_argument("--evidence", action="append", default=[])
-    command.add_argument("--limitation", action="append", default=[])
-    command.add_argument("--independent", action="store_true")
 
     command = sub.add_parser("block")
     command.add_argument("root", type=Path)
@@ -692,10 +830,12 @@ def main() -> int:
             result = select_structure(root, args.candidate, args.quote)
         elif args.action == "start":
             result = start(root, contract_report=args.contract_report)
+        elif args.action == "begin-check":
+            result = begin_check(root)
+        elif args.action == "cancel-check":
+            result = cancel_check(root, args.reason)
         elif args.action == "verify":
-            result = verify(root, status=args.status, evidence=args.evidence,
-                            limitations=args.limitation, independent=args.independent,
-                            report=args.report)
+            result = verify(root, report=args.report)
         elif args.action == "block":
             result = block(root, args.reason)
         elif args.action == "resume":

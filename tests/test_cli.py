@@ -7,6 +7,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "release" / "site-builder" / "scripts" / "state.py"
 DESIGN = Path(__file__).parents[1] / "release" / "site-design" / "scripts" / "design.py"
+CHECK = Path(__file__).parents[1] / "release" / "site-check" / "scripts" / "check.py"
 
 # A contract that passes prebuild: every indexed ID exists in the body, the BR
 # has a handoff target, the required IC has a structural impact, the VA is
@@ -105,6 +106,34 @@ class StateCliTests(unittest.TestCase):
         )
         return report
 
+    def write_check_report(self, root, overall="verified"):
+        """Write a check report the protocol accepts for ``root`` as it is now.
+
+        Fingerprints come from check.py itself, so the CLI flow exercises the
+        same validation a real verification does.
+        """
+        plan = json.loads(subprocess.run(
+            [sys.executable, str(CHECK), "plan", str(root)],
+            check=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        ).stdout)
+        status = "verified" if overall == "verified" else "not_run"
+        axes = {axis: {"status": status, "observed": f"{axis} 覆盖"}
+                for axis in plan["required_axes"]}
+        report = root / ".site" / "check-report.json"
+        report.write_text(json.dumps({
+            "project_root": str(root.resolve()),
+            "mode": plan["mode"],
+            "overall": overall,
+            "independent": False,
+            "contract_sha256": plan["contract_sha256"],
+            "source_sha256": plan["source_sha256"],
+            "axes": axes,
+            "evidence": ["新增库存后刷新仍可见"],
+            "limitations": [] if overall == "verified" else ["未验证"],
+        }, ensure_ascii=False), encoding="utf-8")
+        return report
+
     def test_guided_cli_flow(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -123,15 +152,28 @@ class StateCliTests(unittest.TestCase):
             )
             report = self.write_contract_report(root)
             self.run_cli("start", root, "--contract-report", report)
+            self.run_cli("begin-check", root)
             delivered = self.run_cli(
                 "verify",
                 root,
-                "--status",
-                "verified",
-                "--evidence",
-                "新增库存后刷新仍可见",
+                "--report",
+                self.write_check_report(root),
             )
             self.assertEqual(delivered["next_action"], "report_delivery")
+
+    def test_verify_rejects_a_stale_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.run_cli("init", root, "--mode", "guided")
+            self.run_cli("decide", root, "--task", "登记库存", "--direction",
+                         "单工作台", "--quote", "就按这个方向做")
+            self.run_cli("start", root, "--contract-report", self.write_contract_report(root))
+            report = self.write_check_report(root)
+            # The product changes after the report was written.
+            (root / "app.js").write_text("show()", encoding="utf-8")
+            self.run_cli("begin-check", root)
+            result = self.run_cli("verify", root, "--report", report, expected=2)
+            self.assertIn("fresh report", result["error"])
 
     def test_invalid_transition_returns_machine_readable_error(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -184,8 +226,9 @@ class StateCliTests(unittest.TestCase):
             )
             report = self.write_contract_report(root)
             self.run_cli("start", root, "--contract-report", report)
+            self.run_cli("begin-check", root)
             delivered = self.run_cli(
-                "verify", root, "--status", "verified", "--evidence", "刷新后仍可见"
+                "verify", root, "--report", self.write_check_report(root)
             )
             self.assertEqual(delivered["next_action"], "report_delivery")
 

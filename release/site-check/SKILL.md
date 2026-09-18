@@ -9,7 +9,34 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 ## 协议
 
-`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴、门禁顺序，以及（给了 `--changed-from` 时）哪些轴已失效。`REF` 有两种输入，不会混淆：可读的旧计划或报告 JSON（直接用它的指纹），或者项目所在仓库里能解析的 git revision（分支、标签、提交，按该 revision 重算合同和源码指纹再比对）。两种都不是时，机器可读地报错，并保守升级到 `guided-core`，不谎称没有变化。git 解析只用 stdlib 子进程，结果确定，不启动浏览器。`check.py validate-report PROJECT REPORT.json` 校验一份检查报告是否符合协议，返回 `valid / overall / invalidated_axes / reverify / reverify_vas / browser_blocked / errors`，供 `state.py verify --report` 使用。
+`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴和门禁顺序，并输出 `source_files / source_excluded / source_manifest`——哪些文件算产品、哪些被排除，都摆出来。产品源码之外的运行期状态（根目录下的 `data/`、`uploads/`、构建产物、`*.db`、`*.sqlite`、`*.log`）不进指纹：店主卖出第一瓶水不该作废一份关于代码的报告。检查脚本仍算源码，改了它，它产出过的 PASS 就不再作数。
+
+`source_excluded` 是给你核对的：如果里面出现了真正属于产品的东西（比如一个随产品发布的只读 `.db`），那说明排除规则猜错了，把它当成限制如实写进报告，不要当作已覆盖。
+
+给了 `--changed-from` 时，报告**哪些文件变了**（`changed_files` 的 added / removed / modified）。`REF` 有两种输入，不会混淆：可读的旧计划或报告 JSON（直接用它的指纹；旧文件里带 `source_manifest` 时也能列出逐文件变化），或者项目所在仓库里能解析的 git revision（分支、标签、提交，按该 revision 重算再比对）。两种都不是时，机器可读地报错，`changed_files` 为 `null`，不猜范围。**哪些轴要重验由你判断，不由工具规定**：文件后缀推不出影响面，一条 `display:none` 就能让核心任务消失，和挪一个像素的代价完全不同。
+
+`check.py validate-report PROJECT REPORT.json` 校验一份检查报告是否符合协议，返回 `valid / overall / invalidated_axes / reverify / reverify_vas / browser_blocked / errors`。`state.py verify --report` 会先跑它，`valid` 不为真就拒绝记录，所以它是交付的**门禁**，不是参考意见：指纹对不上当前源码的报告不是"部分过期"，而是不成立。**每一轮都针对当前源码写一份新报告**，没重跑的轴如实记为 `limited` 并写明是哪条，不要拿旧报告凑。
+
+报告的骨架（下面的指纹从 `check.py plan` 的输出里取，不要自己算）：
+
+```json
+{
+  "project_root": "/项目绝对路径",
+  "mode": "guided",
+  "overall": "verified",
+  "independent": false,
+  "contract_sha256": "plan 的 contract_sha256",
+  "source_sha256": "plan 的 source_sha256",
+  "source_manifest": "plan 的 source_manifest，原样带上",
+  "axes": {
+    "core_task": {"status": "verified", "observed": "登记 → 刷新 → 数量正确，5 条记录"}
+  },
+  "evidence": ["可核对的事实"],
+  "limitations": []
+}
+```
+
+`axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。`source_manifest` 原样抄 `plan` 的输出：带上它，下一轮 `--changed-from` 这份报告就能直接列出改过哪些文件；不带也能校验，只是只能告诉你"变了"。代价是体积，每个文件约 100 字节，一万个文件约 1MB——现在无所谓，文件数上到几千再说。
 
 六个层级、八条轴：
 
@@ -28,8 +55,10 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 - **静态门禁**：L0/L1 没过就不启动浏览器；浏览器轴必须记为 `not_run`，overall 为 `blocked`。
 - **视觉复验范围**：视觉轴没过只复验受影响的页面、状态和视口（报告里记 `failed_vas`），不重跑全部视口。
-- **哈希失效**：合同 SHA-256 一变，所有轴失效；源码 SHA-256 一变，L1-L5 失效（合同在 `.site` 下单独指纹，改源码不影响 L0）。
+- **哈希失效**：合同或源码的 SHA-256 对不上，整份报告不成立（合同在 `.site` 下单独指纹，改源码不影响 L0）。指纹管的是"这份报告还算不算数"，不是"哪几条轴要重跑"：对不上之后，重验范围由 `changed_files` 加你的判断决定，别拿后缀当映射。
 - **轴依赖**：一条轴没过，依赖它的轴要复验（L0→全部，L1→L2-L5，L2→L3-L5，L3/L4→L5）。
+- **说清查了什么**：报 `verified` 的轴必须写 `observed`。这个字段是给下一个读报告的人看的，不是机器在核对你说没说真话——没有字段能承担那件事。写的时候带上数字（"扫了 24 个文字节点"比"对比度检查通过"有用得多），因为空样本是这套流程里唯一能静默通过的错误：选择器一个都没命中时被测对象是 0 个，`every()` 对空列表恒真，你手上那 80 条断言会全部通过并报出 PASS。**这件事只有探针自己能拦**：扫到 0 个对象必须判失败，不能报 PASS。写探针时就把这条写进去，别指望报告能替你发现它。
+- **排除项**：指纹只覆盖产品源码，`plan` 的 `source_excluded` 列出被排掉的路径。随产品发布的只读库（种子库、字典）和运行期状态在指纹里长得一样，机器分不出来，所以这份清单要人读一遍：排掉的确实是运行期状态就继续，是产品的一部分就把规则改掉。
 - **模式**：`guided` 可以如实返回 `limited`；`strict` 不能 `limited`，而且 `verified` 必须带 `independent`。`independent` 只有在宿主用独立 Checker 上下文真的查过之后才算数；做不到就返回 `blocked`，不要自己打标。
 
 ## 五字段回执
@@ -41,3 +70,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 - `blocked`：核心任务没过，或者缺了让结论成立的关键证据。
 
 有 `.site/design/surface-brief.md` 时，以里面适用的页面、状态、视口和 `VA-*` 为依据；视觉检查走 `site-design` 的只读审查分支，不重新发明方向。先按风险选最小够用的范围：局部修改只查静态和受影响的结果；普通首版查核心任务的成功路径加一个最可能失败的反例（长文本不换行、0 条数据、320px 窄屏这类情况也要试）；严格项目查核心任务、关键反例、适用视口、再次打开和权限隐私风险，并独立取证。
+
+验收依据不止合同。**合同之外，把用户能看到的承诺读一遍**：README、页面文案、按钮和空状态里对用户说过的话，都是要兑现的判据。项目的承诺写在 `README.md` 而验收标准里没写，是这套流程最常见的漏法——判据和探针由同一个人写，会共享同一个盲区；读承诺本身，是唯一能跳出这个盲区的一步。发现的缺陷写进回执的 `limitations`，由 `site-builder` 落进工作日志；你是只读的，不改项目里任何文件。
+
+合同里出现枚举式验收标准（"这三对要达标"）时不要照抄范围：把它当全称量化来查，枚举整页的同类对象。少测的代价由用户承担，多测的代价只是一点时间。
