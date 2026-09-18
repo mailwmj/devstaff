@@ -35,6 +35,12 @@ def now() -> str:
 
 
 def state_path(root: Path) -> Path:
+    if root.is_dir():
+        for child in root.iterdir():
+            if child.is_dir() and child.name.lower() in (".site", ".v3"):
+                candidate = child / "state.json"
+                if candidate.is_file():
+                    return candidate
     for candidate in (root / ".site" / "state.json", root / ".SITE" / "state.json", root / ".v3" / "state.json"):
         if candidate.exists():
             return candidate

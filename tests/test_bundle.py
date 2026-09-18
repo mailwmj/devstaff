@@ -28,10 +28,12 @@ class BundleTests(unittest.TestCase):
     def test_design_knowledge_base_is_packaged(self):
         design = ROOT / "site-design"
         expected_references = {
+            "chinese-typography.md",
             "craft-review.md",
             "design-context.md",
             "design-tokens.md",
             "design-toolchain.md",
+            "landing-page.md",
             "prototype.md",
             "reference-input.md",
             "surface-brief.md",

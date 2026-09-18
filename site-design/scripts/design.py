@@ -197,6 +197,73 @@ def _layout_guidance(design_system):
     }
 
 
+_ICON_VENDOR_FIELDS = ('Library', 'Import Code')
+# Every curated row leads its Usage with library-specific JSX or library-choice
+# advice, then ends with the same library-agnostic accessibility guidance. Only
+# that guidance may steer an undecided project, so Usage keeps it and nothing
+# else; a row without the marker loses the field rather than leak a vendor.
+_ICON_USAGE_MARKER = 'Context is chosen by use:'
+
+# Routes whose payload carries ready-to-paste artifacts (imports, font URLs,
+# palettes, preset names) that an unwarned reader could take for project law.
+_RETRIEVAL_NOTES = {
+    'icons': '默认 Lucide：这里只给图标语义、命名与场景无障碍要求，不要照搬任何库、'
+             'import 代码或 Vendor JSX。用户或现有工程已明确指定其他图标体系时，'
+             '以该指定为准并写入合同 icon_system。',
+    'typography': '字体角色与配对只是候选，返回的 Google Fonts URL 与 CSS Import 不是项目标准；'
+                  '是否加载网络字体由项目事实与设计需要决定，加载时必须配系统栈回退，'
+                  '中文字体结论与加载纪律以 chinese-typography.md 为准。',
+    'google-fonts': '条目只证明候选存在；许可、中文覆盖、加载与离线策略需单独核对，'
+                    '已有字体系统优先继承。',
+}
+_DESIGN_SYSTEM_NOTE = (
+    '返回的色板、字体、pattern 与技术栈建议都是候选，不是项目标准：'
+    '配色 / 字体 / 密度 / 形状以 design-tokens.md 为准，落地页版式以 landing-page.md 为准，'
+    '并必须用项目事实写出 fit_basis。'
+)
+
+
+def _strip_icon_vendor(result):
+    """Withhold the icon snapshot's vendor identity, snippets and vendor JSX.
+
+    The bundled snapshot is Phosphor-based while this pack defaults to Lucide.
+    Only the icon's semantic role and name may steer the default, so the
+    snapshot cannot quietly decide the icon library for an undecided project.
+    The data file itself stays a byte-faithful upstream snapshot.
+    """
+    if not isinstance(result, dict) or result.get('domain') != 'icons':
+        return result
+    rows = result.get('results')
+    if not isinstance(rows, list):
+        return result
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for field in _ICON_VENDOR_FIELDS:
+            row.pop(field, None)
+        usage = row.get('Usage')
+        if isinstance(usage, str):
+            index = usage.find(_ICON_USAGE_MARKER)
+            if index >= 0:
+                row['Usage'] = usage[index:]
+            else:
+                row.pop('Usage', None)
+    return result
+
+
+def _apply_retrieval_note(result):
+    """State how to treat a payload whose values could pass for project law."""
+    if not isinstance(result, dict):
+        return result
+    if isinstance(result.get('design_system'), dict):
+        result['retrieval_note'] = _DESIGN_SYSTEM_NOTE
+    else:
+        note = _RETRIEVAL_NOTES.get(result.get('domain'))
+        if note:
+            result['retrieval_note'] = note
+    return result
+
+
 def research(args):
     """Run the bundled UI/UX search behind this skill's stable interface."""
     root = intelligence_root()
@@ -231,6 +298,7 @@ def research(args):
         result = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         raise ValueError('Bundled design intelligence returned invalid JSON') from error
+    result = _apply_retrieval_note(_strip_icon_vendor(result))
 
     mode = 'design-system' if args.design_system else ('stack' if args.stack else 'domain')
     retrieval = _retrieval_record(args, result)
@@ -384,9 +452,17 @@ def css_text(result):
 
 def intent_text(result):
     selection = ', '.join(f'{key}={value}' for key, value in result['selection'].items())
+    evidence = result.get('direction_evidence') or {}
+    if evidence.get('mode') == 'direction-gate':
+        source = ('方向依据：本稿由项目合同 `'
+                  + str(evidence.get('contract_sha256') or '')[:12] + '` 的方向闸门放行，'
+                  '方向变化后必须重新生成。')
+    else:
+        source = ('方向依据：**无**。本稿以 `--standalone` 生成，未读取任何项目合同，'
+                  '不得作为已确认方向使用。')
     return f'''# 项目设计意图
 
-> 这是由 `{result['recipe']}` 生成的实现校准草稿。它需要结合项目方向合同填写，不代表用户已确认设计方向。
+> 这是由 `{result['recipe']}` 生成的实现校准草稿。{source}它需要结合项目方向合同填写，不代表用户已确认设计方向。
 
 ## North Star
 这套设计要让用户更容易：
@@ -451,6 +527,7 @@ def gallery_html(data, template, primitives):
 
 CATALOG_BLOCK = re.compile(
     r'(<script type="application/json" id="catalog">)(.*?)(</script>)', re.DOTALL)
+STALE_CATALOG = 'Gallery catalog payload is stale'
 
 
 def sync_gallery(data, path):
@@ -484,6 +561,37 @@ def _payload_equal(a, b):
     return a == b
 
 
+def gallery_catalog_drift(data=None):
+    """Return a reason string when gallery.html disagrees with tokens.json.
+
+    ``None`` means in sync (or no gallery to check). Shared by ``validate``,
+    which owns --auto-sync, and ``check-contract``, which reports the drift at
+    the moment the tool is used.
+    """
+    gallery = resources() / 'gallery.html'
+    if not gallery.is_file():
+        return None
+    try:
+        data = read_catalog() if data is None else data
+        text = gallery.read_text(encoding='utf-8')
+    except (OSError, ValueError):
+        return None
+    match = CATALOG_BLOCK.search(text)
+    if not match:
+        return 'Gallery has no <script id="catalog"> block.'
+    expected = json.dumps(
+        {key: {**value, **compose(data, key)} for key, value in data['recipes'].items()},
+        ensure_ascii=False).replace('<', '\\u003c')
+    if match.group(2) == expected:
+        return None
+    try:
+        if _payload_equal(json.loads(match.group(2)), json.loads(expected)):
+            return None
+    except Exception:
+        pass
+    return STALE_CATALOG
+
+
 # --- design contract check ------------------------------------------------
 # The contract is the project's copy of surface-brief.md. A fixed
 # ```site-contract``` JSON fenced block indexes the IDs defined in the body
@@ -497,34 +605,42 @@ CONTRACT_BLOCK_RE = re.compile(r'```(?:site-contract|v3-contract)\n(.*?)\n```', 
 ID_TOKEN_RE = re.compile(r'`([A-Z]{2}-\d{2})`')
 CONTRACT_LIST_FIELDS = (
     'scope_refs', 'required_constraints', 'pages', 'sections', 'responsive',
-    'components', 'assets', 'acceptance', 'unresolved_confirm',
+    'components', 'assets', 'copy', 'acceptance', 'unresolved_confirm',
     'blocking_missing_assets', 'intentional_exceptions',
 )
-# Design-judgment aspects that must be formed from project facts, not copied
-# from the template. Each names the bullet label(s) in surface-brief.md; a
-# value that still equals the template default means the field was not filled.
+# Project facts the contract must state. They are the basis every derived
+# judgment cites, so they are checked for presence, not for citation.
 PROJECT_FACT_LABELS = ('使用者', '主任务', '业务对象', '真实内容')
+# Derived design judgments. Each must be filled AND cite at least one project
+# fact ID declared in the body. This measures grounding. The earlier check
+# compared the value against the template string, which measured wording
+# deviation instead: it passed on a synonym and failed on faithful reuse.
 DESIGN_JUDGMENT_ASPECTS = (
-    ('project_facts', PROJECT_FACT_LABELS),
     ('anti_default', ('反默认原因',)),
     ('visual_motif', ('母题',)),
     ('composition', ('构图命题',)),
     ('detail_signature', ('细节签名',)),
 )
+# ID namespaces that count as a citable project fact. VA-* is deliberately
+# absent: acceptance criteria are the contract's output, not its evidence.
+EVIDENCE_ID_PREFIXES = ('BR', 'IC', 'PG', 'SC', 'RP', 'CP', 'AS', 'TX')
 VAGUE_VA_TERMS = ('高级', '现代', '像参考', '时尚', '优雅', '大气', '精致')
 CONTRACT_PHASES = ('direction', 'prebuild', 'precheck')
 
 
-def template_path():
-    return Path(__file__).resolve().parent.parent / 'references' / 'surface-brief.md'
-
-
 def contract_path(root):
+    root_path = Path(root)
+    if root_path.is_dir():
+        for child in root_path.iterdir():
+            if child.is_dir() and child.name.lower() in ('.site', '.v3'):
+                candidate = child / 'design' / 'surface-brief.md'
+                if candidate.is_file():
+                    return candidate
     for rel in (CONTRACT_REL_PATH, '.SITE/design/surface-brief.md', '.v3/design/surface-brief.md'):
-        candidate = Path(root) / rel
+        candidate = root_path / rel
         if candidate.is_file():
             return candidate
-    return Path(root) / CONTRACT_REL_PATH
+    return root_path / CONTRACT_REL_PATH
 
 
 def _read_contract_text(root):
@@ -659,20 +775,70 @@ def _va_row(body, va):
     return None, None
 
 
-def _missing_design_judgment(body, template_body):
-    """Aspects still equal to the template default (not filled from project facts)."""
-    missing = []
+def _declared_facts(lists):
+    """Project facts the contract structurally declares, namely its JSON index.
+
+    Deliberately *not* every backticked ID in the body: a citation written
+    into a bullet would then declare its own evidence and the grounding check
+    would pass on any invented ID. ``broken_reference`` already proves the
+    index is a subset of the body, so using the index is the stricter set.
+    """
+    declared = set()
+    for values in lists.values():
+        declared.update(values)
+    return declared
+
+
+def _cited_fact_ids(value, declared):
+    """Project-fact IDs cited in a field value and declared by the contract."""
+    return sorted({identity for identity in ID_TOKEN_RE.findall(value)
+                   if identity.split('-')[0] in EVIDENCE_ID_PREFIXES
+                   and identity in declared})
+
+
+def _design_judgment_gaps(body, declared):
+    """Return ``(missing, uncited)`` aspects of the derived design judgments.
+
+    ``missing`` means the field is blank. ``uncited`` means the field is
+    filled but cites no project fact the contract declares, so the judgment
+    cannot be traced to anything specific to this product. Judgments grounded
+    in the project are what makes a direction falsifiable: delete the cited
+    facts and the claim should stop holding.
+    """
+    missing, uncited = [], []
     for aspect, labels in DESIGN_JUDGMENT_ASPECTS:
-        present = False
+        value = ''
         for label in labels:
             value = _bullet_value(body, label)
-            default = _bullet_value(template_body, label)
-            if value and value != default:
-                present = True
+            if value:
                 break
-        if not present:
+        if not value:
             missing.append(aspect)
-    return missing
+        elif not _cited_fact_ids(value, declared):
+            uncited.append(aspect)
+    return missing, uncited
+
+
+def _design_judgment_blockers(body, lists):
+    """Blockers for the derived design judgments, grounded in project facts.
+
+    Shared by the prebuild phase and the token gate so the two cannot drift.
+    """
+    blockers = []
+    for label in PROJECT_FACT_LABELS:
+        if not _bullet_value(body, label):
+            blockers.append({'code': 'missing_design_judgment',
+                             'aspect': 'project_facts', 'detail': label})
+    missing, uncited = _design_judgment_gaps(body, _declared_facts(lists))
+    for aspect in missing:
+        blockers.append({'code': 'missing_design_judgment', 'aspect': aspect})
+    for aspect in uncited:
+        blockers.append({
+            'code': 'uncited_design_judgment', 'aspect': aspect,
+            'detail': '需引用至少一条合同索引已声明、且正文已定义的项目事实（'
+                      + ' / '.join(prefix + '-*' for prefix in EVIDENCE_ID_PREFIXES)
+                      + '）；VA-* 是验收输出，不能作为依据'})
+    return blockers
 
 
 def _contract_report(root, phase, sha, passed, blockers, warnings):
@@ -693,7 +859,7 @@ def check_contract(root, phase):
 
     Only applicable fields are checked: empty lists mean a class of object is
     not used by the project, not that something is missing. Determined problems
-    are blockers; templating tendencies are warnings. The report's SHA-256 is
+    are blockers; package-health drift is a warning. The report's SHA-256 is
     computed over the whole contract file, so any edit invalidates a prior
     report.
     """
@@ -728,7 +894,7 @@ def check_contract(root, phase):
         ref_fields = ('scope_refs',)
     else:
         ref_fields = ('scope_refs', 'required_constraints', 'pages', 'sections',
-                      'responsive', 'components', 'assets', 'acceptance')
+                      'responsive', 'components', 'assets', 'copy', 'acceptance')
     for field in ref_fields:
         for reference in lists.get(field, []):
             if reference not in defined:
@@ -761,8 +927,16 @@ def check_contract(root, phase):
             else:
                 vague = [term for term in VAGUE_VA_TERMS if term in observable]
                 if vague:
-                    warnings.append({'code': 'vague_va_standard', 'ref': va,
-                                     'terms': vague})
+                    # VA-* is the ground truth site-check verifies against. A
+                    # standard nobody can decide makes every downstream browser
+                    # check vacuous, so its downstream leverage is unbounded.
+                    # Warn while the direction is still forming; block once
+                    # implementation is about to start.
+                    entry = {
+                        'code': 'vague_va_standard', 'ref': va, 'terms': vague,
+                        'detail': '无法判定的验收用词；改写为可在真实页面上取证的断言',
+                    }
+                    (blockers if phase == 'precheck' else warnings).append(entry)
 
     if phase == 'prebuild':
         scope_targets = _scope_targets(body)
@@ -774,25 +948,61 @@ def check_contract(root, phase):
             if reference in impacts and not impacts[reference].strip():
                 blockers.append({'code': 'required_constraint_without_target',
                                  'ref': reference})
-        try:
-            template_body = _strip_contract_block(template_path().read_text(encoding='utf-8'))
-        except OSError:
-            template_body = ''
-        for aspect in _missing_design_judgment(body, template_body):
-            blockers.append({'code': 'missing_design_judgment', 'aspect': aspect})
+        blockers.extend(_design_judgment_blockers(body, lists))
+
+    # Package health: gallery.html embeds a copy of the composed catalog so it
+    # can be opened straight from disk, so the two can drift. Surfacing it here
+    # checks the invariant at the moment the tool is actually used rather than
+    # only when someone remembers to run `validate`.
+    drift = gallery_catalog_drift()
+    if drift:
+        warnings.append({'code': 'stale_gallery_catalog', 'detail': drift})
 
     return _contract_report(root, phase, sha, not blockers, blockers, warnings)
+
+
+# --- token-selection gate ---------------------------------------------------
+# `build` emits a ready-to-use tokens.css, which made the recipe catalog the one
+# artifact reachable with no evidence at all -- the exact inverse of
+# design-context.md, where gallery and 配方 sit at the lowest conflict priority.
+# The gate composes rules that already exist rather than adding a consistency
+# rule of its own: the direction-phase contract check, plus the design
+# judgments design-tokens.md demands before token selection. It deliberately
+# does not reuse the prebuild phase, because prebuild also demands scope
+# targets, constraint impacts and executable VA rows that are still being
+# written when a direction is being calibrated.
+
+
+def direction_gate(root):
+    """Report whether token selection is allowed for this project.
+
+    ``passed`` is False while the contract is missing, unreadable, or does not
+    yet state the derived design judgments (母题 / 反默认原因 / 构图命题 /
+    细节签名) with citations to project facts the contract itself declares.
+    The report carries the contract SHA-256 so a selection can be tied to the
+    revision it was calibrated against, the same way state.py ties a build to
+    a prebuild report.
+    """
+    report = dict(check_contract(root, 'direction'))
+    if report['blockers']:
+        return {**report, 'gate': 'direction'}
+    text = _read_contract_text(Path(root).resolve())
+    blockers = _design_judgment_blockers(
+        _strip_contract_block(text), _contract_lists(_parse_contract_block(text)))
+    return {**report, 'gate': 'direction', 'blockers': blockers,
+            'passed': not blockers}
 
 
 # --- UI lint (stage 3) ------------------------------------------------------
 # lint-ui reads the project contract (declared icon system, emoji/unicode
 # exceptions, excluded capabilities, visual-candidate evidence) and statically
 # scans the project's UI source for deterministic anti-patterns. It is a
-# read-only, stdlib-only check: it never starts a browser. Determined problems
-# are blockers; templating tendencies are warnings. Output is machine-readable
-# JSON. Real user content, test fixtures, Markdown and data files are excluded
-# from the scan; contract ``intentional_exceptions`` that look like paths or
-# globs exempt matching files.
+# read-only, stdlib-only check: it never starts a browser. Everything it
+# reports as a blocker is a fact it can decide from the source text; aesthetic
+# judgments are left to craft-review.md. Output is machine-readable JSON. Real
+# user content, test fixtures, Markdown and data files are excluded from the
+# scan; contract ``intentional_exceptions`` that look like paths or globs
+# exempt matching files.
 
 LINT_UI_EXTENSIONS = ('.html', '.htm', '.css', '.js', '.mjs', '.cjs',
                       '.jsx', '.ts', '.tsx', '.vue', '.svelte', '.astro')
@@ -848,6 +1058,10 @@ _LABEL_TAG_RE = re.compile(
 _ATTR_VAL_RE = re.compile(
     r'(?:class|className|id|alt|aria-label|placeholder|title|role)=["\']'
     r'([^"\']*)["\']', re.IGNORECASE)
+
+# Pack default. An explicit user or existing-project choice overrides it, so
+# this is the fallback for an undeclared contract, never a hard requirement.
+LUCIDE_ICON_SYSTEM = 'lucide'
 
 _ICON_SYSTEM_PACKAGES = (
     ('lucide', re.compile(r'lucide', re.IGNORECASE)),
@@ -912,18 +1126,17 @@ def _split_phrases(text):
     return out
 
 
-def _excluded_capabilities(body, template_body):
+def _excluded_capabilities(body):
     """Capability phrases the contract explicitly excluded.
 
     Drawn from the 明确不做 / 明确排除项 bullets and any ``IC-*`` row whose
-    grade is ``excluded``. Template-default values mean the project did not
-    declare exclusions, so nothing is extracted.
+    grade is ``excluded``. The template leaves these fields blank, so an empty
+    value simply means the project declared no exclusions.
     """
     caps = []
     for label in ('明确不做', '明确排除项'):
         value = _bullet_value(body, label)
-        default = _bullet_value(template_body, label)
-        if value and value != default:
+        if value:
             caps.extend(_split_phrases(value))
     header, rows = _table(body, '约束', '对结构')
     grade_col = _column(header, '等级')
@@ -942,7 +1155,7 @@ def _excluded_capabilities(body, template_body):
     return out
 
 
-def _candidate_skin_blockers(body, template_body):
+def _candidate_skin_blockers(body):
     """Block when declared visual candidates are skin-only or unevidenced.
 
     Mirrors the 换肤反模式 in visual-direction.md: two or more declared
@@ -967,8 +1180,7 @@ def _candidate_skin_blockers(body, template_body):
     if len(declared) < 2:
         return blockers
     evidence = _bullet_after(body, '结构差异证据')
-    default = _bullet_after(template_body, '结构差异证据')
-    if not evidence or evidence == default:
+    if not evidence:
         blockers.append({
             'code': 'skin_only_candidates',
             'detail': '对照方向有≥2候选但缺少结构差异证据'
@@ -1070,9 +1282,17 @@ def _scan_file(rel, text, excepted_chars, icon_system, caps):
         blockers.append({'code': 'mixed_icon_systems', 'file': rel,
                          'systems': sorted(systems),
                          'detail': '同界面混用多套图标体系'})
-    elif icon_system and systems and icon_system not in systems:
+    # A declared system (the user's or the project's own choice) wins; only an
+    # undeclared contract falls back to the pack default. A file that does not
+    # use the expected system is drift, not automatically a defect: the fix may
+    # be either to align the code or to declare the choice in the contract.
+    expected = icon_system or LUCIDE_ICON_SYSTEM
+    if systems and expected not in systems:
         warnings.append({'code': 'icon_system_mismatch', 'file': rel,
-                         'declared': icon_system, 'found': sorted(systems)})
+                         'declared': icon_system or f'{LUCIDE_ICON_SYSTEM}（默认）',
+                         'found': sorted(systems),
+                         'detail': '实际图标体系与合同声明（或默认 Lucide）不一致；'
+                                   '按用户指定改用声明体系，或把该选择写入合同'})
 
     # Fabricated proof: lorem-ipsum copy and placeholder logos.
     if _LOREM_RE.search(text):
@@ -1105,45 +1325,20 @@ def _scan_file(rel, text, excepted_chars, icon_system, caps):
                                      'detail': '明确排除能力仍出现在界面'})
                     break
 
-    warnings.extend(_template_warnings(rel, text))
     return blockers, warnings, had_icons
 
 
-def _template_warnings(rel, text):
-    warnings = []
-    cards = len(re.findall(r'class=["\'][^"\']*\bcard\b|<article\b', text,
-                           re.IGNORECASE))
-    hero = bool(re.search(r'class=["\'][^"\']*\bhero\b|\bid=["\']\s*hero\b',
-                          text, re.IGNORECASE))
-    cta = bool(re.search(
-        r'<(?:button|a)\b[^>]*>[^<]{0,30}'
-        r'(?:开始|立即|免费|订阅|联系|注册|登录|加入|了解更多|Get started|Sign up|'
-        r'Subscribe|Contact|Start now|Try|Buy|Join|Learn more)', text,
-        re.IGNORECASE))
-    if hero and cards >= 3 and cta:
-        warnings.append({'code': 'template_hero_cards_cta', 'file': rel,
-                         'detail': 'Hero+三卡+CTA 生成式骨架'})
-    if cards >= 4:
-        warnings.append({'code': 'template_card_soup', 'file': rel,
-                         'detail': '满页同规格卡片'})
-    pills = len(re.findall(r'class=["\'][^"\']*\b(?:pill|badge|chip|tag)\b',
-                           text, re.IGNORECASE))
-    if pills >= 4:
-        warnings.append({'code': 'template_pill_badge_soup', 'file': rel,
-                         'detail': '多处 pill/badge/chip/tag'})
-    if re.search(r'backdrop-filter|filter:\s*[^;}]*blur'
-                 r'|(?:linear|radial)-gradient', text, re.IGNORECASE):
-        warnings.append({'code': 'template_unsourced_effects', 'file': rel,
-                         'detail': '无来源渐变/玻璃/光晕'})
-    surfaces = len(re.findall(r'class=["\'][^"\']*\bsurface\b', text,
-                              re.IGNORECASE))
-    if surfaces >= 3:
-        warnings.append({'code': 'template_section_surfaces', 'file': rel,
-                         'detail': '每区块独立 surface'})
-    if re.search(r'@keyframes|\banimation\s*:', text, re.IGNORECASE):
-        warnings.append({'code': 'template_decorative_animation', 'file': rel,
-                         'detail': '装饰动画须有状态/因果依据'})
-    return warnings
+# Template-tendency heuristics were removed here: hero+3-cards+CTA, card /
+# pill / surface counts, and "any gradient or @keyframes". They were aesthetic
+# judgments expressed as token counts, so they fired on layouts this package's
+# own landing-page and dashboard guidance recommends, and a warning that is
+# both non-blocking and frequently wrong trains agents to ignore warnings.
+#
+# Generated sameness is still caught where it can actually be judged:
+# ``_candidate_skin_blockers`` hard-fails two declared directions that differ
+# only by color and font, and ``check_contract`` requires each derived design
+# judgment to cite a project fact. Aesthetic review stays in craft-review.md,
+# where a reader can weigh context instead of a threshold.
 
 
 def _is_exempt(rel_posix, exemptions):
@@ -1362,13 +1557,8 @@ def lint_ui(root, contract_rel, changed_from=None):
                 icon_exceptions.append({'char': item, 'basis': ''})
     exemptions = list(lists.get('intentional_exceptions', []))
 
-    try:
-        template_body = _strip_contract_block(
-            template_path().read_text(encoding='utf-8'))
-    except OSError:
-        template_body = ''
-    caps = _excluded_capabilities(body, template_body)
-    blockers.extend(_candidate_skin_blockers(body, template_body))
+    caps = _excluded_capabilities(body)
+    blockers.extend(_candidate_skin_blockers(body))
 
     cf = None
     if changed_from:
@@ -1423,7 +1613,8 @@ def lint_ui(root, contract_rel, changed_from=None):
 
     if had_icons and not icon_system:
         warnings.append({'code': 'undeclared_icon_system',
-                         'detail': '界面使用图标但合同未声明 icon_system'})
+                         'detail': '界面使用图标但合同未声明 icon_system（默认 Lucide）；'
+                                   '采用其他体系时显式声明即可'})
 
     return _lint_report(root, contract_rel, sha, not blockers, blockers,
                         warnings, changed_summary, scanned, ui_sha,
@@ -1445,6 +1636,70 @@ def _lint_report(root, contract_rel, sha, passed, blockers, warnings,
         'passed': passed,
         'checked_at': _now(),
     }
+
+
+# --- bounded stdout (--summary) -------------------------------------------
+# The full report is the artifact that belongs on disk. Printed verbatim it
+# also scales with the project: lint-ui emits one manifest entry per scanned
+# UI file, so a few hundred components push tens of kilobytes of hashes into a
+# caller that only reads the verdict. --summary keeps stdout bounded to counts
+# plus the first findings; --out still receives the complete report.
+
+SUMMARY_FINDING_LIMIT = 5
+SUMMARY_PASSTHROUGH_KEYS = ('phase', 'ui_source_sha256', 'changed_from')
+SUMMARY_COUNT_KEYS = (('scanned_files', 'scanned_file_count'),
+                      ('files', 'tracked_file_count'))
+
+
+def _report_summary(report, report_path=None, max_findings=SUMMARY_FINDING_LIMIT):
+    """Bounded stdout view of a full report: counts plus a capped sample."""
+    blockers = list(report.get('blockers') or [])
+    warnings = list(report.get('warnings') or [])
+    omitted = {'blockers': max(0, len(blockers) - max_findings),
+               'warnings': max(0, len(warnings) - max_findings)}
+    summary = {
+        'mode': 'summary',
+        'passed': report.get('passed'),
+        'project_root': report.get('project_root'),
+        'contract_path': report.get('contract_path'),
+        'contract_sha256': report.get('contract_sha256'),
+        'blocker_count': len(blockers),
+        'warning_count': len(warnings),
+        'blockers': blockers[:max_findings],
+        'warnings': warnings[:max_findings],
+        'omitted': omitted,
+    }
+    for key in SUMMARY_PASSTHROUGH_KEYS:
+        if key in report:
+            summary[key] = report[key]
+    for key, target in SUMMARY_COUNT_KEYS:
+        if key in report:
+            summary[target] = len(report.get(key) or [])
+    if omitted['blockers'] or omitted['warnings']:
+        summary['note'] = (
+            'findings truncated; the complete list is in the report file'
+            if report_path else
+            'findings truncated; rerun with --out <path> for the complete list '
+            'or --max-findings N to widen stdout')
+    summary['report'] = str(report_path) if report_path else None
+    summary['checked_at'] = report.get('checked_at')
+    return summary
+
+
+def _emit_report(args, report):
+    """Write the full report when --out is given, then print it or its summary."""
+    text = json.dumps(report, ensure_ascii=False, indent=2)
+    report_path = None
+    if args.out:
+        report_path = args.out.expanduser()
+        report_path.write_text(text + '\n', encoding='utf-8')
+        report_path = report_path.resolve()
+    if args.summary:
+        limit = SUMMARY_FINDING_LIMIT if args.max_findings is None else args.max_findings
+        print(json.dumps(_report_summary(report, report_path, limit),
+                         ensure_ascii=False, indent=2))
+    else:
+        print(text)
 
 
 def main():
@@ -1487,13 +1742,35 @@ def main():
                            'reported and conservatively scans everything')
     lint.add_argument('--out', type=Path,
                        help='write the report JSON to this path as well as stdout')
+    for command in (check, lint):
+        command.add_argument('--summary', action='store_true',
+                             help='print a bounded summary (counts and the first '
+                                  'findings) instead of the full report; --out still '
+                                  'writes the complete report')
+        command.add_argument('--max-findings', type=int, default=None, metavar='N',
+                             help='findings listed per severity with --summary '
+                                  f'(default {SUMMARY_FINDING_LIMIT})')
     build = commands.add_parser('build')
     build.add_argument('--recipe', required=True)
     for key in GROUPS:
         build.add_argument('--' + key)
     build.add_argument('--out', type=Path, required=True, help='New or empty output directory')
+    build.add_argument('--project-root', type=Path, default=Path.cwd(),
+                       help='project root holding .site/design/surface-brief.md; '
+                            'the direction gate reads the contract from here '
+                            '(default: current directory)')
+    build.add_argument('--standalone', action='store_true',
+                       help='skip the direction gate when no project direction '
+                            'exists yet; the selection is then marked as having '
+                            'no direction evidence')
     args = parser.parse_args()
     try:
+        if getattr(args, 'max_findings', None) is not None:
+            if not args.summary:
+                raise ValueError('--max-findings requires --summary')
+            if args.max_findings < 0:
+                raise ValueError('--max-findings must be zero or greater')
+
         if args.command == 'research':
             if not args.design_system and any(
                     getattr(args, name) is not None for name in ('project_name', 'variance', 'motion', 'density')):
@@ -1506,19 +1783,11 @@ def main():
             return
 
         if args.command == 'check-contract':
-            report = check_contract(args.root, args.phase)
-            text = json.dumps(report, ensure_ascii=False, indent=2)
-            if args.out:
-                args.out.expanduser().write_text(text + '\n', encoding='utf-8')
-            print(text)
+            _emit_report(args, check_contract(args.root, args.phase))
             return
 
         if args.command == 'lint-ui':
-            report = lint_ui(args.root, args.contract, args.changed_from)
-            text = json.dumps(report, ensure_ascii=False, indent=2)
-            if args.out:
-                args.out.expanduser().write_text(text + '\n', encoding='utf-8')
-            print(text)
+            _emit_report(args, lint_ui(args.root, args.contract, args.changed_from))
             return
 
         data = read_catalog()
@@ -1530,28 +1799,16 @@ def main():
             for palette in data['palettes']:
                 compose(data, next(iter(data['recipes'])), palette=palette)
             gallery = resources() / 'gallery.html'
-            drift = ''
-            if gallery.is_file():
-                match = CATALOG_BLOCK.search(gallery.read_text(encoding='utf-8'))
-                expected = json.dumps(
-                    {key: {**value, **compose(data, key)} for key, value in data['recipes'].items()},
-                    ensure_ascii=False).replace('<', '\\u003c')
-                if not match:
-                    drift = 'Gallery has no <script id="catalog"> block.'
-                elif match.group(2) != expected:
-                    try:
-                        actual_payload = json.loads(match.group(2))
-                        expected_payload = json.loads(expected)
-                        payload_is_stale = not _payload_equal(actual_payload, expected_payload)
-                    except Exception:
-                        payload_is_stale = True
-                    if payload_is_stale:
-                        if getattr(args, 'auto_sync', False):
-                            sync_gallery(data, gallery)
-                            print(f"[Auto-Sync] Gallery catalog payload was stale and has been updated in {gallery.resolve()}")
-                        else:
-                            script_name = Path(sys.argv[0]).name or 'design.py'
-                            drift = f'Gallery catalog payload is stale; run: python {script_name} sync-gallery --gallery "{gallery.resolve()}" (or run validate with --auto-sync)'
+            drift = gallery_catalog_drift(data)
+            if drift == STALE_CATALOG:
+                if getattr(args, 'auto_sync', False):
+                    sync_gallery(data, gallery)
+                    print(f"[Auto-Sync] Gallery catalog payload was stale and has been updated in {gallery.resolve()}")
+                    drift = None
+                else:
+                    script_name = Path(sys.argv[0]).name or 'design.py'
+                    drift = (f'{drift}; run: python {script_name} sync-gallery '
+                             f'--gallery "{gallery.resolve()}" (or run validate with --auto-sync)')
             if drift:
                 raise ValueError(drift)
             intelligence = validate_intelligence()
@@ -1562,7 +1819,23 @@ def main():
             print(json.dumps({'gallery': str(gallery.resolve()), 'catalog_version': data['version'],
                               'recipes': len(data['recipes']), 'changed': changed}, ensure_ascii=False))
         else:
+            # The catalogue is the only artifact one command away. Refuse to
+            # hand out ready-to-use tokens until the project's own direction
+            # exists, and make the way around that gate explicit and recorded.
+            evidence = {'mode': 'standalone', 'contract_sha256': None}
+            if not args.standalone:
+                gate = direction_gate(args.project_root)
+                if not gate['passed']:
+                    codes = ', '.join(sorted({entry['code'] for entry in gate['blockers']}))
+                    raise ValueError(
+                        '方向未确认，禁止选择配方（' + (codes or 'unknown') + '）。先补齐 '
+                        'surface-brief.md 的母题、反默认原因、构图命题与细节签名，'
+                        '每项引用一条合同已声明的项目事实，再重跑；'
+                        '确认这只是一份无方向依据的草稿时才加 --standalone。')
+                evidence = {'mode': 'direction-gate',
+                            'contract_sha256': gate['contract_sha256']}
             result = compose(data, args.recipe, **{key: getattr(args, key) for key in GROUPS})
+            result['direction_evidence'] = evidence
             dest = args.out.expanduser()
             if dest.is_symlink() or (dest.exists() and (not dest.is_dir() or any(dest.iterdir()))):
                 raise ValueError('Output must be a new or empty directory; existing files preserved')
@@ -1572,6 +1845,7 @@ def main():
             (dest / 'intent.md').write_text(intent_text(result), encoding='utf-8')
             print(json.dumps({'output': str(dest.resolve()), 'token_count': len(result['tokens']),
                               'recipe': result['recipe'], 'selection': result['selection'],
+                              'direction_evidence': evidence,
                               'files': ['tokens.css', 'selection.json', 'intent.md']}, ensure_ascii=False))
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, f'{error}\n')

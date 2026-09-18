@@ -2,13 +2,15 @@
 
 本包提供实现校准配方、10 套色彩、6 种排版角色分配、3 种密度、4 种形状和 4 类布局尺寸。配置见 `assets/design/tokens.json`；实际预览见 `assets/design/gallery.html`。它们只帮助把已形成的项目方向转成一致变量，不负责产生页面命题、信息架构、母题或行业答案，也不是保证任何组合都高级的认证。
 
-进入本文件前应已按 [设计上下文](design-context.md)、[页面设计合同](surface-brief.md) 和 [视觉方向](visual-direction.md) 确定用户路径、首屏结构、真实内容与母题。**尚不能说明母题从哪来时，不要进入 token 选择**——挑选配方不能代替设计判断，**没有任何一个配方能作为"方向"提交给用户**。
+进入本文件前应已按 [设计上下文](design-context.md)、[页面设计合同](surface-brief.md) 和 [视觉方向](visual-direction.md) 确定用户路径、首屏结构、真实内容与母题。**尚不能说明母题从哪来时，不要进入 token 选择**——挑选配方不能代替设计判断，**没有任何一个配方能作为"方向"提交给用户**。这条由 `build` 的方向闸门机械执行，不靠提醒。
 
 ## 选择顺序
 
 1. 用户参考或已有设计系统优先。已有 token 时做语义映射，不引入第二套全局变量覆盖它。
 2. 根据已经确定的内容形状映射布局尺寸：阅读/写作 reading、记录/比较 workspace、收藏/作品 collection、介绍/叙述 story。名称只是校准入口，不是页面职责分类器；布局配置给尺寸与组织建议，不能自动生成信息架构。
-3. 按**角色分配**选排版（见 [工艺审查](craft-review.md)）：`ui` 无衬线统一承担界面、`reading` 宋体承担标题与连续正文、`narrative` 衬线标题配无衬线正文、`display` 大尺度无衬线标题主导构图、`cultural` 楷体标题与引文、`technical` 无衬线与等宽数字、字阶更紧。字体是含中文回退的**本机字体栈，不下载字体**；实际设备必须查看回退效果。
+3. 按**角色分配**选排版（见 [工艺审查](craft-review.md)）：`ui` 无衬线统一承担界面、`reading` 宋体承担标题与连续正文、`narrative` 衬线标题配无衬线正文、`display` 大尺度无衬线标题主导构图、`cultural` 楷体标题与引文、`technical` 无衬线与等宽数字、字阶更紧。字体默认是含中文回退的**本机字体栈**（零下载、离线可用、渲染最锐利）。**设计需要时可以加载网络字体**（西文/数字展示字体、品牌指定字体，中文按 [中文排版规范](chinese-typography.md) 的子集化例外），但每个加载字体都必须同时写出系统栈回退，并在断网或加载失败时保持首屏与主任务版式不破：**外部资源是增强，不是必需品**。实际设备必须查看回退效果。
+
+   加载字体按外部资产登记：在本合同的 [素材地图](surface-brief.md) 里为每个字体开一行 `AS-*`，填来源 URL、许可、子集范围（实际用字或字符集）、回退栈与加载策略，状态用 `ready / missing / replace` 反映它是否真的可用。**字体不是"只是 CSS"就免登记**——没有这一行，回退与许可就没有落点，token 里写下的字体名只是无法验收的散文。
 4. 按操作频率与设备选密度：桌面高频比较可 compact，普通工具 comfortable，展示 spacious。紧凑模式下触屏仍使用 44px 的项目默认操作高度；不能通过压小正文容纳内容。
 5. 按品牌与内容气质选色彩/形状。深色要有明确需求或选定依据，不把“高级”直接翻译成黑底发光。色彩应从真实来源采样并按 [工艺审查](craft-review.md) 收敛成语义角色；本包的色板只是实现示例，不作为采样依据。
 6. 展示项目自己的代表页面、完成选择后导出并复验。更换任一维度后重新看布局和实际色对，不仅看色板。
@@ -41,9 +43,13 @@
 python3 /absolute/site-design/scripts/design.py list
 python3 /absolute/site-design/scripts/design.py validate
 python3 /absolute/site-design/scripts/design.py sync-gallery   # 改过 tokens.json 后刷新 gallery 内嵌目录
-python3 /absolute/site-design/scripts/design.py build --recipe reading-journal --out /absolute/project/design-choice
-python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace --palette ocean --density compact --shape crisp --out /absolute/project/alternate-choice
+python3 /absolute/site-design/scripts/design.py build --recipe reading-journal --project-root /absolute/project --out /absolute/project/design-choice
+python3 /absolute/site-design/scripts/design.py build --recipe daily-workspace --palette ocean --density compact --shape crisp --project-root /absolute/project --out /absolute/project/alternate-choice
 ```
+
+`build` 默认先过**方向闸门**：它从 `--project-root`（缺省为当前目录）读取 `.site/design/surface-brief.md`，合同缺失、不可读，或母题 / 反默认原因 / 构图命题 / 细节签名未填、未引用合同自己声明的项目事实时，直接拒绝并列出 blocker code，**不写任何文件**。闸门只组合已有规则（`check-contract` 的 direction 阶段 + 本文件要求的四项判断），不新增自己的判据。
+
+放行后 `selection.json` 会记录 `direction_evidence`：`{"mode": "direction-gate", "contract_sha256": ...}`，把这次校准钉在具体的合同版本上；合同一改，旧选择即可判定过期。确实只需要一份无方向依据的草稿时，显式加 `--standalone`，产出会标记 `{"mode": "standalone"}` 并在 `intent.md` 顶部写明"未读取任何项目合同"。**没有任何理由在真实项目里静默使用 `--standalone`。**
 
 输出目录须为新目录或空目录，已有内容拒绝覆盖。输出 `tokens.css`、`selection.json` 与 `intent.md`；它们都是隔离的校准草稿，不是项目规格、设计方向或用户选稿凭证。只把最终采用的语义映射、项目理由和例外合并进 `.site/design/surface-brief.md`；`site-builder` 的实施计划引用该合同，不另行定义视觉事实。
 

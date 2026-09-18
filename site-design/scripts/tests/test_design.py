@@ -1,4 +1,5 @@
 import json
+import csv
 import tempfile
 from pathlib import Path
 import re
@@ -36,8 +37,8 @@ def run_json(*args):
     return json.loads(completed.stdout)
 
 
-# Body of a surface-brief whose design-judgment fields differ from the
-# template defaults and whose tables declare BR-01/IC-01/PG-01/VA-01.
+# Body of a surface-brief whose derived design judgments cite declared project
+# facts and whose tables declare BR-01/IC-01/PG-01/VA-01.
 BASE_BODY = """
 ## 项目事实
 
@@ -52,13 +53,13 @@ BASE_BODY = """
 
 ## 设计推导
 
-- **反默认原因：** 仓管员高频登记需单工作台而非多页工作台
+- **反默认原因：** 仓管员高频登记需单工作台而非多页工作台（依据 `IC-01`）
 
 ## 视觉方向
 
-- **母题：** 以表格为视觉主角密度优先
-- **构图命题：** 表格居中占主区新增入口在顶部
-- **细节签名：** 数量列等宽数字对齐
+- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）
+- **构图命题：** 表格居中占主区新增入口在顶部（依据 `PG-01`）
+- **细节签名：** 数量列等宽数字对齐（依据 `BR-01`）
 
 ## 首版承诺 × 原型覆盖
 
@@ -133,6 +134,34 @@ class CheckContractTests(unittest.TestCase):
     def codes(self, report):
         return sorted(block["code"] for block in report["blockers"])
 
+    def test_cli_summary_bounds_findings_while_out_keeps_all(self):
+        many_refs = dict(VALID_CONTRACT_JSON,
+                         required_constraints=[f"IC-{i:02d}" for i in range(1, 30)],
+                         pages=[f"PG-{i:02d}" for i in range(1, 30)])
+        write_contract(self.root, contract_json=many_refs)
+        out = self.root / ".site" / "contract-report.json"
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "check-contract", "--root",
+             str(self.root), "--phase", "prebuild", "--summary", "--out",
+             str(out)],
+            cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        summary = json.loads(completed.stdout)
+        self.assertEqual(summary["mode"], "summary")
+        self.assertEqual(summary["phase"], "prebuild")
+        self.assertFalse(summary["passed"])
+        self.assertGreater(summary["blocker_count"],
+                           design.SUMMARY_FINDING_LIMIT)
+        self.assertEqual(len(summary["blockers"]), design.SUMMARY_FINDING_LIMIT)
+        self.assertEqual(summary["omitted"]["blockers"],
+                         summary["blocker_count"] - design.SUMMARY_FINDING_LIMIT)
+        self.assertLess(len(completed.stdout.encode("utf-8")), 4096)
+
+        full = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(len(full["blockers"]), summary["blocker_count"])
+        self.assertNotIn("mode", full)
+
     def test_valid_contract_passes_prebuild(self):
         write_contract(self.root)
         report = check(self.root)
@@ -147,11 +176,12 @@ class CheckContractTests(unittest.TestCase):
         )
 
     def test_simple_project_need_not_fill_whole_template(self):
-        # Only work_type, structure, one scope ref and one page; no sections,
-        # responsive, components, assets or acceptance. Still passes prebuild.
+        # Only work_type, structure, one scope ref, one constraint and one
+        # page; no sections, responsive, components, assets or acceptance.
+        # Empty lists mean "not applicable", not "missing".
         write_contract(self.root, {
             "work_type": "new-surface", "structure_mode": "single",
-            "scope_refs": ["BR-01"], "required_constraints": [],
+            "scope_refs": ["BR-01"], "required_constraints": ["IC-01"],
             "pages": ["PG-01"], "sections": [], "responsive": [],
             "components": [], "assets": [], "acceptance": [],
             "unresolved_confirm": [], "blocking_missing_assets": [],
@@ -178,7 +208,17 @@ class CheckContractTests(unittest.TestCase):
         write_contract(self.root, contract)
         report = check(self.root)
         self.assertFalse(report["passed"])
-        self.assertEqual(self.codes(report), ["broken_reference"])
+        self.assertIn("broken_reference", self.codes(report))
+
+    def test_dropping_a_fact_from_the_index_ungrounds_judgments_citing_it(self):
+        # Judgments cite the contract index. Replacing PG-01 with PG-99 both
+        # breaks the reference and removes the basis the 母题 rested on.
+        contract = dict(VALID_CONTRACT_JSON)
+        contract["pages"] = ["PG-99"]
+        write_contract(self.root, contract)
+        report = check(self.root)
+        self.assertIn("broken_reference", self.codes(report))
+        self.assertIn("uncited_design_judgment", self.codes(report))
 
     def test_unclosed_confirm_is_blocked(self):
         contract = dict(VALID_CONTRACT_JSON)
@@ -203,6 +243,22 @@ class CheckContractTests(unittest.TestCase):
         report = check(self.root)
         self.assertIn("non_executable_va", self.codes(report))
 
+    def test_vague_va_warns_at_prebuild_and_blocks_at_precheck(self):
+        # VA-* is what site-check verifies against, so an undecidable standard
+        # makes every downstream browser check vacuous.
+        body = BASE_BODY.replace(
+            "| `VA-01` | `PG-01` | 登记后数量增加且可见 | `core_task` | `yes` |",
+            "| `VA-01` | `PG-01` | 界面要高级现代 | `core_task` | `yes` |",
+        )
+        write_contract(self.root, body=body)
+        prebuild = check(self.root, phase="prebuild")
+        self.assertTrue(prebuild["passed"], prebuild["blockers"])
+        self.assertIn("vague_va_standard",
+                      [w["code"] for w in prebuild["warnings"]])
+        precheck = check(self.root, phase="precheck")
+        self.assertFalse(precheck["passed"])
+        self.assertIn("vague_va_standard", self.codes(precheck))
+
     def test_scope_ref_without_target_is_blocked(self):
         body = BASE_BODY.replace(
             "| `BR-01` | 登记库存 | `covered` | 无 | `IC-01` |",
@@ -221,17 +277,58 @@ class CheckContractTests(unittest.TestCase):
         report = check(self.root)
         self.assertIn("required_constraint_without_target", self.codes(report))
 
-    def test_missing_design_judgment_is_blocked(self):
-        # Revert one design-judgment field to the template default value.
-        default = ""
-        for line in TEMPLATE.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("- **母题：**"):
-                default = line.strip().split("- **母题：**", 1)[1].strip()
-                break
-        body = BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先",
-            "- **母题：** " + default,
+    # --- derived design judgments must be grounded, not just worded ---
+
+    def _blank_motif(self):
+        return BASE_BODY.replace(
+            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **母题：**",
         )
+
+    def _uncited_motif(self, citation=""):
+        return BASE_BODY.replace(
+            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **母题：** 以表格为视觉主角密度优先" + citation,
+        )
+
+    def test_blank_design_judgment_is_blocked(self):
+        write_contract(self.root, body=self._blank_motif())
+        report = check(self.root)
+        self.assertIn("missing_design_judgment", self.codes(report))
+        self.assertIn("visual_motif", [b["aspect"] for b in report["blockers"]
+                                       if b["code"] == "missing_design_judgment"])
+
+    def test_uncited_design_judgment_is_blocked(self):
+        # Filled in, but traceable to nothing: a synonym of the template would
+        # have passed the old wording comparison.
+        write_contract(self.root, body=self._uncited_motif())
+        report = check(self.root)
+        self.assertIn("uncited_design_judgment", self.codes(report))
+        self.assertEqual(
+            [b["aspect"] for b in report["blockers"]
+             if b["code"] == "uncited_design_judgment"],
+            ["visual_motif"],
+        )
+
+    def test_va_cannot_be_cited_as_design_evidence(self):
+        # VA-* is the contract's output, not its basis.
+        write_contract(self.root, body=self._uncited_motif("（依据 `VA-01`）"))
+        report = check(self.root)
+        self.assertIn("uncited_design_judgment", self.codes(report))
+
+    def test_citation_to_undefined_fact_is_not_evidence(self):
+        write_contract(self.root, body=self._uncited_motif("（依据 `SC-07`）"))
+        report = check(self.root)
+        self.assertIn("uncited_design_judgment", self.codes(report))
+
+    def test_grounded_judgment_passes(self):
+        # Control: the same sentence is accepted once it cites a real fact.
+        write_contract(self.root, body=self._uncited_motif("（依据 `PG-01`）"))
+        report = check(self.root)
+        self.assertTrue(report["passed"], report["blockers"])
+
+    def test_blank_project_fact_is_blocked(self):
+        body = BASE_BODY.replace("- **使用者：** 仓管员", "- **使用者：**")
         write_contract(self.root, body=body)
         report = check(self.root)
         self.assertIn("missing_design_judgment", self.codes(report))
@@ -244,18 +341,36 @@ class CheckContractTests(unittest.TestCase):
         second = check(self.root)
         self.assertNotEqual(first["contract_sha256"], second["contract_sha256"])
 
+    def test_undrifted_gallery_is_not_warned(self):
+        write_contract(self.root)
+        report = check(self.root)
+        self.assertNotIn("stale_gallery_catalog",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_stale_gallery_catalog_is_surfaced_at_use_time(self):
+        # gallery.html embeds a copy of the composed catalog so it opens
+        # straight from disk; the invariant is checked when the tool is used,
+        # not only when someone remembers to run `validate`.
+        gallery = design.resources() / "gallery.html"
+        if not gallery.is_file():
+            self.skipTest("no bundled gallery")
+        original = gallery.read_text(encoding="utf-8")
+        try:
+            gallery.write_text(
+                design.CATALOG_BLOCK.sub(r"\1{}\3", original, count=1),
+                encoding="utf-8")
+            write_contract(self.root)
+            report = check(self.root)
+            self.assertIn("stale_gallery_catalog",
+                          [w["code"] for w in report["warnings"]])
+            # Package health must never block a project's own contract.
+            self.assertTrue(report["passed"], report["blockers"])
+        finally:
+            gallery.write_text(original, encoding="utf-8")
+
     def test_direction_phase_is_lighter_than_prebuild(self):
-        # Missing design judgment does not block the direction phase.
-        default = ""
-        for line in TEMPLATE.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("- **母题：**"):
-                default = line.strip().split("- **母题：**", 1)[1].strip()
-                break
-        body = BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先",
-            "- **母题：** " + default,
-        )
-        write_contract(self.root, body=body)
+        # Design-judgment grounding is not demanded while the direction forms.
+        write_contract(self.root, body=self._uncited_motif())
         direction = check(self.root, phase="direction")
         self.assertTrue(direction["passed"])
         prebuild = check(self.root, phase="prebuild")
@@ -273,16 +388,7 @@ class CheckContractTests(unittest.TestCase):
         )
 
     def test_precheck_skips_design_judgment(self):
-        default = ""
-        for line in TEMPLATE.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("- **母题：**"):
-                default = line.strip().split("- **母题：**", 1)[1].strip()
-                break
-        body = BASE_BODY.replace(
-            "- **母题：** 以表格为视觉主角密度优先",
-            "- **母题：** " + default,
-        )
-        write_contract(self.root, body=body)
+        write_contract(self.root, body=self._uncited_motif())
         report = check(self.root, phase="precheck")
         self.assertTrue(report["passed"])
 
@@ -304,6 +410,93 @@ class CheckContractTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0)
         # Process startup aside, the check itself is well under a second.
         self.assertLess(elapsed, 5.0)
+
+
+class BuildDirectionGateTests(unittest.TestCase):
+    """`build` owns the gate because it is the only one-command artifact.
+
+    design-context.md puts gallery and 配方 at the lowest conflict priority,
+    but before this gate a recipe was also the only thing obtainable with no
+    evidence at all. The gate composes rules that already exist; these tests
+    also pin that it does not quietly raise the contract check's own phases.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.project = self.root / "project"
+        self.project.mkdir()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def build(self, *extra, out=None):
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "build", "--recipe", "daily-workspace",
+             "--project-root", str(self.project),
+             "--out", str(out if out is not None else self.root / "out"), *extra],
+            cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+
+    def ungrounded(self):
+        return BASE_BODY.replace(
+            "- **母题：** 以表格为视觉主角密度优先（依据 `PG-01`）",
+            "- **母题：** 以表格为视觉主角密度优先")
+
+    def test_missing_contract_is_refused_and_writes_nothing(self):
+        out = self.root / "out"
+        completed = self.build(out=out)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("missing_contract", completed.stderr)
+        self.assertIn("--standalone", completed.stderr)
+        # Refusing must not leave a half-written selection behind.
+        self.assertFalse(out.exists())
+
+    def test_ungrounded_motif_is_refused(self):
+        write_contract(self.project, body=self.ungrounded())
+        out = self.root / "out"
+        completed = self.build(out=out)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("uncited_design_judgment", completed.stderr)
+        self.assertFalse(out.exists())
+
+    def test_passing_gate_records_the_contract_sha(self):
+        contract = write_contract(self.project)
+        out = self.root / "out"
+        completed = self.build(out=out)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads((out / "selection.json").read_text(encoding="utf-8"))
+        evidence = payload["direction_evidence"]
+        self.assertEqual(evidence["mode"], "direction-gate")
+        self.assertEqual(evidence["contract_sha256"],
+                         hashlib.sha256(contract.encode("utf-8")).hexdigest())
+
+    def test_standalone_skips_the_gate_and_says_so(self):
+        out = self.root / "out"
+        completed = self.build("--standalone", out=out)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads((out / "selection.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["direction_evidence"],
+                         {"mode": "standalone", "contract_sha256": None})
+        self.assertIn("未读取任何项目合同",
+                      (out / "intent.md").read_text(encoding="utf-8"))
+
+    def test_gate_does_not_raise_the_direction_phase(self):
+        # The direction phase is deliberately light while a direction forms:
+        # grounding is demanded to *select tokens*, not to record a direction.
+        write_contract(self.project, body=self.ungrounded())
+        self.assertTrue(check(self.project, phase="direction")["passed"])
+        self.assertFalse(design.direction_gate(self.project)["passed"])
+
+    def test_existing_output_guard_still_holds(self):
+        write_contract(self.project)
+        out = self.root / "out"
+        out.mkdir()
+        (out / "keep.txt").write_text("mine", encoding="utf-8")
+        completed = self.build(out=out)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("new or empty directory", completed.stderr)
+        self.assertEqual((out / "keep.txt").read_text(encoding="utf-8"), "mine")
 
 
 class DesignIntelligenceContractTests(unittest.TestCase):
@@ -362,19 +555,237 @@ class DesignIntelligenceContractTests(unittest.TestCase):
         self.assertIsNone(result["retrieval"]["top_result_id"])
         self.assertEqual(result["retrieval"]["next_action"], "retry_once_then_record_fallback")
 
+    def test_icon_results_withhold_vendor_and_import_code(self):
+        # The bundled snapshot is Phosphor-based but this pack defaults to
+        # Lucide, so vendor identity and import snippets must not steer an
+        # undecided project (the data file stays a byte-faithful snapshot).
+        result = run_json(
+            "research", "settings gear preferences", "--domain", "icons", "--max-results", "1"
+        )
+
+        self.assertEqual(result["retrieval"]["status"], "verified_match")
+        rows = result["result"]["results"]
+        self.assertTrue(rows, result["result"])
+        for row in rows:
+            self.assertNotIn("Library", row)
+            self.assertNotIn("Import Code", row)
+            self.assertIn("Icon Name", row)
+        note = result["result"]["retrieval_note"]
+        self.assertIn("Lucide", note)
+        self.assertIn("以该指定为准", note)
+
+    def test_every_curated_icon_row_drops_vendor_usage(self):
+        # Usage carried `<MagnifyingGlass size={20} weight="regular" />` — a
+        # Phosphor-only snippet that was the one copyable artifact left after
+        # Library/Import Code were withheld. Only the library-agnostic
+        # accessibility guidance may survive.
+        data = SKILL_ROOT / "intelligence" / "data" / "icons.csv"
+        with data.open(encoding="utf-8") as handle:
+            raw = [dict(row) for row in csv.DictReader(handle)]
+
+        stripped = design._strip_icon_vendor({"domain": "icons", "results": raw})
+
+        self.assertEqual(len(stripped["results"]), 105)
+        for row in stripped["results"]:
+            usage = row.get("Usage")
+            self.assertIsInstance(usage, str, row["Icon Name"])
+            self.assertIn("aria-hidden", usage, row["Icon Name"])
+            self.assertFalse(re.search(r"<[A-Z]|weight=|\{[0-9]+\}", usage), row["Icon Name"])
+            for vendor in ("Phosphor", "Heroicons", "Lucide"):
+                self.assertNotIn(vendor, usage, row["Icon Name"])
+
+    def test_routes_with_copyable_artifacts_declare_a_retrieval_note(self):
+        # A payload that ships font URLs, palettes or preset names reads like a
+        # standard unless the response itself says otherwise.
+        for args in (
+            ("research", "dashboard data", "--domain", "typography", "--max-results", "1"),
+            ("research", "geometric sans", "--domain", "google-fonts", "--max-results", "1"),
+            ("research", "saas dashboard", "--design-system", "--project-name", "Probe"),
+        ):
+            note = run_json(*args)["result"]["retrieval_note"]
+            self.assertTrue(note, args)
+            self.assertIn("候选", note, args)
+
+        # Routes without ready-to-paste artifacts stay clean; a note on every
+        # payload would train the reader to skip it.
+        self.assertNotIn(
+            "retrieval_note",
+            run_json("research", "error summary", "--domain", "ux", "--max-results", "1")["result"],
+        )
+
 
 class ReferenceArchitectureTests(unittest.TestCase):
+    def test_toolchain_documents_the_lint_boundary_and_retrieval_note(self):
+        toolchain = (SKILL_ROOT / "references" / "design-toolchain.md").read_text(encoding="utf-8")
+
+        # lint-ui returns passed:true for a page with negative tracking, a bogus
+        # 700 and a full webfont import. The document must pre-empt that badge.
+        self.assertIn("retrieval_note", toolchain)
+        self.assertIn("排版度量与渲染效果不在其中", toolchain)
+        self.assertIn("不表示排版或设计成立", toolchain)
+
+    def test_external_fonts_are_allowed_with_a_mandatory_fallback(self):
+        # design-tokens.md owns 字体 (design-toolchain.md's authority table), and
+        # it used to say 不下载字体 outright — which forbade the very
+        # 西文/数字展示字体 that chinese-typography.md recommends for giving a
+        # Chinese page its character. The policy is design-first with graceful
+        # degradation, not offline-only.
+        tokens = (SKILL_ROOT / "references" / "design-tokens.md").read_text(encoding="utf-8")
+        craft = (SKILL_ROOT / "references" / "craft-review.md").read_text(encoding="utf-8")
+        cjk = (SKILL_ROOT / "references" / "chinese-typography.md").read_text(encoding="utf-8")
+
+        self.assertIn("可以加载网络字体", tokens)
+        self.assertIn("系统栈回退", tokens)
+        self.assertIn("外部资源是增强，不是必需品", tokens)
+        # The fallback must be an observable acceptance condition, not advice.
+        self.assertIn("系统栈回退", craft)
+        self.assertIn("不允许它成为唯一可用字体", craft)
+        # A flat "no font downloads" ban reappearing in any reference silently
+        # reinstates offline-only pages, so guard the whole set.
+        for path in sorted((SKILL_ROOT / "references").glob("*.md")):
+            self.assertNotIn("不下载字体", path.read_text(encoding="utf-8"), path.name)
+
+    def test_loaded_fonts_are_recorded_assets_not_unverifiable_prose(self):
+        # The fallback rule above is unenforceable unless the font has a row:
+        # 素材地图 is the only contract surface carrying 来源 / 许可 / 状态.
+        tokens = (SKILL_ROOT / "references" / "design-tokens.md").read_text(encoding="utf-8")
+        craft = (SKILL_ROOT / "references" / "craft-review.md").read_text(encoding="utf-8")
+
+        self.assertIn("[素材地图](surface-brief.md)", tokens)
+        self.assertIn("`AS-*`", tokens)
+        for field in ("来源 URL", "许可", "子集范围", "回退栈"):
+            self.assertIn(field, tokens)
+        self.assertIn("加载字体同样按素材登记", craft)
+
+        # The row must land in a table the template actually provides, with the
+        # columns this routing promises.
+        template = TEMPLATE.read_text(encoding="utf-8")
+        header, _ = design._table(design._strip_contract_block(template),
+                                  "来源与性质", "许可")
+        self.assertTrue(header, "素材地图 缺少可承载字体资产的表头")
+
+    def test_chinese_body_fonts_need_self_hosted_subsets(self):
+        # 永远强制使用系统字体栈 blocked reasoning about a fixed-copy brand
+        # page. The conditional exception must keep the one red line that
+        # actually matters (no un-subsetted whole-pack load) and forbid the
+        # unreachable-CDN dependency.
+        cjk = (SKILL_ROOT / "references" / "chinese-typography.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("永远强制使用系统字体栈", cjk)
+        self.assertIn("正文、表格与交互 UI 控件默认使用系统字体栈", cjk)
+        for condition in ("自托管", "子集化", "font-display: swap", "不依赖境外 CDN"):
+            self.assertIn(condition, cjk)
+        self.assertIn("不做子集化的整包引入", cjk)
+        # The old premise claimed CDN loading is the hazard; measurement showed
+        # Google Fonts slices CJK into unicode-range chunks automatically, so
+        # the real hazards are whole-pack loads and CDN reachability.
+        self.assertIn("unicode-range", cjk)
+        self.assertIn("中国大陆不可靠", cjk)
+
+
     def test_runtime_references_are_flat_and_bounded(self):
         references = SKILL_ROOT / "references"
         markdown = list(references.rglob("*.md"))
 
-        self.assertLessEqual(len(markdown), 8)
+        self.assertLessEqual(len(markdown), 10)
         self.assertFalse((references / "upstream").exists())
         self.assertFalse((references / "design-intent.md").exists())
 
         entrypoint = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         linked = set(re.findall(r"\(references/([^)#]+\.md)(?:#[^)]+)?\)", entrypoint))
         self.assertEqual({path.name for path in markdown}, linked)
+
+    def test_heavy_branches_are_staged_not_bundled(self):
+        # The new-surface branch spans ~65KB. Handing the agent the whole set
+        # at once is the progressive-disclosure failure this guards against,
+        # so every reading step must name at most one reference.
+        entrypoint = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("按步骤读", entrypoint)
+        steps = [line for line in entrypoint.splitlines()
+                 if line.startswith("| A") or line.startswith("| B")]
+        self.assertTrue(steps, "reading sequence is missing")
+        for row in steps:
+            self.assertLessEqual(len(re.findall(r"\(references/[^)]+\)", row)), 1, row)
+
+    def test_reading_sequence_step_sizes_match_the_files(self):
+        # The entrypoint quotes per-step sizes to justify staged reading. A
+        # stale number is the same rot the file/link equality test guards.
+        entrypoint = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        checked = 0
+        for line in entrypoint.splitlines():
+            row = re.match(
+                r"\|\s*[AB]\d\s*\|[^|]*\|\s*\[[^\]]+\]\(references/([^)]+\.md)\)"
+                r"\s*\|\s*(\d+)KB\s*\|", line)
+            if not row:
+                continue
+            actual = (SKILL_ROOT / "references" / row.group(1)).stat().st_size / 1024
+            self.assertEqual(int(row.group(2)), round(actual), row.group(1))
+            checked += 1
+        self.assertEqual(checked, 10, "reading sequence rows changed shape")
+
+    def test_entrypoint_prose_sizes_match_the_files(self):
+        # The prose around the tables quotes the same sizes, but nothing guarded
+        # it, so it drifted to 63KB / 15KB while the files were 64KB / 16KB --
+        # the table rows below were kept honest and the sentences were not.
+        # Both figures are now derived from the files the tables name.
+        entrypoint = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        names = set()
+        for line in entrypoint.splitlines():
+            row = re.match(
+                r"\|\s*[AB]\d\s*\|[^|]*\|\s*\[[^\]]+\]\(references/([^)]+\.md)\)"
+                r"\s*\|\s*(\d+)KB\s*\|", line)
+            if row:
+                names.add(row.group(1))
+        self.assertEqual(len(names), 6, "reading sequence files changed shape")
+        sizes = [(SKILL_ROOT / "references" / name).stat().st_size
+                 for name in names]
+
+        total = re.search(r"合计约\s*(\d+)KB", entrypoint)
+        self.assertIsNotNone(total, "total-size sentence changed shape")
+        self.assertEqual(int(total.group(1)), round(sum(sizes) / 1024))
+
+        largest = re.search(r"单步最大\s*(\d+)KB", entrypoint)
+        self.assertIsNotNone(largest, "largest-step sentence changed shape")
+        self.assertEqual(int(largest.group(1)),
+                         max(round(size / 1024) for size in sizes))
+
+        template = re.search(r"references/surface-brief\.md\)（(\d+)KB）", entrypoint)
+        self.assertIsNotNone(template, "template-size sentence changed shape")
+        self.assertEqual(int(template.group(1)),
+                         round(TEMPLATE.stat().st_size / 1024))
+
+    def test_contract_template_stays_a_fill_in_skeleton(self):
+        body = design._strip_contract_block(TEMPLATE.read_text(encoding="utf-8"))
+        labels = list(design.PROJECT_FACT_LABELS) + [
+            "明确不做", "明确排除项", "交换检查结论", "结构差异证据"]
+        labels += [label for _, labels_ in design.DESIGN_JUDGMENT_ASPECTS
+                   for label in labels_]
+        filled = {label: design._bullet_value(body, label) for label in labels
+                  if design._bullet_value(body, label)}
+        # Guidance text in a field gets copied into contracts; it belongs in
+        # the reference that owns the topic.
+        self.assertEqual(filled, {})
+        # The skeleton is copied into every project, so it is bounded -- but the
+        # old 16000 cap left 89 bytes of headroom, which turned any necessary
+        # field addition into a test failure and pushed authors toward deleting
+        # guidance first. Raised to 20000 to give that work room. It is still a
+        # bound, not a budget: explanation belongs in the owning reference.
+        self.assertLess(len(TEMPLATE.read_bytes()), 20000)
+
+    def test_template_declares_every_anchor_the_checker_reads(self):
+        body = design._strip_contract_block(TEMPLATE.read_text(encoding="utf-8"))
+        for markers in (("来源引用", "交接目标"), ("约束", "对结构"),
+                        ("可观察标准", "检查轴"), ("候选", "母题")):
+            header, _ = design._table(body, *markers)
+            self.assertTrue(header, f"模板缺少表头 {markers}")
+
+    def test_no_gate_decision_reads_the_template_text(self):
+        # Gate behaviour must depend only on the project contract. Reading the
+        # template to obtain "default values" made a gate decision flip when
+        # someone reworded the template, and let a synonym pass as design work.
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("template_path", source)
+        self.assertNotIn("template_body", source)
 
     def test_surface_brief_is_the_only_project_design_specification(self):
         content = "\n".join(
@@ -489,6 +900,52 @@ class LintUiTests(unittest.TestCase):
         report = self._lint()
         self.assertIn("mixed_icon_systems", self.codes(report))
 
+    def test_user_chosen_icon_system_is_honored(self):
+        # Lucide is only a default: an explicitly declared system (the user's or
+        # an existing project's own choice) must pass without a blocker.
+        self._write(contract_json=self._contract(icon_system="phosphor"),
+                    files={"app.jsx":
+                           "import { Gear } from '@phosphor-icons/react'"})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertTrue(report["passed"], report["blockers"])
+        self.assertNotIn("icon_system_mismatch",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_undeclared_icon_system_drift_is_a_warning_not_a_blocker(self):
+        # With no declaration the default is Lucide, so another library is drift
+        # worth surfacing -- but the fix may be to declare the choice, so it must
+        # not block.
+        self._write(files={"app.jsx":
+                           "import { Gear } from '@phosphor-icons/react'"})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertTrue(report["passed"], report["blockers"])
+        codes = [w["code"] for w in report["warnings"]]
+        self.assertIn("icon_system_mismatch", codes)
+        self.assertIn("undeclared_icon_system", codes)
+        mismatch = next(w for w in report["warnings"]
+                        if w["code"] == "icon_system_mismatch")
+        self.assertEqual(mismatch["found"], ["phosphor"])
+
+    def test_declared_system_drift_is_reported(self):
+        self._write(contract_json=self._contract(icon_system="lucide"),
+                    files={"app.jsx":
+                           "import { Gear } from '@phosphor-icons/react'"})
+        report = self._lint()
+        mismatch = next(w for w in report["warnings"]
+                        if w["code"] == "icon_system_mismatch")
+        self.assertEqual(mismatch["declared"], "lucide")
+        self.assertEqual(mismatch["found"], ["phosphor"])
+
+    def test_lucide_only_interface_passes(self):
+        self._write(contract_json=self._contract(icon_system="lucide"),
+                    files={"app.jsx":
+                           "import { Settings, Trash2 } from 'lucide-react'"})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertTrue(report["passed"], report["blockers"])
+
     def test_fabricated_lorem_is_blocked(self):
         self._write(files={"index.html": "<p>lorem ipsum dolor sit amet</p>"})
         report = self._lint()
@@ -561,16 +1018,26 @@ class LintUiTests(unittest.TestCase):
         report = self._lint()
         self.assertNotIn("skin_only_candidates", self.codes(report))
 
-    # --- template tendencies are warnings only ---
+    # --- aesthetic judgments are not grep heuristics ---
 
-    def test_hero_cards_cta_is_warning_not_blocker(self):
+    def test_generated_looking_layout_is_not_flagged(self):
+        # hero + three cards + CTA is what landing-page.md itself recommends,
+        # and card/pill/gradient counts fire on legitimate dashboards and tag
+        # lists. Those heuristics were removed: a warning that never blocks and
+        # is often wrong trains agents to ignore warnings.
         html = ('<section class="hero"><h1>产品</h1></section>'
                 '<div class="card">a</div><div class="card">b</div>'
-                '<div class="card">c</div><button>立即开始</button>')
+                '<div class="card">c</div><button>立即开始</button>'
+                '<span class="pill">x</span><span class="badge">y</span>'
+                '<span class="chip">z</span><span class="tag">w</span>'
+                '<style>.a{background:linear-gradient(#fff,#000)}'
+                '@keyframes k{from{opacity:0}}</style>')
         self._write(files={"index.html": html})
         report = self._lint()
         self.assertTrue(report["passed"], report["blockers"])
-        self.assertIn("template_hero_cards_cta", [w["code"] for w in report["warnings"]])
+        template_codes = [w["code"] for w in report["warnings"]
+                          if w["code"].startswith("template_")]
+        self.assertEqual(template_codes, [])
 
     def test_undeclared_icon_system_is_warning(self):
         # Icons in use but contract declares no icon_system → warning, not blocker.
@@ -692,6 +1159,83 @@ class LintUiTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertTrue(out.is_file())
         self.assertEqual(json.loads(out.read_text(encoding="utf-8"))["passed"], True)
+
+    # --- bounded stdout (--summary) ---
+
+    def _lint_cli(self, *extra, expected=0):
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "lint-ui", "--root", str(self.root),
+             *extra],
+            cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        self.assertEqual(completed.returncode, expected,
+                         (completed.stdout or "") + (completed.stderr or ""))
+        return completed
+
+    def _files_with_one_blocker_each(self, count):
+        """One emoji-as-icon blocker per file, so counts are predictable."""
+        return {f"src/Comp{i}.tsx": '<span class="icon">🎯</span>'
+                for i in range(count)}
+
+    def test_summary_bounds_stdout_and_out_keeps_the_full_report(self):
+        self._write(files=self._files_with_one_blocker_each(60))
+        out = self.root / ".site" / "lint.json"
+        completed = self._lint_cli("--summary", "--out", str(out))
+        summary = json.loads(completed.stdout)
+        self.assertEqual(summary["mode"], "summary")
+        self.assertFalse(summary["passed"])
+        self.assertEqual(summary["blocker_count"], 60)
+        self.assertEqual(len(summary["blockers"]), design.SUMMARY_FINDING_LIMIT)
+        self.assertEqual(summary["omitted"]["blockers"],
+                         60 - design.SUMMARY_FINDING_LIMIT)
+        self.assertEqual(summary["scanned_file_count"], 60)
+        self.assertEqual(summary["tracked_file_count"], 60)
+        self.assertEqual(summary["report"], str(out.resolve()))
+        self.assertLess(len(completed.stdout.encode("utf-8")), 4096)
+
+        full = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(len(full["blockers"]), 60)
+        self.assertEqual(len(full["files"]), 60)
+        self.assertEqual(len(full["scanned_files"]), 60)
+        self.assertNotIn("mode", full)
+
+    def test_summary_max_findings_controls_the_sample(self):
+        self._write(files=self._files_with_one_blocker_each(20))
+        summary = json.loads(
+            self._lint_cli("--summary", "--max-findings", "2").stdout)
+        self.assertEqual(len(summary["blockers"]), 2)
+        self.assertEqual(summary["omitted"]["blockers"], 18)
+        self.assertIsNone(summary["report"])
+        self.assertIn("--out", summary["note"])
+
+    def test_summary_zero_findings_keeps_the_counts(self):
+        self._write(files=self._files_with_one_blocker_each(3))
+        summary = json.loads(
+            self._lint_cli("--summary", "--max-findings", "0").stdout)
+        self.assertEqual(summary["blockers"], [])
+        self.assertEqual(summary["blocker_count"], 3)
+        self.assertEqual(summary["omitted"]["blockers"], 3)
+
+    def test_summary_clean_project_has_no_truncation_note(self):
+        self._write(files={"index.html": "<h1>库存</h1>"})
+        summary = json.loads(self._lint_cli("--summary").stdout)
+        self.assertTrue(summary["passed"])
+        self.assertEqual(summary["blocker_count"], 0)
+        self.assertEqual(summary["scanned_file_count"], 1)
+        self.assertNotIn("note", summary)
+
+    def test_default_stdout_stays_the_full_report(self):
+        self._write(files=self._files_with_one_blocker_each(20))
+        report = json.loads(self._lint_cli().stdout)
+        self.assertNotIn("mode", report)
+        self.assertEqual(len(report["blockers"]), 20)
+        self.assertEqual(len(report["files"]), 20)
+        self.assertEqual(report["scanned_files"], sorted(report["scanned_files"]))
+
+    def test_max_findings_without_summary_is_rejected(self):
+        self._write(files={"index.html": "<h1>库存</h1>"})
+        completed = self._lint_cli("--max-findings", "3", expected=1)
+        self.assertIn("--max-findings requires --summary", completed.stderr)
 
     def test_report_under_one_second(self):
         import time
