@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -23,12 +27,14 @@ jobs:
         if: always()
         with:
           name: release-${{ matrix.python-version }}
+          include-hidden-files: true
           path: |
             .verification/
             dist/skill.zip
             dist/devstaff-project.zip
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,6 +50,7 @@ jobs:
         if: always()
         with:
           name: browser-evidence
+          include-hidden-files: true
           path: |
             .verification/
             dist/skill.zip
