@@ -383,20 +383,39 @@ def _file_diff(prior: dict[str, str], current: dict[str, str]) -> dict:
 
 
 def read_mode(root) -> str:
-    """Project mode from .site/state.json, or 'guided' when there is no state."""
-    path = None
-    for candidate in (Path(root) / STATE_REL_PATH, Path(root) / '.SITE/state.json', Path(root) / '.v3/state.json'):
-        if candidate.is_file():
-            path = candidate
-            break
-    if not path or not path.is_file():
+    """Read the project policy. Only absence, never corruption, defaults to guided.
+
+    Keep the legacy mode-only fixture format readable. Known version fields,
+    when supplied, must have their exact types and supported values. Multiple
+    state files are ambiguous and cannot be used to downgrade a project.
+    """
+    root = Path(root)
+    candidates = []
+    if root.is_dir():
+        for directory in sorted(root.iterdir()):
+            if directory.is_dir() and directory.name.lower() in ('.site', '.v3'):
+                path = directory / 'state.json'
+                if path.exists() or path.is_symlink():
+                    candidates.append(path)
+    if not candidates:
         return 'guided'
+    if len(candidates) != 1:
+        raise ValueError('ambiguous project state: multiple state.json files')
     try:
-        state = json.loads(path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError:
-        return 'guided'
+        state = json.loads(candidates[0].read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'project state is unreadable: {exc}') from exc
+    if not isinstance(state, dict):
+        raise ValueError('project state must be a JSON object')
     mode = state.get('mode')
-    return mode if mode in ('guided', 'strict') else 'guided'
+    if mode not in ('guided', 'strict'):
+        raise ValueError('project state mode must be guided or strict')
+    if 'version' in state and (type(state['version']) is not int or state['version'] != 3):
+        raise ValueError('unsupported project state version')
+    if 'schema_revision' in state and (
+            type(state['schema_revision']) is not int or state['schema_revision'] not in (1, 2)):
+        raise ValueError('unsupported project state schema_revision')
+    return mode
 
 
 def required_axes(mode: str, vas: list[dict]) -> list[str]:
@@ -613,7 +632,7 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
         if not prior['resolved']:
             # Invalid REF: stay machine-readable. The plan reports that it could
             # not tell what changed instead of guessing a scope; the report gate
-            # still refuses any report whose fingerprints do not match this tree.
+            # still refuses anything that does not match this tree's fingerprints.
             changed = {
                 'ref': changed_from,
                 'available': False,
@@ -711,9 +730,16 @@ def validate_report(root, report_path) -> dict:
     errors: list[str] = []
     if Path(str(report.get('project_root', ''))).resolve() != root:
         errors.append('project_root does not match')
-    mode = report.get('mode')
-    if mode not in ('guided', 'strict'):
+    # The project is the authority; a report cannot choose a weaker policy.
+    mode = None
+    try:
+        mode = read_mode(root)
+    except (OSError, ValueError) as exc:
+        errors.append(str(exc))
+    if report.get('mode') not in ('guided', 'strict'):
         errors.append('mode must be guided or strict')
+    elif mode is not None and report['mode'] != mode:
+        errors.append(f'report mode does not match project mode ({mode})')
     overall = report.get('overall')
     if overall not in DELIVERABLE_STATUSES:
         errors.append('overall must be verified, limited or blocked')
@@ -768,7 +794,8 @@ def validate_report(root, report_path) -> dict:
         result = axes.get(a)
         if not isinstance(result, dict) or result.get('status') != 'verified':
             continue
-        if not str(result.get('observed') or '').strip():
+        observed = result.get('observed')
+        if not isinstance(observed, str) or not observed.strip():
             errors.append(f'{a} verified without recording what was observed')
 
     # Re-verification scope: failures invalidate their dependents; visual
@@ -799,9 +826,16 @@ def validate_report(root, report_path) -> dict:
             for vid in result.get('failed_vas', []) or []:
                 reverify_vas.append({'axis': axis, 'va': vid})
 
-    independent = bool(report.get('independent', False))
+    independent = report.get('independent', False)
+    if type(independent) is not bool:
+        errors.append('independent must be a JSON boolean')
+        independent = False
     evidence = report.get('evidence', [])
     limitations = report.get('limitations', [])
+    for name, items in (('evidence', evidence), ('limitations', limitations)):
+        if not isinstance(items, list) or any(
+                not isinstance(item, str) or not item.strip() for item in items):
+            errors.append(f'{name} must be a list of non-empty strings')
     if not isinstance(evidence, list):
         evidence = []
     if not isinstance(limitations, list):
@@ -821,7 +855,8 @@ def validate_report(root, report_path) -> dict:
     # Overall must agree with the worst required-axis status.
     if required:
         statuses = [_axis_status(axes, a) for a in required]
-        if any(s == 'blocked' for s in statuses):
+        # An unexecuted required check always wins over limited coverage.
+        if any(s in ('blocked', 'not_run', None) for s in statuses):
             computed = 'blocked'
         elif any(s == 'limited' for s in statuses):
             computed = 'limited'
