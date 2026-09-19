@@ -2,7 +2,7 @@ name: Roadmap integration
 on:
   push:
     branches: ['agent/devstaff-complete-20260919']
-    paths: ['.agent-upgrade.json']
+    paths: ['.github/workflows/agent-upgrade.yml']
 permissions:
   contents: write
 jobs:
@@ -17,48 +17,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply checksum-verified source transformation
-        shell: bash
+      - name: Apply exact integration corrections
         run: |
           set -euo pipefail
-          export STAGING="$(mktemp -d)"
-          python3 - <<'PY'
-          import base64, hashlib, io, json, os, tarfile, zipfile
-          from pathlib import Path
-          config = json.loads(Path('.agent-upgrade.json').read_text())
-          pieces = []
-          for number in range(1, 10):
-              data = Path(f'.agent-upgrade.part-{number:02d}').read_bytes()
-              if number == 3:
-                  encoded = base64.b64encode(data).decode()
-                  encoded = encoded.replace('dbfppp9', 'dbfpp9', 1) + 'C'
-                  data = base64.b64decode(encoded)
-              pieces.append(data)
-          payload = b''.join(pieces)
-          assert hashlib.sha256(payload).hexdigest() == config['sha256'], 'transport checksum mismatch'
-          with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-              with tarfile.open(fileobj=io.BytesIO(archive.read('payload.tar.xz')), mode='r:xz') as tar:
-                  tar.extractall(os.environ['STAGING'], filter='data')
-          PY
-          python3 "$STAGING/upgrade/apply.py" "$GITHUB_WORKSPACE" "$STAGING/staging"
-          rm .agent-upgrade.part-* .agent-upgrade.json
+          python3 tools/fix_integration.py
+          rm tools/fix_integration.py
           git config user.name 'devstaff implementation agent'
           git config user.email 'devstaff-agent@users.noreply.github.com'
           git add -A -- . ':!.github'
-          git commit -m 'feat: implement runtime, user workflow, tested starters and delivery tools'
+          git commit -m 'fix: align supported schema and scan boundaries; diagnose browser failures'
           git push origin HEAD:refs/heads/agent/devstaff-complete-20260919
-          git rev-parse HEAD
       - name: Install test-only browser dependencies
         run: |
           python3 -m pip install -r release/site-check/requirements-browser.txt
           python3 -m playwright install --with-deps chromium
       - name: Run full integration validation
         run: python3 tools/verify_all.py --browser
-      - name: Upload validation and complete project
+      - name: Upload all evidence and complete project
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: devstaff-complete-validation
+          name: devstaff-integration-corrected
+          include-hidden-files: true
           path: |
             .verification/
             dist/skill.zip
