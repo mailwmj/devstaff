@@ -153,10 +153,10 @@ class PlanTests(_ProjectBase):
         result = check.plan(self.root, ".site/design/surface-brief.md")
         self.assertIn("data/inventory.db", result["source_excluded"])
         self.assertIn("notes.log", result["source_excluded"])
+        self.assertEqual(result["source_files"], len(result["source_manifest"]))
         # A product directory that merely happens to be called data/ stays in.
         self.assertIn("src/data.json", result["source_manifest"])
         self.assertNotIn("src/data.json", result["source_excluded"])
-        self.assertEqual(result["source_files"], len(result["source_manifest"]))
 
     def test_nested_state_file_is_excluded_at_any_depth(self):
         """1.1 matches state-file suffixes at every depth, not just the root.
@@ -420,44 +420,43 @@ class ValidateReportTests(_ProjectBase):
         self.assertTrue(any("contract is missing or unreadable" in e for e in result["errors"]),
                         result["errors"])
 
-    def test_report_mode_comes_from_the_report(self):
-        """1.1 removed the cross-check against the project's own mode.
-
-        validate-report no longer reads .site/state.json, so a report is judged
-        by the mode it declares; state.py's verify is what enforces the
-        project's mode when a report is recorded.
-        """
+    def test_report_mode_must_match_the_project(self):
+        """A report cannot downgrade a strict project's required axes."""
         (self.root / ".site" / "state.json").write_text(
             json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
             encoding="utf-8",
         )
-        report = self._guided_report(mode="guided")
+        report = self._guided_report(mode="guided", independent=True)
         result = self._validate(report)
-        self.assertTrue(result["valid"], result["errors"])
-        self.assertEqual(result["mode"], "guided")
+        self.assertFalse(result["valid"])
+        self.assertEqual(result["mode"], "strict")
+        errors = " ".join(result["errors"])
+        self.assertIn("mode", errors)
+        self.assertIn("risk", errors)
+        self.assertIn("reopen", errors)
 
-    def test_independent_is_normalised_by_truthiness(self):
-        """1.1 dropped "independent must be a JSON boolean".
-
-        The value is normalised with bool(), so the non-empty string "false"
-        counts as independent. The normalised value is what the guided echo and
-        the strict gate both see; an empty value is still not independent.
-        """
+    def test_independent_must_be_a_json_boolean(self):
+        """A non-empty string is not an independent-check attestation."""
         guided = self._validate(self._guided_report(independent="false"))
-        self.assertTrue(guided["valid"], guided["errors"])
-        self.assertTrue(guided["independent"], '"false" is a non-empty string, so it normalises to True')
+        self.assertFalse(guided["valid"])
+        self.assertIs(guided["independent"], False)
+        self.assertTrue(any("boolean" in e for e in guided["errors"]))
 
+        (self.root / ".site" / "state.json").write_text(
+            json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
+            encoding="utf-8",
+        )
         strict = self._guided_report(mode="strict", independent="false")
-        strict["axes"]["reopen"] = _measured("刷新后数据保持")
-        strict["axes"]["risk"] = _measured("密钥与公开数据面")
+        strict["axes"]["reopen"] = _measured("Reload preserved data")
+        strict["axes"]["risk"] = _measured("Checked authorization boundaries")
         result = self._validate(strict, name="strict.json")
-        self.assertTrue(result["independent"])
-        self.assertTrue(result["valid"], result["errors"])
+        self.assertIs(result["independent"], False)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("boolean" in e for e in result["errors"]))
 
-        strict["independent"] = ""
-        rejected = self._validate(strict, name="strict-empty.json")
-        self.assertFalse(rejected["valid"])
-        self.assertTrue(any("independent" in e for e in rejected["errors"]), rejected["errors"])
+        strict["independent"] = True
+        valid = self._validate(strict, name="strict-boolean.json")
+        self.assertTrue(valid["valid"], valid["errors"])
 
 
 class StrictModeTests(_ProjectBase):

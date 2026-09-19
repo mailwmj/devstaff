@@ -20,7 +20,10 @@ class InstallTests(unittest.TestCase):
                 result["skills"],
                 ["site-brief", "site-builder", "site-check", "site-design"],
             )
-            self.assertEqual(result["instruction_file"], str((RELEASE / "AGENTS.md").resolve()))
+            self.assertEqual(result["instruction_file"],
+                             str((destination / "site-builder/references/AGENTS.md").resolve()))
+            self.assertEqual(Path(result["instruction_file"]).read_bytes(),
+                             (RELEASE / "AGENTS.md").read_bytes())
             self.assertTrue((destination / "site-builder" / "scripts" / "state.py").is_file())
             self.assertTrue(
                 (destination / "site-check" / "scripts" / "check.py").is_file()
