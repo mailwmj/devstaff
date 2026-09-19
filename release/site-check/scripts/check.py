@@ -823,8 +823,16 @@ def validate_report_data(root, report):
     try:
         state_file = runtime_metadata_dir(root) / 'state.json'
         current_state = json.loads(state_file.read_bytes()) if state_file.exists() else {}
-        if current_state.get('schema_revision', 1) >= 3:
-            round_id = (current_state.get('verification') or {}).get('round_id')
+        if not isinstance(current_state, dict):
+            raise ValueError('state must be a JSON object')
+        revision = current_state.get('schema_revision', 1)
+        if type(revision) is not int or revision not in (1, 2, 3):
+            raise ValueError('unsupported state schema_revision')
+        if revision >= 3:
+            verification = current_state.get('verification') or {}
+            if not isinstance(verification, dict):
+                raise ValueError('state verification must be an object')
+            round_id = verification.get('round_id')
             if round_id and report.get('round_id') != round_id:
                 errors.append('report round_id does not match the open round')
     except (OSError, ValueError) as exc:

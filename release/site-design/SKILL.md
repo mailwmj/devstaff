@@ -33,3 +33,24 @@ Carry approved layout/tokens/content into implementation. Experimental state or 
 Deterministic lint checks references/source hygiene. It cannot certify aesthetics, infer fake reviews from star characters, or decide semantic negation by grep. Inspect actual rendered page/state/viewport evidence for hierarchy, long content, empty/error states and focus. A generated screenshot is not a completed review.
 
 Return the five-field receipt to builder; don't call brief or check directly, mutate production source or announce final project delivery.
+
+## 按步骤读，不要一次读完
+
+The design paths below load one reference per step. Read the next step only when needed; skip inapplicable stages. A is a product surface; B is a conversion page.
+
+合计约 61KB，单步最大 17KB。
+
+[Contract](references/surface-brief.md)（18KB） is the shared artifact; read once and update only applicable sections.
+
+| Step | Purpose | Read | Size |
+| --- | --- | --- | --- |
+| A1 | Establish task context | [design-context](references/design-context.md) | 9KB |
+| A2 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 11KB |
+| A3 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
+| A4 | Export approved tokens | [design-tokens](references/design-tokens.md) | 10KB |
+| A5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |
+| B1 | Establish task context | [design-context](references/design-context.md) | 9KB |
+| B2 | Arrange truthful conversion content | [landing-page](references/landing-page.md) | 10KB |
+| B3 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 11KB |
+| B4 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
+| B5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |

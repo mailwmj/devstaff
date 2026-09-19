@@ -56,6 +56,8 @@ def read_state(root: Path) -> dict:
     revision=state.get('schema_revision',1)
     if type(revision) is not int or revision not in (1,2,3): raise ValueError('unsupported state schema_revision')
     if state.get('mode') not in ('guided','strict') or state.get('stage') not in tuple(STAGES): raise ValueError('unsupported state')
+    if 'decision' not in state and revision < 3 and state['stage'] == 'discovering':
+        state['decision'] = {'confirmed': False, 'task': '', 'direction': '', 'include': [], 'exclude': [], 'quote': ''}
     decision=state.get('decision')
     if not isinstance(decision,dict) or type(decision.get('confirmed')) is not bool: raise ValueError('state decision.confirmed must be a boolean')
     if not isinstance(state.get('history'),list): raise ValueError('state history must be a list')

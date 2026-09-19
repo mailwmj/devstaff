@@ -169,6 +169,9 @@ class InstallHardeningTests(unittest.TestCase):
             folder = self.root / name / 'scripts'
             folder.mkdir()
             shutil.copy2(ROOT / 'release' / name / 'scripts' / script, folder / script)
+        # The runtime is a shipped dependency, not a file from the install source.
+        shutil.copytree(ROOT / 'release/site-builder/scripts/site_runtime',
+                        self.root / 'site-builder/scripts/site_runtime')
         installer.install(self.root, self.dest)
         shutil.rmtree(self.root)
         script = self.dest / 'site-builder/scripts/state.py'
