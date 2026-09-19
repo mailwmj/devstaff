@@ -1,3 +1,5 @@
+> Accessibility policy: AA is the default unless the project declares AAA. Dark-mode AAA examples below are optional higher-target recipes, not unconditional blockers.
+
 # 中文排版与配色规范（Chinese Typography）
 
 > 本文件是 `site-design` 针对**中文界面、中西文混排及中国本地化场景**的专项排版与视觉规范。

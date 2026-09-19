@@ -1,56 +1,57 @@
 name: Verify release bundle
-
 on:
   push:
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.10', '3.12']
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Run workflow tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
-
-      - name: Run design tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
-
-      - name: Run the tests the bundle ships with
+      - name: All suites and clean release with installation source removed
+        run: python3 tools/verify_all.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-${{ matrix.python-version }}
+          include-hidden-files: true
+          path: |
+            .verification/
+            dist/skill.zip
+            dist/devstaff-project.zip
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test-only browser dependencies
         run: |
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-builder/scripts/tests -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-check/scripts/tests -p 'test_*.py'
-
-      - name: Validate design assets
-        run: PYTHONDONTWRITEBYTECODE=1 python3 release/site-design/scripts/design.py validate
-
-      - name: Verify installation from a clean release archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARCHIVE_FILE="$(mktemp)"
-          RELEASE_DIR="$(mktemp -d)"
-          INSTALL_DIR="$(mktemp -d)"
-          git archive --format=tar HEAD:release --output="$ARCHIVE_FILE"
-          tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-design/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-builder/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-check/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/site-design/scripts/design.py" validate
-          python3 "$RELEASE_DIR/install.py" "$INSTALL_DIR"
-          test -f "$INSTALL_DIR/site-design/references/surface-brief.md"
-          test -f "$INSTALL_DIR/site-builder/scripts/state.py"
-          test -f "$INSTALL_DIR/site-check/scripts/check.py"
+          python3 -m pip install -r release/site-check/requirements-browser.txt
+          python3 -m playwright install --with-deps chromium
+      - name: Isolated browser, data and release regression
+        run: python3 tools/verify_all.py --browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          include-hidden-files: true
+          path: |
+            .verification/
+            dist/skill.zip
+            dist/devstaff-project.zip

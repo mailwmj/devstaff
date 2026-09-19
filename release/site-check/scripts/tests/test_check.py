@@ -37,9 +37,13 @@ def run_json(*args):
         capture_output=True,
         encoding="utf-8",
         errors="replace",
-        check=True,
+        check=False,
     )
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    expected = 1 if args[0] == "validate-report" and payload.get("valid") is False else 0
+    if completed.returncode != expected:
+        raise AssertionError(completed.stderr or completed.stdout)
+    return payload
 
 
 class MissingContractTest(unittest.TestCase):

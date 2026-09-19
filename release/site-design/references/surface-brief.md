@@ -1,3 +1,32 @@
+# Small executable contract, schema 2
+
+For new projects use exactly one site-contract block in the project surface-brief.md. The machine authority for acceptance is targets, not Markdown table headings or a duplicate acceptance index. Keep only applicable reference lists. IDs remain stable across revisions. Rationale and chosen direction remain prose; a reference proves traceability, not good design.
+
+```site-contract
+{
+  "schema_version": 2,
+  "work_type": "new-surface",
+  "structure_mode": "single",
+  "comparison_type": "style",
+  "task": "Replace with the confirmed core task",
+  "scope_refs": ["BR-01"],
+  "pages": ["PG-01"],
+  "unresolved_confirm": [],
+  "blocking_missing_assets": [],
+  "targets": [
+    {"id": "VA-01", "target": "PG-01 / success / desktop", "standard": "Replace with an observable result", "axis": "core_task", "blocking": true, "refs": ["BR-01", "PG-01"]}
+  ]
+}
+```
+
+Add applicable negative, reopen and visual targets. A bundled runner probe ID is optional and valid only when it actually implements that standard; unrelated targets remain not_run. Strict risks are driven by project policy, not weakened by the contract. The defaults above are scaffolding, not a ready user decision.
+
+Existing schema-1 contracts remain readable. project.py migrate-contract backs up bytes and preserves stable IDs/prose; migration changes the contract hash and invalidates prior reports. Unknown schema, duplicate IDs, missing referenced IDs, invalid axes/flags and missing declared acceptance targets fail closed.
+
+## Detailed design planning library
+
+The retained sections below are optional planning aids, not a second executable index. Delete inapplicable sections in a project, retain useful design knowledge. Where the historical example says two alternatives or structure-difference evidence, follow comparison_type and the recommendation-first protocol above. Do not copy the historical JSON index into another site-contract fence.
+
 # 页面设计合同
 
 `site-design`、`site-builder` 与 `site-check` 共用的设计接口。方向、实现和验收共享这一份事实，不另写互相漂移的规格。
@@ -28,7 +57,7 @@
 
 机器可读的合同锚点，供 `site-design` 检查和 `site-builder` 交接校验。只索引正文已定义的编号，不复制正文规格；正文改了编号或内容，索引和旧报告同步失效。填写深度随任务：简单项目只索引适用字段，空列表表示该类对象不适用，不是缺失。
 
-```site-contract
+```json
 {
   "work_type": "",
   "structure_mode": "",

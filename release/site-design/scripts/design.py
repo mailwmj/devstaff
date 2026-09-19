@@ -13,6 +13,8 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "site-builder" / "scripts"))
+from site_runtime import contract as runtime_contract
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -646,18 +648,7 @@ CONTRACT_PHASES = ('direction', 'prebuild', 'precheck')
 
 
 def contract_path(root):
-    root_path = Path(root)
-    if root_path.is_dir():
-        for child in root_path.iterdir():
-            if child.is_dir() and child.name.lower() in ('.site', '.v3'):
-                candidate = child / 'design' / 'surface-brief.md'
-                if candidate.is_file():
-                    return candidate
-    for rel in (CONTRACT_REL_PATH, '.SITE/design/surface-brief.md', '.v3/design/surface-brief.md'):
-        candidate = root_path / rel
-        if candidate.is_file():
-            return candidate
-    return root_path / CONTRACT_REL_PATH
+    return runtime_contract.path(root)
 
 
 def _read_contract_text(root):
@@ -673,16 +664,7 @@ def _strip_contract_block(text):
 
 
 def _parse_contract_block(text):
-    match = CONTRACT_BLOCK_RE.search(text)
-    if not match:
-        raise ValueError('contract block is missing')
-    try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError as error:
-        raise ValueError(f'contract block is not valid JSON: {error}') from error
-    if not isinstance(data, dict):
-        raise ValueError('contract block must be a JSON object')
-    return data
+    return runtime_contract.parse(text)
 
 
 def _contract_lists(data):
@@ -902,6 +884,9 @@ def check_contract(root, phase):
         return _contract_report(root, phase, sha, False,
                                 [{'code': 'invalid_contract', 'detail': str(error)}], warnings)
 
+    if data.get("schema_version") == 2:
+        return _runtime_contract_v2(root, phase, contract_text, data)
+
     defined = _defined_ids(body)
     work_type = str(data.get('work_type') or '').strip()
     structure_mode = str(data.get('structure_mode') or '').strip()
@@ -1004,6 +989,8 @@ def direction_gate(root):
     if report['blockers']:
         return {**report, 'gate': 'direction'}
     text = _read_contract_text(Path(root).resolve())
+    if _parse_contract_block(text).get('schema_version') == 2:
+        return {**report, 'gate': 'direction'}
     blockers = _design_judgment_blockers(
         _strip_contract_block(text), _contract_lists(_parse_contract_block(text)))
     return {**report, 'gate': 'direction', 'blockers': blockers,
@@ -1173,50 +1160,12 @@ def _excluded_capabilities(body):
 
 
 def _candidate_skin_blockers(body):
-    """Block when declared visual candidates are skin-only or unevidenced.
+    """Free-text judgments and DOM reuse do not deterministically prove quality.
 
-    Mirrors the 换肤反模式 in visual-direction.md: two or more declared
-    candidates must each carry structural-difference evidence (主布局容器 /
-    核心组件形态 / 信息密度 / 首屏重心). Missing evidence, identical
-    motif+composition across candidates, or a swap-check that admits换肤 are
-    all hard failures — color/font-only differences are not a second direction.
+    Compare rendered alternatives under the same frame. A source lint must
+    not convert the phrase 'not a reskin' into a fabricated failure.
     """
-    blockers = []
-    header, rows = _table(body, '候选', '设计主线')
-    if not header:
-        header, rows = _table(body, '候选', '母题')
-    cand_col = _column(header, '候选')
-    motif_col = _column(header, '设计主线', '母题')
-    comp_col = _column(header, '构图命题')
-    if cand_col is None or motif_col is None or comp_col is None:
-        return blockers
-    declared = []
-    for row in rows:
-        motif = row[motif_col].strip() if motif_col < len(row) else ''
-        comp = row[comp_col].strip() if comp_col < len(row) else ''
-        if motif or comp:
-            declared.append((motif, comp))
-    if len(declared) < 2:
-        return blockers
-    evidence = _bullet_after(body, '结构差异证据')
-    if not evidence:
-        blockers.append({
-            'code': 'skin_only_candidates',
-            'detail': '对照方向有≥2候选但缺少结构差异证据'
-            '（主布局容器/核心组件形态/信息密度/首屏重心）'})
-        return blockers
-    pairs = {(motif, comp) for motif, comp in declared}
-    if len(pairs) == 1:
-        blockers.append({
-            'code': 'skin_only_candidates',
-            'detail': '候选设计主线与构图命题相同，仅可能换色/字体'})
-    swap = _bullet_after(body, '交换检查结论')
-    if swap and re.search(r'换肤|差异(?:不|基本.*不)成立|基本消失|只(?:是|能算).*上色',
-                          swap):
-        blockers.append({
-            'code': 'skin_only_candidates',
-            'detail': '交换检查结论表明候选仅换肤：' + swap})
-    return blockers
+    return []
 
 
 def _extract_labels(text):
@@ -1274,7 +1223,7 @@ def _scan_file(rel, text, excepted_chars, icon_system, caps):
             continue
         seen_rating.add(line)
         had_icons = True
-        blockers.append({'code': 'fabricated_proof', 'kind': 'fabricated_rating',
+        warnings.append({'code': 'unverified_social_proof', 'kind': 'rating_requires_source',
                          'file': rel, 'line': line, 'char': char,
                          'detail': '星级评定无来源'})
 
@@ -1376,19 +1325,28 @@ def _is_exempt(rel_posix, exemptions):
 
 
 def _iter_ui_files(root):
-    for path in sorted(root.rglob('*')):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root)
-        if any(part in LINT_IGNORE_DIRS for part in rel.parts):
-            continue
-        if any(part in LINT_FIXTURE_DIR_PARTS for part in rel.parts):
-            continue
-        if LINT_FIXTURE_NAME_RE.search(path.name):
-            continue
-        if path.suffix.lower() not in LINT_UI_EXTENSIONS:
-            continue
-        yield path
+    """Prune ignored directories without classifying by absolute parent names."""
+    root = Path(root)
+    def fail(exc):
+        raise ValueError('UI source unreadable: ' + str(exc)) from exc
+    ignored = LINT_IGNORE_DIRS | LINT_FIXTURE_DIR_PARTS
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=fail):
+        dirs[:] = sorted(name for name in dirs if name not in ignored)
+        for name in dirs:
+            if (Path(directory) / name).is_symlink():
+                raise ValueError('UI source symlink is unsupported')
+        for name in sorted(files):
+            path = Path(directory) / name
+            relative = path.relative_to(root)
+            if any(part in ignored for part in relative.parts[:-1]):
+                continue
+            if LINT_FIXTURE_NAME_RE.search(path.name):
+                continue
+            if path.suffix.lower() not in LINT_UI_EXTENSIONS:
+                continue
+            if path.is_symlink():
+                raise ValueError('UI source symlink is unsupported')
+            yield path
 
 
 def _ui_manifest_sha256(entries):
@@ -1872,6 +1830,18 @@ def main():
                               'files': ['tokens.css', 'selection.json', 'intent.md']}, ensure_ascii=False))
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, f'{error}\n')
+
+
+
+
+def _runtime_contract_v2(root, phase, text, data):
+    sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    blockers, warnings = [], []
+    if phase in ('prebuild', 'precheck'):
+        for key, code in (('unresolved_confirm','unresolved_confirm'),('blocking_missing_assets','blocking_missing_asset')):
+            if data.get(key): blockers.append({'code':code,'items':data[key]})
+    warnings.append({'code':'rendered_review_required','detail':'Schema validity and ID references do not establish visual quality or user acceptance.'})
+    return _contract_report(Path(root).resolve(), phase, sha, not blockers, blockers, warnings)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "required": [
+    "case_id",
+    "commit",
+    "execution_kind",
+    "host",
+    "started_at",
+    "finished_at",
+    "outcome",
+    "evidence"
+  ],
+  "properties": {
+    "execution_kind": {
+      "enum": [
+        "real_agent",
+        "scripted_integration",
+        "human_study"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked"
+      ]
+    },
+    "cost": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "tokens": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

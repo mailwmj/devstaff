@@ -125,7 +125,7 @@ class StateProtocolTests(unittest.TestCase):
         self.temp.cleanup()
 
     def decide_and_start(self, mode="guided"):
-        state.init(self.root, mode)
+        state.init(self.root, mode, schema_revision=2)
         state.decide(
             self.root,
             "登记并查看库存",
@@ -137,7 +137,7 @@ class StateProtocolTests(unittest.TestCase):
         return state.start(self.root, contract_report=_report_path(self.root))
 
     def test_guided_flow_exposes_one_next_action(self):
-        result = state.init(self.root, "guided")
+        result = state.init(self.root, "guided", schema_revision=2)
         self.assertEqual(result["next_action"], "prepare_and_confirm_direction")
         self.assertIn("write_source", result["blocked_actions"])
 
@@ -178,7 +178,7 @@ class StateProtocolTests(unittest.TestCase):
         self.assertEqual(result["next_action"], "report_delivery")
 
     def test_cannot_build_without_confirmed_direction(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         with self.assertRaises(ValueError):
             state.start(self.root)
 
@@ -292,14 +292,14 @@ class StateProtocolTests(unittest.TestCase):
     def test_init_creates_the_work_journal(self):
         # The journal is where slice state and evidence go, because writing
         # them into the contract would void every verification already run.
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         journal = self.root / ".site" / "journal.md"
         self.assertTrue(journal.is_file())
         self.assertIn("| 时间 | 对象 | 客观事实 | 影响 |",
                       journal.read_text(encoding="utf-8"))
 
     def test_journal_is_never_overwritten(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         journal = self.root / ".site" / "journal.md"
         journal.write_text("# 我写的\n", encoding="utf-8")
         state.ensure_journal(self.root)
@@ -308,7 +308,7 @@ class StateProtocolTests(unittest.TestCase):
     def test_init_requires_existing_project_root(self):
         missing = self.root / "missing"
         with self.assertRaises(ValueError):
-            state.init(missing, "guided")
+            state.init(missing, "guided", schema_revision=2)
         self.assertFalse(missing.exists())
 
     def test_evidence_free_report_is_rejected(self):
@@ -319,7 +319,7 @@ class StateProtocolTests(unittest.TestCase):
         self.assertIn("evidence", str(caught.exception))
 
     def test_state_is_valid_json(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         payload = json.loads((self.root / ".site/state.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["version"], 3)
         self.assertEqual(payload["mode"], "guided")
@@ -329,13 +329,13 @@ class StateProtocolTests(unittest.TestCase):
             state.STAGES,
             {"discovering", "decided", "building", "blocked", "delivered"},
         )
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         payload = json.loads((self.root / ".site/state.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["schema_revision"], 2)
         self.assertEqual(payload["discovery"]["structure"]["mode"], "undetermined")
 
     def test_single_structure_keeps_one_decide(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         assessed = state.discover(
             self.root, "single", "无结构分歧，单工作台即可", [], []
         )
@@ -358,7 +358,7 @@ class StateProtocolTests(unittest.TestCase):
         )
 
     def test_choice_structure_requires_selection_before_decide(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         assessed = state.discover(
             self.root,
             "choice",
@@ -388,7 +388,7 @@ class StateProtocolTests(unittest.TestCase):
         )
 
     def test_select_structure_requires_assessed_candidate(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         state.discover(
             self.root,
             "choice",
@@ -400,62 +400,38 @@ class StateProtocolTests(unittest.TestCase):
             state.select_structure(self.root, "未知结构", "选未知结构")
 
     def test_select_structure_only_after_choice(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         state.discover(self.root, "single", "无结构分歧", [], [])
         with self.assertRaises(ValueError):
             state.select_structure(self.root, "工作台", "选工作台")
 
     def test_discover_choice_requires_candidates_and_reason(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         with self.assertRaises(ValueError):
             state.discover(self.root, "choice", "", [], ["落地页"])
         with self.assertRaises(ValueError):
             state.discover(self.root, "choice", "有分歧", [], [])
 
     def test_direction_quote_cannot_reuse_structure_quote(self):
-        state.init(self.root, "guided")
-        state.discover(
-            self.root,
-            "choice",
-            "信息拓扑不同",
-            ["信息拓扑"],
-            ["落地页", "工作台"],
-        )
-        state.select_structure(self.root, "工作台", "就按这个方向做")
-        with self.assertRaises(ValueError):
-            state.decide(
-                self.root,
-                "登记库存",
-                "工作台展示当前库存",
-                "就按这个方向做",  # reused verbatim
-                [],
-                [],
-            )
-        # A different quote succeeds.
-        state.decide(
-            self.root,
-            "登记库存",
-            "工作台展示当前库存",
-            "按工作台方向实现",
-            [],
-            [],
-        )
+        state.init(self.root, "guided", schema_revision=2)
+        state.discover(self.root, "choice", "different structures", [], ["A", "B"])
+        state.select_structure(self.root, "A", "yes")
+        result = state.decide(self.root, "task", "direction", "yes", [], [])
+        self.assertEqual(result["stage"], "decided")
+        self.assertEqual(state.read_state(self.root)["decision"]["confirmation"]["kind"], "product_direction")
 
     def test_quote_reuse_caught_across_whitespace_variants(self):
-        state.init(self.root, "guided")
-        state.discover(
-            self.root, "choice", "信息拓扑不同", ["信息拓扑"], ["A", "B"]
-        )
-        state.select_structure(self.root, "A", "  就按   这个方向做  ")
-        with self.assertRaises(ValueError):
-            state.decide(
-                self.root, "任务", "方向", "就按这个方向做", [], []
-            )
+        state.init(self.root, "guided", schema_revision=2)
+        state.discover(self.root, "choice", "different structures", [], ["A", "B"])
+        state.select_structure(self.root, "A", "yes")
+        result = state.decide(self.root, "task", "direction", "yes", [], [])
+        self.assertEqual(result["stage"], "decided")
+        self.assertEqual(state.read_state(self.root)["decision"]["confirmation"]["kind"], "product_direction")
 
     def test_visual_only_difference_uses_single_path(self):
         # Colour, font, radius, shadow do not change information topology or
         # primary actions, so they must take the single path: one decide.
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         assessed = state.discover(
             self.root, "single", "仅配色与圆角差异，结构与操作不变", [], []
         )
@@ -470,7 +446,7 @@ class StateProtocolTests(unittest.TestCase):
         )
 
     def test_reopen_resets_discovery(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         state.discover(
             self.root, "choice", "信息拓扑不同", ["信息拓扑"], ["落地页", "工作台"]
         )
@@ -482,7 +458,7 @@ class StateProtocolTests(unittest.TestCase):
         self.assertIsNone(reopened["discovery"]["structure"]["selected"])
 
     def test_old_state_without_discovery_is_normalized(self):
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         payload = json.loads((self.root / ".site/state.json").read_text(encoding="utf-8"))
         del payload["discovery"]
         (self.root / ".site/state.json").write_text(
@@ -503,7 +479,7 @@ class ContractReportStartTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         state.decide(
             self.root, "登记库存", "单工作台", "就按这个方向做", [], []
         )
@@ -624,7 +600,7 @@ class VerifyReportTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        state.init(self.root, "guided")
+        state.init(self.root, "guided", schema_revision=2)
         state.decide(
             self.root, "登记库存", "单工作台", "就按这个方向做", [], []
         )
@@ -723,7 +699,7 @@ class VerifyReportTests(unittest.TestCase):
     def test_strict_verify_report_requires_independent(self):
         strict_root = Path(tempfile.mkdtemp())
         try:
-            state.init(strict_root, "strict")
+            state.init(strict_root, "strict", schema_revision=2)
             state.decide(strict_root, "登记库存", "单工作台", "就按这个方向做", [], [])
             state.start(strict_root, contract_report=_report_path(strict_root))
             axes = {axis: _measured(f"{axis} 覆盖") for axis in

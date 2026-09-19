@@ -1,0 +1,2 @@
+# Optional test-only dependency, pinned to the version exercised by CI.
+playwright==1.57.0

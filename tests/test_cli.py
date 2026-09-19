@@ -81,6 +81,9 @@ VALID_CONTRACT = """# 页面设计合同
 
 class StateCliTests(unittest.TestCase):
     def run_cli(self, *args, expected=0):
+        # Retained compatibility cases explicitly request schema 2.
+        if args and args[0] == "init":
+            args = (*args, "--schema-revision", "2")
         result = subprocess.run(
             [sys.executable, str(SCRIPT), *map(str, args)],
             check=False,
@@ -320,7 +323,7 @@ class StateCliTests(unittest.TestCase):
             report = self.write_contract_report(root)
             self.run_cli("start", root, "--contract-report", report)
 
-    def test_reused_quote_rejected_by_cli(self):
+    def test_separate_confirmations_may_repeat_the_same_words(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.run_cli("init", root)
@@ -348,10 +351,11 @@ class StateCliTests(unittest.TestCase):
                 "方向",
                 "--quote",
                 "就按这个方向做",
-                expected=2,
+                expected=0,
             )
-            self.assertIn("error", result)
-            self.assertIn("quote", result["error"])
+            self.assertEqual(result["stage"], "decided")
+            stored = json.loads((root / ".site/state.json").read_text(encoding="utf-8"))
+            self.assertEqual(stored["decision"]["quote"], stored["discovery"]["structure"]["quote"])
 
 
 if __name__ == "__main__":

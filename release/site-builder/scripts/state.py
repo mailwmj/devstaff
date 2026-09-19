@@ -13,6 +13,12 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+import importlib.util as runtime_importlib
+import secrets as runtime_secrets
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from site_runtime.common import Problem as RuntimeProblem, JsonParser as RuntimeParser, metadata_dir as runtime_metadata_dir, error_result as runtime_error_result
+from site_runtime import contract as runtime_contract
+RUNTIME_RISKS = ("sensitive_data", "money", "permissions", "external_write", "irreversible")
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -37,42 +43,37 @@ def now() -> str:
 
 
 def state_path(root: Path) -> Path:
-    if root.is_dir():
-        for child in root.iterdir():
-            if child.is_dir() and child.name.lower() in (".site", ".v3"):
-                candidate = child / "state.json"
-                if candidate.is_file():
-                    return candidate
-    for candidate in (root / ".site" / "state.json", root / ".SITE" / "state.json", root / ".v3" / "state.json"):
-        if candidate.exists():
-            return candidate
-    return root / ".site" / "state.json"
+    return runtime_metadata_dir(root) / 'state.json'
 
 
 def read_state(root: Path) -> dict:
     path = state_path(root)
-    if not path.exists():
-        raise ValueError("state does not exist; initialize it first")
-    try:
-        state = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid state: {exc}") from exc
-    if (
-        state.get("version") != 3
-        or state.get("mode") not in MODES
-        or state.get("stage") not in STAGES
-    ):
-        raise ValueError("unsupported state")
-    # Older revision-1 states never carried a discovery block; normalize it in
-    # memory so new structure-choice logic can run without forcing a re-init.
-    if "discovery" not in state:
-        state["discovery"] = default_discovery()
-    verification = state.get("verification")
-    if not isinstance(verification, dict):
-        state["verification"] = blank_verification()
-    elif verification.get("phase") not in VERIFICATION_PHASES:
-        # States written before verification rounds existed: no round is open.
-        verification["phase"] = "idle"
+    if path.is_symlink(): raise RuntimeProblem('UNSAFE_PATH', 'state cannot be a symlink')
+    if not path.is_file(): raise RuntimeProblem('STATE_MISSING','state does not exist; initialize it first','Run state.py init PROJECT.')
+    state = json.loads(path.read_bytes())
+    if not isinstance(state,dict): raise ValueError('state must be a JSON object')
+    if type(state.get('version')) is not int or state['version']!=3: raise ValueError('unsupported state version')
+    revision=state.get('schema_revision',1)
+    if type(revision) is not int or revision not in (1,2,3): raise ValueError('unsupported state schema_revision')
+    if state.get('mode') not in ('guided','strict') or state.get('stage') not in tuple(STAGES): raise ValueError('unsupported state')
+    if 'decision' not in state and revision < 3 and state['stage'] == 'discovering':
+        state['decision'] = {'confirmed': False, 'task': '', 'direction': '', 'include': [], 'exclude': [], 'quote': ''}
+    decision=state.get('decision')
+    if not isinstance(decision,dict) or type(decision.get('confirmed')) is not bool: raise ValueError('state decision.confirmed must be a boolean')
+    if not isinstance(state.get('history'),list): raise ValueError('state history must be a list')
+    if 'discovery' not in state and revision<3: state['discovery']=default_discovery()
+    discovery=state.get('discovery')
+    if not isinstance(discovery,dict) or not isinstance(discovery.get('structure'),dict): raise ValueError('state discovery must contain structure')
+    if discovery['structure'].get('mode') not in tuple(STRUCTURE_MODES): raise ValueError('invalid structure mode')
+    verification=state.get('verification')
+    if verification is None and revision<3: verification=blank_verification()
+    if not isinstance(verification,dict): raise ValueError('state verification must be an object')
+    if 'phase' not in verification and revision<3: verification['phase']='idle'
+    if verification.get('phase') not in tuple(VERIFICATION_PHASES): raise ValueError('invalid verification phase in state')
+    state['verification']={**blank_verification(),**verification}
+    state.setdefault('revision',0); state.setdefault('revisions',[])
+    state.setdefault('delivery',{'scope':'preview','risks':[],'authorizations':[]})
+    if not isinstance(state['revisions'],list) or not isinstance(state['delivery'],dict): raise ValueError('invalid revisions/delivery state')
     return state
 
 
@@ -229,70 +230,53 @@ def building_actions(phase: str) -> tuple[str, list[str], list[str]]:
 
 
 def preflight_state(state: dict) -> dict:
-    actions = {
-        "discovering": (
-            "prepare_and_confirm_direction",
-            ["ask_user", "site-brief", "site-design", "decide"],
-            ["write_source", "start_build", "deliver"],
-        ),
-        "decided": (
-            "start_build",
-            ["start"],
-            ["change_scope_silently", "deliver"],
-        ),
-        "blocked": (
-            "resolve_blocker",
-            ["ask_user", "resume", "reopen"],
-            ["write_source", "deliver"],
-        ),
-        "delivered": (
-            "report_delivery",
-            ["report", "reopen"],
-            ["write_source", "start_build"],
-        ),
-    }
-    phase = verification_phase(state)
-    if state["stage"] == "building":
-        action, allowed, blocked = building_actions(phase)
+    stage=state['stage']; modern=state.get('schema_revision',1)>=3
+    structure=state.get('discovery',{}).get('structure',{})
+    phase=verification_phase(state)
+    pending=structure.get('mode')=='choice' and not structure.get('selected')
+    unassessed=modern and structure.get('mode','undetermined')=='undetermined'
+    if stage=='discovering':
+        action='present_structure_choice' if pending else 'prepare_and_confirm_direction'
+        allowed=['ask_user','site-brief','site-design','discover','block','reopen','policy']
+        if pending: allowed.append('select-structure')
+        if not pending and not unassessed: allowed.append('decide')
+        blocked=['write_source','start_build','deliver']
+        if 'decide' not in allowed: blocked.append('decide')
+    elif stage=='decided':
+        action,allowed,blocked='start_build',['start','reopen','block','policy'],['deliver','change_scope_silently']
+    elif stage=='building':
+        action,allowed,blocked=building_actions(phase)
+        if modern and phase in ('idle','review'):
+            action='build_then_verify' if phase=='idle' else 'collect_feedback_or_verify'
+            if 'begin-check' not in allowed: allowed.append('begin-check')
+            blocked=[x for x in blocked if x!='begin-check']
+        if phase!='checking': allowed+=['revise','reopen','policy']
+    elif stage=='blocked':
+        action,allowed,blocked='resolve_blocker',['ask_user','resume','reopen','policy'],['write_source','deliver']
     else:
-        action, allowed, blocked = actions[state["stage"]]
-    if state["stage"] == "discovering":
-        action = discovery_next_action(state.get("discovery", {}))
-    checking = state["stage"] == "building" and phase == "checking"
-    missing = []
-    if not state["decision"]["confirmed"]:
-        missing.append("confirmed_direction")
-    discovery = state.get("discovery", {})
-    structure = discovery.get("structure", {})
-    if structure.get("mode") == "choice" and not structure.get("selected"):
-        missing.append("structure_selection")
-    if state["stage"] == "building" and phase in {"idle", "review"}:
-        missing.append("user_review")
-    if checking:
-        missing.append("check_report")
-    if state["mode"] == "strict" and state["stage"] == "building":
-        missing.append("independent_verification")
-    return {
-        "version": 3,
-        "schema_revision": state.get("schema_revision", 1),
-        "mode": state["mode"],
-        "stage": state["stage"],
-        "next_action": action,
-        "allowed_actions": allowed,
-        "blocked_actions": blocked,
-        "missing": missing,
-        "decision": {
-            "confirmed": state["decision"]["confirmed"],
-            "task": state["decision"]["task"],
-            "direction": state["decision"]["direction"],
-        },
-        "discovery": discovery,
-        "verification": state["verification"],
-        "blocked_reason": state.get("blocked_reason"),
-    }
+        action,allowed,blocked='report_delivery',['report','revise','reopen','policy'],['write_source','start_build']
+    missing=[]
+    if not state['decision']['confirmed']: missing.append('confirmed_direction')
+    if unassessed: missing.append('structure_assessment')
+    if pending: missing.append('structure_selection')
+    if stage=='building' and phase in ('idle','review') and not modern: missing.append('user_review')
+    if stage=='building' and phase=='checking': missing.append('check_report')
+    if state['mode']=='strict' and stage=='building': missing.append('independent_verification')
+    owner='site-design' if pending else ('site-check' if phase=='checking' else 'site-builder')
+    return {'version':3,'schema_revision':state.get('schema_revision',1),'mode':state['mode'],'stage':stage,
+            'next_action':action,'allowed_actions':list(dict.fromkeys(allowed)),'blocked_actions':blocked,
+            'action':{'id':action,'owner':owner,'inputs':['.site/brief.md'] if stage=='discovering' else [CONTRACT_REL_PATH,'.site/journal.md'],
+                      'outputs':['five-field receipt'],'preconditions':missing,'recovery':'Resolve the named prerequisite; keep valid decisions, then preflight.',
+                      'needs_user':pending or (stage=='building' and phase=='review' and not modern)},
+            'missing':missing,'decision':{k:state['decision'].get(k) for k in ('confirmed','task','direction')},
+            'discovery':state.get('discovery',default_discovery()),'verification':state['verification'],
+            'delivery':state.get('delivery',{'scope':'preview','risks':[],'authorizations':[]}),
+            'revision':state.get('revision',0),'blocked_reason':state.get('blocked_reason')}
 
 
-def init(root: Path, mode: str) -> dict:
+def init(root: Path, mode: str, schema_revision: int = 3) -> dict:
+    if type(schema_revision) is not int or schema_revision not in (2, 3):
+        raise ValueError("unsupported new state schema_revision")
     if not root.is_dir():
         raise ValueError("project root must be an existing directory")
     if mode not in MODES:
@@ -301,7 +285,9 @@ def init(root: Path, mode: str) -> dict:
         raise ValueError("state already exists")
     state = {
         "version": 3,
-        "schema_revision": 2,
+        "schema_revision": schema_revision,
+        "revision": 0, "revisions": [],
+        "delivery": {"scope": "preview", "risks": [], "authorizations": []},
         "mode": mode,
         "stage": "discovering",
         "discovery": default_discovery(),
@@ -326,38 +312,18 @@ def init(root: Path, mode: str) -> dict:
     return preflight_state(state)
 
 
-def decide(
-    root: Path,
-    task: str,
-    direction: str,
-    quote: str,
-    include: list[str],
-    exclude: list[str],
-) -> dict:
-    state = read_state(root)
-    if state["stage"] != "discovering":
-        raise ValueError("a direction can only be confirmed while discovering")
-    if not task.strip() or not direction.strip() or not quote.strip():
-        raise ValueError("task, direction and quote are required")
-    prior_quote = state.get("discovery", {}).get("structure", {}).get("quote")
-    if prior_quote and normalize_quote(quote) == normalize_quote(prior_quote):
-        raise ValueError(
-            "structure selection quote and direction confirmation quote must differ"
-        )
-    old = state["stage"]
-    state["decision"] = {
-        "confirmed": True,
-        "task": task.strip(),
-        "direction": direction.strip(),
-        "include": clean_items(include),
-        "exclude": clean_items(exclude),
-        "quote": quote.strip(),
-    }
-    state["stage"] = "decided"
-    state["verification"] = blank_verification()
-    record(state, "decide", old)
-    write_state(root, state)
-    return preflight_state(state)
+def decide(root: Path, task: str, direction: str, quote: str, include: list[str], exclude: list[str], message_id=None) -> dict:
+    state=read_state(root)
+    if state['stage']!='discovering': raise ValueError('a direction can only be confirmed while discovering')
+    if 'decide' not in preflight_state(state)['allowed_actions']:
+        raise RuntimeProblem('STRUCTURE_DECISION_REQUIRED','assess/select the structure before confirming direction','Run discover, then select-structure if alternatives exist.')
+    if not all(isinstance(x,str) and x.strip() for x in (task,direction,quote)): raise ValueError('task, direction and quote are required')
+    old=state['stage']
+    state['decision']={'confirmed':True,'task':task.strip(),'direction':direction.strip(),'quote':quote.strip(),'include':clean_items(include),'exclude':clean_items(exclude)}
+    state['decision']['confirmation']={'kind':'product_direction','revision':state.get('revision',0),'quote':quote.strip(),'message_id':message_id,
+        'target_sha256':hashlib.sha256(json.dumps({k:state['decision'][k] for k in ('task','direction','include','exclude')},sort_keys=True).encode()).hexdigest()}
+    state['stage']='decided'; state['verification']=blank_verification()
+    record(state,'decide',old); write_state(root,state); return preflight_state(state)
 
 
 def discover(
@@ -386,8 +352,8 @@ def discover(
         raise ValueError("a structure reason is required")
     discovery = state.get("discovery") or default_discovery()
     candidates = clean_items(candidates)
-    if structure == "choice" and not candidates:
-        raise ValueError("choice structure requires at least one candidate")
+    if structure == "choice" and (len(candidates) < 2 or len(set(candidates)) != len(candidates)):
+        raise ValueError("choice structure requires at least two distinct candidates")
     discovery["phase"] = "structure_assessment"
     discovery["structure"] = {
         "mode": structure,
@@ -436,11 +402,7 @@ def select_structure(root: Path, candidate: str, quote: str) -> dict:
 
 
 def contract_path(root: Path) -> Path:
-    for rel in (CONTRACT_REL_PATH, ".SITE/design/surface-brief.md", ".v3/design/surface-brief.md"):
-        candidate = root / rel
-        if candidate.is_file():
-            return candidate
-    return root / CONTRACT_REL_PATH
+    return runtime_contract.path(root)
 
 
 def _contract_sha256(root: Path) -> str | None:
@@ -473,7 +435,7 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
     proceed without a report. A revision-2 guided/strict project must hand in a
     report whose project path, phase and contract SHA-256 still match.
     """
-    if state.get("schema_revision") != 2 or state["mode"] not in MODES:
+    if state.get("schema_revision", 1) not in (2, 3) or state["mode"] not in MODES:
         return
     if report_path is None:
         raise ValueError(
@@ -490,7 +452,7 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
         raise ValueError("contract report project_root does not match this project")
     if report.get("phase") != "prebuild":
         raise ValueError("contract report phase must be prebuild")
-    if not report.get("passed"):
+    if report.get("passed") is not True:
         raise ValueError("contract report did not pass; resolve blockers before start")
     current = _contract_sha256(root)
     if current is None:
@@ -511,7 +473,7 @@ def _legacy_start_warnings(root: Path, state: dict) -> list:
     CLI JSON instead of being silently passed through. revision-2 projects
     return an empty list -- they are never downgraded to a warning here.
     """
-    if state.get("schema_revision") == 2:
+    if state.get("schema_revision") in (2, 3):
         return []
     if _contract_has_site_block(root):
         return []
@@ -533,6 +495,7 @@ def start(root: Path, contract_report=None) -> dict:
     _validate_contract_report(root, state, contract_report)
     warnings = _legacy_start_warnings(root, state)
     old = state["stage"]
+    state["approved_contract_sha256"] = _contract_sha256(root)
     state["stage"] = "building"
     record(state, "start", old)
     write_state(root, state)
@@ -553,71 +516,21 @@ def _check_script() -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _check_verdict(root: Path, report_path) -> dict:
-    """Ask the site-check protocol whether a report holds for this tree.
-
-    The protocol owns the rules; state.py must not re-derive them, or the two
-    drift and a report the protocol rejects can still be recorded as
-    delivered. Fail closed: no validator, no verification.
-    """
-    script = _check_script()
-    if script is None:
-        raise ValueError(
-            "cannot validate the check report: site-check/scripts/check.py was "
-            "not found next to site-builder; install the skills as a bundle"
-        )
-    try:
-        interpreter = sys.executable or "python3"
-        proc = subprocess.run(
-            [interpreter, str(script), "validate-report", str(root), str(report_path)],
-            capture_output=True, timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"cannot validate the check report: {exc}") from exc
-    try:
-        verdict = json.loads(proc.stdout.decode("utf-8", "replace"))
-    except json.JSONDecodeError as exc:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise ValueError(
-            f"check report validation produced no verdict: {exc} {detail}".strip()
-        ) from exc
-    if not isinstance(verdict, dict) or "error" in verdict:
-        raise ValueError(f"cannot validate the check report: {verdict}")
-    return verdict
+def _check_verdict(root: Path, report) -> dict:
+    script=_check_script()
+    if script is None: raise ValueError('cannot validate the check report: site-check/scripts/check.py was not found next to site-builder; install the skills as a bundle')
+    spec=runtime_importlib.spec_from_file_location('site_check_validation',script)
+    validator=runtime_importlib.module_from_spec(spec); spec.loader.exec_module(validator)
+    return validator.validate_report_data(root,report) if isinstance(report,dict) else validator.validate_report(root,report)
 
 
-def _load_check_report(report_path, root: Path) -> dict:
-    """Read a site-check report's summary fields.
-
-    Rules are not repeated here: ``check.py validate-report`` has already
-    accepted the report for this tree (see :func:`_check_verdict`). This only
-    carries the checker's honest summary into the state file.
-    """
-    try:
-        report = json.loads(Path(report_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"check report is unreadable: {exc}") from exc
-    if not isinstance(report, dict):
-        raise ValueError("check report must be a JSON object")
-    if Path(str(report.get("project_root", ""))).resolve() != root.resolve():
-        raise ValueError("check report project_root does not match this project")
-    overall = report.get("overall")
-    if overall not in VERIFY_STATUSES:
-        raise ValueError(
-            "check report overall must be one of: " + ", ".join(sorted(VERIFY_STATUSES))
-        )
-    evidence = report.get("evidence", [])
-    limitations = report.get("limitations", [])
-    if not isinstance(evidence, list):
-        evidence = []
-    if not isinstance(limitations, list):
-        limitations = []
-    return {
-        "status": overall,
-        "evidence": evidence,
-        "limitations": limitations,
-        "independent": bool(report.get("independent", False)),
-    }
+def _load_check_report(report, root: Path) -> dict:
+    data=report if isinstance(report,dict) else json.loads(Path(report).read_bytes())
+    if not isinstance(data,dict): raise ValueError('check report must be a JSON object')
+    if Path(str(data.get('project_root',''))).resolve()!=root.resolve(): raise ValueError('check report project_root does not match this project')
+    if data.get('overall') not in tuple(VERIFY_STATUSES): raise ValueError('check report overall must be verified, limited or blocked')
+    if type(data.get('independent',False)) is not bool: raise ValueError('independent must be a JSON boolean')
+    return {'status':data['overall'],'evidence':data.get('evidence',[]),'limitations':data.get('limitations',[]),'independent':data.get('independent',False)}
 
 
 def _plan_fingerprint(root: Path) -> dict:
@@ -690,45 +603,23 @@ def handoff(root: Path) -> dict:
     return preflight_state(state)
 
 
-def begin_check(root: Path, quote: str) -> dict:
-    """Open a verification round on the version the user approved.
-
-    Handing the tree to a checker and then editing it invalidates the round
-    already in progress; the same waste happens one step earlier when the user
-    has not seen the page at all. So the round needs his own words, not the
-    agent's judgement that it is probably fine. This tool cannot tell who
-    typed the quote: writing down words the user never said defeats the gate
-    exactly the way a hand-typed PASS defeats the report protocol.
-    """
-    state = read_state(root)
-    if state["stage"] != "building":
-        raise ValueError("a verification round only opens while building")
-    phase = verification_phase(state)
-    if phase == "checking":
-        raise ValueError("a verification round is already open")
-    if phase != "review":
-        raise ValueError(
-            "hand the build to the user and let him answer first: state.py handoff PROJECT"
-        )
-    if not quote.strip():
-        raise ValueError("the user's own words giving the go-ahead are required")
-    shown = state["verification"].get("handoff_fingerprint")
-    if not isinstance(shown, dict):
-        raise ValueError(
-            "no record of which version he looked at; hand the build over "
-            "again: state.py handoff PROJECT"
-        )
-    current = _plan_fingerprint(root)
-    if any(shown.get(key) != current.get(key) for key in current):
-        raise ValueError(
-            "the build changed after he looked at it; hand this version over "
-            "and let him answer again: state.py handoff PROJECT"
-        )
-    state["verification"]["phase"] = "checking"
-    state["verification"]["review_quote"] = quote.strip()
-    record(state, "begin-check", state["stage"])
-    write_state(root, state)
-    return preflight_state(state)
+def begin_check(root: Path, quote: str='') -> dict:
+    state=read_state(root)
+    if state['stage']!='building': raise ValueError('a verification round only opens while building')
+    phase=verification_phase(state)
+    if phase=='checking': raise ValueError('a verification round is already open')
+    modern=state.get('schema_revision',1)>=3
+    current=_plan_fingerprint(root)
+    if not modern:
+        if phase!='review': raise ValueError('hand the build to the user first: state.py handoff PROJECT')
+        if not quote.strip(): raise ValueError("the user's own words giving the go-ahead are required")
+        shown=state['verification'].get('handoff_fingerprint')
+        if not isinstance(shown,dict): raise ValueError('no record of which version he looked at; handoff again')
+        if shown!=current: raise ValueError('the build changed after he looked at it; handoff the current version again')
+    elif quote.strip() and (phase!='review' or state['verification'].get('handoff_fingerprint')!=current):
+        raise ValueError('review quote requires a handoff of this current version')
+    state['verification'].update(phase='checking',round_fingerprint=current,round_id=runtime_secrets.token_hex(12),review_quote=quote.strip() or None,execution_scope='isolated_checks_only')
+    record(state,'begin-check',state['stage']); write_state(root,state); return preflight_state(state)
 
 
 def cancel_check(root: Path, reason: str) -> dict:
@@ -752,73 +643,47 @@ def cancel_check(root: Path, reason: str) -> dict:
 
 
 def verify(root: Path, report=None) -> dict:
-    """Record verification while building, from a validated site-check report.
-
-    The report is the evidence. A status typed in by hand says nothing about
-    what was actually checked, so there is no path to ``delivered`` that skips
-    the protocol: the report must match this tree's fingerprints, respect the
-    gating rules and state what each passing axis examined.
-    """
-    state = read_state(root)
-    if state["stage"] != "building":
-        raise ValueError("verification can only be recorded while building")
-    if verification_phase(state) != "checking":
-        raise ValueError(
-            "no verification round is open; hand the build to the user first "
-            "(state.py handoff PROJECT), then open one on his go-ahead "
-            "(state.py begin-check PROJECT --quote \"his words\")"
-        )
-    if report is None:
-        raise ValueError("verification requires --report, a site-check report")
-    verdict = _check_verdict(root, report)
-    if not verdict.get("valid"):
-        reasons = list(verdict.get("errors") or [])
-        if verdict.get("invalidated_axes"):
-            reasons.append(
-                "the report's fingerprints do not match the current tree; re-run "
-                "the affected checks and write a fresh report for this tree"
-            )
-        raise ValueError(
-            "check report does not hold for this tree: " + "; ".join(reasons or ["unknown"])
-        )
-    derived = _load_check_report(report, root)
-    status = derived["status"]
-    evidence = clean_items(derived["evidence"])
-    limitations = clean_items(derived["limitations"])
-    independent = derived["independent"]
-    if not evidence:
-        raise ValueError("at least one concrete evidence item is required")
-    if state["mode"] == "strict" and status == "limited":
-        raise ValueError("strict mode cannot be delivered with limited verification")
-    if state["mode"] == "strict" and status == "verified" and not independent:
-        raise ValueError("strict mode requires independent verification")
-
-    old = state["stage"]
-    prior = state["verification"]
-    state["verification"] = {
-        **blank_verification(),
-        "status": status,
-        "evidence": evidence,
-        "limitations": limitations,
-        "independent": independent,
-        "checked_at": now(),
-        # The round ran on the version he looked at. His words and the moment
-        # he saw it stay, so delivery can name which build he approved.
-        "handed_at": prior.get("handed_at"),
-        "review_quote": prior.get("review_quote"),
-        "handoff_fingerprint": prior.get("handoff_fingerprint"),
-    }
-    if status == "blocked":
-        state["stage"] = "blocked"
-        state["blocked_reason"] = limitations[0] if limitations else evidence[0]
-        state["resume_stage"] = "building"
+    state=read_state(root)
+    entry_state_bytes=state_path(root).read_bytes()
+    if state['stage']!='building': raise ValueError('verification can only be recorded while building')
+    if verification_phase(state)!='checking': raise ValueError('no verification round is open; run begin-check before verify')
+    if report is None: raise ValueError('verification requires --report, a site-check report')
+    modern=state.get('schema_revision',1)>=3
+    shown=state['verification'].get('round_fingerprint') or state['verification'].get('handoff_fingerprint')
+    current=_plan_fingerprint(root)
+    if not isinstance(shown,dict) or shown!=current:
+        raise ValueError('the source or contract changed during verification; cancel-check and write a fresh report in a new round')
+    # Read ONCE. Validation and recording consume the same immutable snapshot.
+    payload=json.loads(Path(report).read_bytes())
+    if not isinstance(payload,dict): raise ValueError('check report must be a JSON object')
+    if modern and payload.get('round_id')!=state['verification'].get('round_id'):
+        raise RuntimeProblem('ROUND_MISMATCH','report is not bound to the open round','Read check.py plan after begin-check and run a current check.')
+    verdict=_check_verdict(root,payload)
+    if not verdict.get('valid'):
+        reasons=list(verdict.get('errors') or [])
+        if verdict.get('invalidated_axes'): reasons.append('fingerprints changed; write a fresh report')
+        raise ValueError('check report does not hold for this tree: '+'; '.join(reasons or ['unknown']))
+    derived=_load_check_report(payload,root)
+    if _plan_fingerprint(root)!=current or state_path(root).read_bytes()!=entry_state_bytes:
+        raise RuntimeProblem('VERSION_CHANGED','source, contract or policy changed during report validation')
+    status=derived['status']; evidence=clean_items(derived['evidence']); limits=clean_items(derived['limitations']); independent=derived['independent']
+    if not evidence: raise ValueError('at least one concrete evidence item is required')
+    if state['mode']=='strict' and status=='limited': raise ValueError('strict mode cannot be delivered with limited verification')
+    if state['mode']=='strict' and status=='verified' and not independent: raise ValueError('strict mode requires independent verification')
+    if modern and status!='blocked':
+        axes=payload.get('axes',{})
+        for key in ('contract','static_build','core_task','negative_path'):
+            if axes.get(key,{}).get('status')!='verified':
+                raise RuntimeProblem('CORE_NOT_VERIFIED','core and static checks must be verified before usable delivery','Return a preview or rerun the missing checks; do not call it usable.')
+    old=state['stage']; prior=state['verification']
+    state['verification']={**blank_verification(),'status':status,'evidence':evidence,'limitations':limits,'independent':independent,'checked_at':now(),
+        'handed_at':prior.get('handed_at'),'review_quote':prior.get('review_quote'),'handoff_fingerprint':prior.get('handoff_fingerprint'),
+        'round_id':prior.get('round_id'),'round_fingerprint':current,'report_sha256':hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()}
+    if status=='blocked':
+        state['stage']='blocked'; state['blocked_reason']=limits[0] if limits else evidence[0]; state['resume_stage']='building'
     else:
-        state["stage"] = "delivered"
-        state.pop("blocked_reason", None)
-        state.pop("resume_stage", None)
-    record(state, "verify", old)
-    write_state(root, state)
-    return preflight_state(state)
+        state['stage']='delivered'; state.pop('blocked_reason',None); state.pop('resume_stage',None)
+    record(state,'verify',old); write_state(root,state); return preflight_state(state)
 
 
 def block(root: Path, reason: str) -> dict:
@@ -856,147 +721,107 @@ def resume(root: Path) -> dict:
 
 
 def reopen(root: Path, reason: str) -> dict:
-    state = read_state(root)
-    if not reason.strip():
-        raise ValueError("a reopen reason is required")
-    old = state["stage"]
-    state["stage"] = "discovering"
-    state["decision"] = {
-        "confirmed": False,
-        "task": "",
-        "direction": "",
-        "include": [],
-        "exclude": [],
-        "quote": "",
-    }
-    state["discovery"] = default_discovery()
-    state["verification"] = blank_verification()
-    state["reopen_reason"] = reason.strip()
-    state.pop("blocked_reason", None)
-    state.pop("resume_stage", None)
-    record(state, "reopen", old)
-    write_state(root, state)
-    return preflight_state(state)
+    return revise(root,'scope',reason)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="minimal execution state")
-    sub = parser.add_subparsers(dest="action", required=True)
-
-    command = sub.add_parser("init")
-    command.add_argument("root", type=Path)
-    command.add_argument("--mode", default="guided", choices=sorted(MODES))
-
-    for name in ("preflight", "resume"):
-        sub.add_parser(name).add_argument("root", type=Path)
-
-    command = sub.add_parser("start")
-    command.add_argument("root", type=Path)
-    command.add_argument(
-        "--contract-report", type=Path, default=None,
-        help="path to a passing prebuild contract report (required for schema_revision 2 guided/strict)",
-    )
-
-    command = sub.add_parser("decide")
-    command.add_argument("root", type=Path)
-    command.add_argument("--task", required=True)
-    command.add_argument("--direction", required=True)
-    command.add_argument("--quote", required=True)
-    command.add_argument("--include", action="append", default=[])
-    command.add_argument("--exclude", action="append", default=[])
-
-    command = sub.add_parser("discover")
-    command.add_argument("root", type=Path)
-    command.add_argument(
-        "--structure", required=True, choices=["single", "choice"]
-    )
-    command.add_argument("--reason", required=True)
-    command.add_argument("--axis", action="append", default=[])
-    command.add_argument("--candidate", action="append", default=[])
-
-    command = sub.add_parser("select-structure")
-    command.add_argument("root", type=Path)
-    command.add_argument("--candidate", required=True)
-    command.add_argument("--quote", required=True)
-
-    command = sub.add_parser(
-        "handoff",
-        help="hand the build to the user and wait for his go-ahead; "
-             "no verification round opens before that",
-    )
-    command.add_argument("root", type=Path)
-
-    command = sub.add_parser(
-        "begin-check",
-        help="open a verification round on the version the user approved; "
-             "source writes stay blocked until it closes",
-    )
-    command.add_argument("root", type=Path)
-    command.add_argument(
-        "--quote", required=True,
-        help="the user's own words giving the go-ahead, written down as he said them",
-    )
-
-    command = sub.add_parser(
-        "cancel-check",
-        help="close an open round without a verdict and go back to fixing",
-    )
-    command.add_argument("root", type=Path)
-    command.add_argument("--reason", required=True)
-
-    command = sub.add_parser("verify")
-    command.add_argument("root", type=Path)
-    command.add_argument(
-        "--report", type=Path, required=True,
-        help="path to a site-check report; validated against this tree by "
-             "site-check/scripts/check.py before it is recorded",
-    )
-
-    command = sub.add_parser("block")
-    command.add_argument("root", type=Path)
-    command.add_argument("--reason", required=True)
-
-    command = sub.add_parser("reopen")
-    command.add_argument("root", type=Path)
-    command.add_argument("--reason", required=True)
+    parser=RuntimeParser(description='Versioned execution state. New projects use schema revision 3.')
+    sub=parser.add_subparsers(dest='action',required=True)
+    p=sub.add_parser('init');p.add_argument('root',type=Path);p.add_argument('--mode',choices=sorted(MODES),default='guided');p.add_argument('--schema-revision',type=int,choices=[2,3],default=3)
+    for name in ('preflight','resume','handoff','migrate'):
+        sub.add_parser(name).add_argument('root',type=Path)
+    p=sub.add_parser('start');p.add_argument('root',type=Path);p.add_argument('--contract-report',type=Path)
+    p=sub.add_parser('decide');p.add_argument('root',type=Path)
+    for field in ('task','direction','quote'):p.add_argument('--'+field,required=True)
+    for field in ('include','exclude'):p.add_argument('--'+field,action='append',default=[])
+    p.add_argument('--message-id')
+    p=sub.add_parser('discover');p.add_argument('root',type=Path);p.add_argument('--structure',choices=['single','choice'],required=True);p.add_argument('--reason',required=True)
+    p.add_argument('--axis',action='append',default=[]);p.add_argument('--candidate',action='append',default=[])
+    p=sub.add_parser('select-structure');p.add_argument('root',type=Path);p.add_argument('--candidate',required=True);p.add_argument('--quote',required=True)
+    p=sub.add_parser('begin-check');p.add_argument('root',type=Path);p.add_argument('--quote',default='')
+    p=sub.add_parser('verify');p.add_argument('root',type=Path);p.add_argument('--report',type=Path,required=True)
+    for name in ('cancel-check','block','reopen'):
+        p=sub.add_parser(name);p.add_argument('root',type=Path);p.add_argument('--reason',required=True)
+    p=sub.add_parser('revise');p.add_argument('root',type=Path);p.add_argument('--change-kind',choices=['local','feature','scope'],required=True);p.add_argument('--reason',required=True);p.add_argument('--risk',action='append',default=[])
+    p=sub.add_parser('policy');p.add_argument('root',type=Path);p.add_argument('--scope',choices=['preview','personal','shared','public'],required=True);p.add_argument('--risk',action='append',default=[]);p.add_argument('--quote',default='')
     return parser
 
 
 def main() -> int:
-    args = build_parser().parse_args()
-    root = args.root.resolve()
     try:
-        if args.action == "init":
-            result = init(root, args.mode)
-        elif args.action == "preflight":
-            result = preflight_state(read_state(root))
-        elif args.action == "decide":
-            result = decide(root, args.task, args.direction, args.quote, args.include, args.exclude)
-        elif args.action == "discover":
-            result = discover(root, args.structure, args.reason, args.axis, args.candidate)
-        elif args.action == "select-structure":
-            result = select_structure(root, args.candidate, args.quote)
-        elif args.action == "start":
-            result = start(root, contract_report=args.contract_report)
-        elif args.action == "handoff":
-            result = handoff(root)
-        elif args.action == "begin-check":
-            result = begin_check(root, args.quote)
-        elif args.action == "cancel-check":
-            result = cancel_check(root, args.reason)
-        elif args.action == "verify":
-            result = verify(root, report=args.report)
-        elif args.action == "block":
-            result = block(root, args.reason)
-        elif args.action == "resume":
-            result = resume(root)
-        else:
-            result = reopen(root, args.reason)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
-        return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+        a=build_parser().parse_args();root=a.root.resolve()
+        if a.action=='init':result=init(root,a.mode,schema_revision=a.schema_revision)
+        elif a.action=='preflight':result=preflight_state(read_state(root))
+        elif a.action=='decide':result=decide(root,a.task,a.direction,a.quote,a.include,a.exclude,a.message_id)
+        elif a.action=='discover':result=discover(root,a.structure,a.reason,a.axis,a.candidate)
+        elif a.action=='select-structure':result=select_structure(root,a.candidate,a.quote)
+        elif a.action=='start':result=start(root,contract_report=a.contract_report)
+        elif a.action=='handoff':result=handoff(root)
+        elif a.action=='begin-check':result=begin_check(root,a.quote)
+        elif a.action=='cancel-check':result=cancel_check(root,a.reason)
+        elif a.action=='verify':result=verify(root,a.report)
+        elif a.action=='block':result=block(root,a.reason)
+        elif a.action=='resume':result=resume(root)
+        elif a.action=='reopen':result=reopen(root,a.reason)
+        elif a.action=='revise':result=revise(root,a.change_kind,a.reason,a.risk)
+        elif a.action=='policy':result=set_policy(root,a.scope,a.risk,a.quote)
+        else:result=migrate_state(root)
+        print(json.dumps(result,ensure_ascii=False,indent=2));return 0
+    except (OSError,ValueError,KeyError,TypeError) as exc:
+        print(json.dumps(runtime_error_result(exc),ensure_ascii=False));return 2
+
+
+
+
+def revise(root: Path, change_kind: str, reason: str, risks=None) -> dict:
+    state=read_state(root)
+    if change_kind not in ('local','feature','scope') or not reason.strip(): raise ValueError('revise needs local/feature/scope and a reason')
+    if verification_phase(state)=='checking': raise ValueError('cancel-check before revising a checked version')
+    risks=list(risks or [])
+    if any(r not in RUNTIME_RISKS for r in risks): raise ValueError('unknown risk')
+    if change_kind=='local' and (risks or not state['decision']['confirmed']): raise ValueError('local revision needs a confirmed direction and cannot add risk')
+    if change_kind=='local' and state.get('approved_contract_sha256') and _contract_sha256(root)!=state['approved_contract_sha256']:
+        raise ValueError('contract changed; classify this as feature or scope')
+    old=state['stage']
+    state['revisions'].append({'revision':state.get('revision',0),'decision':state['decision'],'discovery':state['discovery'],'verification':state['verification'],'kind':change_kind,'reason':reason.strip(),'at':now()})
+    state['revision']=state.get('revision',0)+1; state['change_kind']=change_kind; state['verification']=blank_verification()
+    if change_kind=='local': state['stage']='building'
+    elif change_kind=='feature':
+        state['stage']='discovering'; state['decision']={**state['decision'],'confirmed':False,'quote':''}
+        if state['discovery']['structure']['mode']=='undetermined': state['discovery']['structure'].update(mode='single',reason='inherit confirmed project')
+    else:
+        state['stage']='discovering'; state['decision']={'confirmed':False,'task':'','direction':'','include':[],'exclude':[],'quote':''}; state['discovery']=default_discovery()
+    state['delivery']['risks']=sorted(set(state['delivery'].get('risks',[]))|set(risks))
+    if risks: state['mode']='strict'
+    state['delivery']['authorizations']=[]; state['reopen_reason']=reason.strip()
+    state.pop('blocked_reason',None); state.pop('resume_stage',None)
+    record(state,'revise',old,reason.strip()); write_state(root,state); return preflight_state(state)
+
+
+def set_policy(root: Path, scope: str, risks: list[str], quote: str='') -> dict:
+    state=read_state(root); old=state['stage']
+    if verification_phase(state)=='checking': raise ValueError('cancel-check before changing delivery policy')
+    if scope not in ('preview','personal','shared','public') or any(r not in RUNTIME_RISKS for r in risks): raise ValueError('invalid delivery scope or risk')
+    if not set(state['delivery'].get('risks',[])).issubset(risks): raise ValueError('risk removal requires an explicitly reviewed scope revision')
+    if scope=='shared': risks=sorted(set(risks)|{'permissions'})
+    state['delivery']={'scope':scope,'risks':risks,'authorizations':[]}
+    if risks: state['mode']='strict'
+    if quote.strip(): state['delivery']['authorizations'].append({'scope':scope,'quote':quote.strip(),'revision':state.get('revision',0),'at':now(),'not_a_publish_token':True})
+    state['verification']=blank_verification()
+    if old=='delivered': state['stage']='building'
+    record(state,'policy',old); write_state(root,state); return preflight_state(state)
+
+
+def migrate_state(root: Path) -> dict:
+    state=read_state(root)
+    if state.get('schema_revision')==3: return preflight_state(state)
+    if verification_phase(state)=='checking': raise ValueError('cancel-check before migrating state')
+    path=state_path(root); backup=path.with_name('state.'+hashlib.sha256(path.read_bytes()).hexdigest()[:12]+'.bak.json')
+    if not backup.exists(): backup.write_bytes(path.read_bytes())
+    state['schema_revision']=3; state['verification']=blank_verification()
+    if state['stage']=='delivered': state['stage']='building'
+    record(state,'migrate',state['stage'],'backup: '+backup.name); write_state(root,state)
+    return {**preflight_state(state),'migration_backup':str(backup)}
 
 
 if __name__ == "__main__":

@@ -1,127 +1,19 @@
 ---
 name: site-brief
-version: 1.1
-description: 需求收敛与发现。一轮一轮问清楚首版给谁用、核心任务是什么、这版不做什么，把事实、决定、假设、待确认分开记；需要时做轻量查证，不写正式源码。
+description: Clarify a nontechnical user's core website task, scope, data ownership and high-impact unknowns. Use for new tasks or changed scope, not repeated questions on local edits.
 ---
-# 需求收敛与发现
+# Task and scope discovery
 
-你负责问清楚需求。只解决四件事：首版给谁用、要做成什么、这版不做什么、还有哪些不问清就没法继续的未知。你不做体验稿、不写正式业务代码，也不替用户拍板他还没决定的高风险事项。
+Read the shared protocol at the sibling site-builder/references/AGENTS.md (installed), or ../AGENTS.md (source bundle). Apply its user-language guidance. 
 
-## 核心准则
+Do not write product source. Clarify who uses the site, their one main task, observable completion and first-version exclusions. Use the user's real example before inventing an abstract data model.
 
-1. **前沿清空就停**：再问也不会改变首版核心任务、体验边界或风险时，停止提问，进入就绪；不去追问完整愿景的远期分支。
-2. **先问不依赖别人的题**：某题的答案要等另一题先答，就放到下一轮，本轮不提。
-3. **四类信息分开写**：事实、决定、假设、待确认。推荐不是决定，外部行业做法也不是决定。
-4. **说人话**：用现实结果提问，每题给推荐和选项，整轮在手机上一屏读完。措辞按 `AGENTS.md` 的《说人话》。
-5. **研究只为少一处不确定**：只查会改变首版的事实，不写大报告，不顺手分析视觉。
+Ask only questions whose answers affect the first version, costly rework or risk. Ask up to 3-5 independent questions when needed, fewer when enough is known; give plain-language options and a recommendation. Do not ask users to choose frameworks or databases. Record reversible defaults as assumptions. Stop when remaining questions would not change the task.
 
-## 需求发现协议
+Keep facts, confirmed decisions, assumptions and unresolved confirmations separate in `.site/brief.md`, with sources and stable BR IDs where helpful. Replay the scenario: actor, input, action, visible result, likely failure and recovery. Include where data comes from, who sees/changes it, whether reload or changing devices must preserve it and whether there are real external effects.
 
-### 1. 先找出最该问的几件事
-先说一遍你已经知道的内容，再挑出“答得不一样、首版就不一样”的问题。这些问题现在就能回答，答案不依赖本轮其他问题。按下面的顺序排：
+For marketing/content pages start with audience, action, promise and objections. A lead form still requires a recipient/storage/privacy boundary; the landing-page exception does not erase data risks. Never invent testimonials, metrics or customer logos.
 
-1. 哪类最终用户在什么现实场景里用；
-2. 最重要的一件事是什么，做完以后能看到什么结果；
-3. 核心对象从哪里来、中间经历什么状态、完成或取消之后去哪；
-4. 多久用一次、对象有多少、一次持续多久，各设备分别干什么；
-5. 不同角色能看到或操作什么，操作能不能撤回；
-6. 数据要不要跨设备、多人共享、长期保存；
-7. 用不用登录、上传、AI、支付、通知、地图这些外部能力；
-8. 真实内容是什么、有哪些中国本地化的条件、首版停在哪儿。
+Reuse existing reference URLs, screenshots, brand materials and answers. Research only facts affecting feasibility/scope/risk; external facts don't become user decisions. Visual reference analysis belongs to site-design. When blocked, return the gap to builder instead of invoking another skill.
 
-*(落地页／营销页特例：只问四件事：唯一要用户做的动作是什么、核心承诺是什么、受众和流量从哪来、用户不下单的前三个顾虑是什么。不要追问数据库、多端存储和权限角色。)*
-
-一轮问 3～5 题，题与题之间互相独立，最多 5 题；真正影响首版的疑问更少，就问得更少。问过的不重问，远期设想不挤进本轮。问完等用户回答，再按回答重新挑下一轮；挑不出题就停止提问。
-
-### 2. 怎么问
-- **说现实的话**：问结果，不问技术。比如问“换台电脑还想看到这些记录吗”，不问“用什么数据库”。
-- **给选项和推荐**：每题 2～4 个选项，每个一句话，说清选它会怎样，并标出你推荐哪个、为什么。用户回“都按推荐方案”也算回答；影响小的细节记成 Agent 假设。
-- **排版**：整轮一次问完，手机上不用滚太久：
-  ```text
-  Q1 <问题标题>：<问题正文与 2～4 个一句话选项>
-  推荐：<推荐答案与理由>
-  ```
-- **用户没想法时**：给 2～3 个真正不同的方向，分别说明解决什么问题、给谁用、核心操作是什么、首版做到哪、相对复杂度如何，并给出推荐理由。差别要来自任务或范围，不能只换名字和颜色。
-
-### 3. 四类信息
-brief 里始终分开写这四类：
-- **事实**：用户明确说了、或可靠资料能核对的现状，注明来源。
-- **决定**：用户已经选定的产品取舍，注明什么时候确认的。
-- **假设**：你为了继续往下梳理先这么认为，用户随时可以推翻。
-- **待确认**：用户不回答就没法继续的未知，通常会影响任务、边界或风险。
-*红线*：推荐不是决定，外部资料里的行业做法也不是用户的决定。新证据和旧决定冲突时，当场把冲突摆出来重新确认。
-
-### 4. 业务词义
-碰上“用户、客户、管理员、课程、订单、发布、完成”这类词，不要急着建抽象模型，先用业务例子核对：
-- 同一个词是不是指了两个东西；两个词是不是其实指同一个东西；同一个动作对不同角色是不是含义不同；“完成”“保存”“发布”分别由什么可见的结果证明。
-- brief 里放一张很小的业务词义表，只记本轮核心任务用得到的词，不提前把全部词穷举一遍。
-- 词义和已有说法冲突时当场问（比如：“你说的‘名额’在这里指 X，你刚才那句听起来像 Y，哪个对？”）。问不清的写进“待确认”，不要自己挑一种解释往下做。
-
-### 5. 场景走一遍
-用一句话把当前理解回放出来：
-> `[谁] 在 [什么情况下]，先 [输入或动作]，再 [动作]，最后看到 [结果]。如果 [出了什么问题]，就 [用户能看懂的处理结果]。`
-
-- **逐项对**：这个人真实存在吗、起点存在吗、输入从哪来、结果能不能判断、数据算谁的、下次打开还在不在。走不通就回到本轮该问的问题上，不要顺手加页面。
-- **对代码**：已经有工程时，把用户说的做法和代码实际行为对一遍，不一致就当面问（比如：“代码是整场课一起取消，你刚说可以只退一次，按哪个来？”），不要默认一边是对的。
-- **试边界**：自己编 1～2 个边界情况（一次处理很多条、电脑换手机、几个人同时改、过几天再打开、断网或做到一半失败），看每种情况下什么该保留、什么该变。边界情况只用来检查你已经理解的部分，**不要因为想到了就加功能或加页面**。微信、短信、二维码、支付、实名这些，不能因为面向中国用户就默认要有。
-
-## 轻量研究机制
-
-研究只用来消掉“会改变首版”的不确定，不要写成行业报告，也不要变成功能灵感清单。
-
-### 什么时候才去查
-1. 用户给了网站、截图、文档或现有项目当依据；
-2. 法规、平台能力、公开数据、竞品实际流程这类外部事实会改变范围或风险；
-3. 用户把猜测当成了事实，而这个猜测会影响核心场景。
-*红线*：产品上怎么取舍由用户定，不能用搜索结果替代用户确认。不查也能继续时，直接问清楚。
-
-### 怎么查最省
-1. 先写清要验证什么、答案不同会改变什么。
-2. 先读用户给的材料和项目源码；外部事实先看官方文档、法规原文、产品实际页面这类一手来源。
-3. 只收集够回答当前问题的证据，记下来源链接、查看日期和适用条件。
-4. 结论明确标成：`已证实事实`、`仍不确定` 或 `与当前理解冲突`。
-5. 把影响翻译成普通话说给用户听，再更新 brief 的事实、假设或待确认；**外部事实不要写进“已确认决定”**。
-
-### 和设计参考的分工
-- `site-brief` 只查会改变**业务范围、风险和可行性**的事实。
-- 截图和网页的布局、视觉、交互参考交给 `site-design` 去判断是还原、借鉴还是功能相似；同一份视觉资料不要在两边各分析一遍。
-- 别人页面上有的功能，不等于首版就得有。
-
-## 产物规范 (.site/brief.md)
-
-收敛结果统一写进 `.site/brief.md`，结构如下：
-```markdown
-# 项目需求简报 (Brief)
-
-## 核心用户与使用场景
-- 核心用户与真实场景描述
-- **主场景检验**：[谁] 在 [什么情况下]，先 [输入]，再 [动作]，最后看到 [结果]；如果 [出了什么问题]，就 [结果]。
-
-## 核心任务与业务词义
-- **核心任务**：一条能从头走到尾的核心任务。
-- **业务词义**：
-  - [词汇]：在这件事里指什么，看什么能确认。
-
-## 本轮包含与明确排除
-- **首版包含**：BR-01, BR-02...
-- **明确排除**：这版不做的能力。
-
-## 四类信息底账
-- **事实**：已核对的现状（注明来源）。
-- **决定**：用户确认过的取舍（注明何时确认）。
-- **假设**：暂定假设（用户随时可推翻）。
-- **待确认**：不问清就没法继续的未知。
-
-## 外部事实与轻量研究（如有）
-- 查证的问题、一手证据、结论状态与适用条件。
-```
-
-## 回执格式
-
-做完一次梳理或提完一轮问题就停下，返回五字段回执：
-- `status`：`ready`（没有该问的了，可以进入设计和确认）、`needs_user`（已提出问题，等用户回答）、或 `blocked`（有硬矛盾解不开）。
-- `summary`：这轮问到了什么、判断是什么。
-- `artifacts`：`.site/brief.md` 及相关路径。
-- `evidence`：判断依据，或场景走查的结果。
-- `limitations`：这版还没覆盖的部分。
-
+Return one receipt: status ready/needs_user/blocked, summary, artifacts, evidence, limitations. The user sees only the useful question/result, not the internal receipt fields.
