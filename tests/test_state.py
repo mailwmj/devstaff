@@ -25,15 +25,26 @@ assert CLI_SPEC.loader is not None
 CLI_SPEC.loader.exec_module(cli_fixture)
 
 
+def _open_round(root: Path, quote="可以，去测吧"):
+    """Hand the build to the user, then open a round on his go-ahead.
+
+    No round opens on a version he has not looked at, so the handoff is part of
+    the flow rather than a step the tests may skip.
+    """
+    if state.verification_phase(state.read_state(root)) != "review":
+        state.handoff(root)
+    return state.begin_check(root, quote)
+
+
 def _verify(root: Path, report=None):
-    """Run the real two-step flow: open a round if none is open, then record.
+    """Run the real three-step flow: hand over, open a round if none is open, record.
 
     A rejected report deliberately leaves the round open — the builder is still
     verifying, and must either produce a report that holds or say why it is
     going back to fixing.
     """
     if state.verification_phase(state.read_state(root)) != "checking":
-        state.begin_check(root)
+        _open_round(root)
     return state.verify(root, report=report)
 
 
@@ -142,7 +153,7 @@ class StateProtocolTests(unittest.TestCase):
         self.assertEqual(current["next_action"], "start_build")
         self.assertEqual(
             state.start(self.root, contract_report=_report_path(self.root))["next_action"],
-            "verify_core_task",
+            "build_then_handoff",
         )
 
     def verify(self, report=None):
@@ -210,7 +221,7 @@ class StateProtocolTests(unittest.TestCase):
 
     def test_verify_requires_a_report(self):
         self.decide_and_start()
-        state.begin_check(self.root)
+        _open_round(self.root)
         with self.assertRaises(ValueError) as caught:
             state.verify(self.root)
         self.assertIn("--report", str(caught.exception))
@@ -219,7 +230,7 @@ class StateProtocolTests(unittest.TestCase):
         # The failure this exists for: the checker read db.js, the builder
         # edited it twice mid-round, and the whole round was thrown away.
         self.decide_and_start()
-        opened = state.begin_check(self.root)
+        opened = _open_round(self.root)
         self.assertEqual(opened["next_action"], "finish_verification")
         self.assertIn("write_source", opened["blocked_actions"])
         self.assertNotIn("write_source", opened["allowed_actions"])
@@ -233,7 +244,7 @@ class StateProtocolTests(unittest.TestCase):
 
     def test_cancel_check_reopens_writes_with_a_reason(self):
         self.decide_and_start()
-        state.begin_check(self.root)
+        _open_round(self.root)
         with self.assertRaises(ValueError):
             state.cancel_check(self.root, "   ")
         result = state.cancel_check(self.root, "VA-05 对比度 4.21:1")
@@ -244,21 +255,25 @@ class StateProtocolTests(unittest.TestCase):
 
     def test_round_cannot_open_twice_or_while_not_building(self):
         self.decide_and_start()
-        state.begin_check(self.root)
+        _open_round(self.root)
         with self.assertRaises(ValueError):
-            state.begin_check(self.root)
+            state.begin_check(self.root, "可以")
         self.assertNotIn("cancel-check", state.preflight_state(
             state.read_state(self.root))["blocked_actions"])
-        # A cancelled round can be reopened.
+        # Fixing after a cancelled round needs a fresh look and fresh words:
+        # the yes he gave belonged to the round that just closed.
         state.cancel_check(self.root, "修完再来")
-        self.assertEqual(state.begin_check(self.root)["next_action"],
+        with self.assertRaises(ValueError):
+            state.begin_check(self.root, "可以")
+        state.handoff(self.root)
+        self.assertEqual(state.begin_check(self.root, "修好了，再测")["next_action"],
                          "finish_verification")
 
     def test_a_rejected_report_keeps_the_round_open(self):
         # A report that does not hold must not quietly hand the tree back to
         # editing: the builder either writes one that holds or says why not.
         self.decide_and_start()
-        state.begin_check(self.root)
+        _open_round(self.root)
         bad = _valid_check_report(self.root, evidence=[])
         with self.assertRaises(ValueError):
             state.verify(self.root, report=bad)
@@ -268,7 +283,7 @@ class StateProtocolTests(unittest.TestCase):
 
     def test_resume_clears_an_open_round(self):
         self.decide_and_start()
-        state.begin_check(self.root)
+        _open_round(self.root)
         state.block(self.root, "保存接口返回错误")
         result = state.resume(self.root)
         self.assertEqual(result["stage"], "building")
@@ -534,15 +549,22 @@ class ContractReportStartTests(unittest.TestCase):
             state.start(self.root, contract_report=report)
         self.assertIn("changed since", str(caught.exception))
 
-    def test_matching_sha_cannot_attest_invalid_contract(self):
+    def test_contract_content_is_left_to_the_checker(self):
+        """A report whose SHA matches is accepted here; content is the checker's job.
+
+        This gate answers "is this report about this contract file", not "is the
+        contract any good": a matching SHA plus a passing phase is enough. What
+        makes an unparseable block unacceptable belongs to site-design's
+        check-contract, which is what writes the report in the first place.
+        """
         path = self.root / ".site" / "design" / "surface-brief.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# bad\n```site-contract\n{not-json}\n```\n", encoding="utf-8")
         report = _report_path(self.root, sha=hashlib.sha256(
             path.read_bytes()).hexdigest())
-        with self.assertRaises(ValueError) as caught:
-            state.start(self.root, contract_report=report)
-        self.assertIn("invalid contract block", str(caught.exception))
+        self.assertEqual(
+            state.start(self.root, contract_report=report)["stage"], "building"
+        )
 
     def test_unreadable_report_is_rejected(self):
         bad = self.root / ".site" / "bad.json"
@@ -656,13 +678,20 @@ class VerifyReportTests(unittest.TestCase):
         self.assertIn("fresh report", message)
         self.assertNotEqual(state.read_state(self.root)["stage"], "delivered")
 
-    def test_verification_round_rejects_changes_after_it_opens(self):
-        state.begin_check(self.root)
+    def test_verification_round_rejects_a_report_for_an_earlier_tree(self):
+        # The round itself no longer freezes a fingerprint: the report protocol
+        # compares the report against the tree as it is now, which is what makes
+        # a report written before the edit useless rather than merely stale.
+        stale = _valid_check_report(self.root)
+        _open_round(self.root)
         (self.root / "index.html").write_text("<html>changed</html>", encoding="utf-8")
-        report = _valid_check_report(self.root)
         with self.assertRaises(ValueError) as caught:
-            self.verify(report)
-        self.assertIn("changed during this verification round", str(caught.exception))
+            state.verify(self.root, report=stale)
+        self.assertIn("fresh report", str(caught.exception))
+        # The round stays open: the builder owes a report that holds.
+        still = state.preflight_state(state.read_state(self.root))
+        self.assertEqual(still["next_action"], "finish_verification")
+        self.assertIn("write_source", still["blocked_actions"])
 
     def test_verify_rejects_an_axis_that_says_nothing(self):
         plan = check.plan(self.root)

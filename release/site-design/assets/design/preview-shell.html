@@ -16,11 +16,18 @@
   正文区自己搭：该有什么分区、放几张卡、要不要表格，由项目和方案决定。
   只有顶栏切换条和色板是两版共用的，其余都不共用。
 
+  只做一版时（用户给了参考网站或截图，按参考贴一版），整条切换条连脚本一起删掉：
+  没有可比的第二版，留着这条只会让人以为还有另一版可看；要说明的话放进页脚。
+
   要改的：
     1. 标题 title。
-    2. 顶栏两个标签换成实际方案名。
-    3. 脚本里的 HINT：每版一句话，说清先看见什么、再怎么动手。
-    4. 两个 view 里的正文全部自己写。
+    2. 脚本里的 HINT：每版一句话。骨架稿说这一版先看见什么、再怎么动手；
+       视觉稿说两种气质差在哪。两级都不要用「方案 A：」这类前缀，也不拿方案短名
+       或风格名当句子开头的标签——编号已经写在标签上，短名和风格名放进句子里说，
+       或者只留在 .site/design/surface-brief.md。
+    3. 两个 view 里的正文全部自己写。
+  不要改的：顶栏两个标签固定写「方案 A」「方案 B」，两版一模一样。
+  骨架稿不换成方案短名，视觉稿不换成风格名，也不写成「证据优先 / 顾虑优先」这类轴名。
   颜色纪律：颜色只用来分区块、分文字层级、标状态，不用来区分方案。
            两个方案必须共用同一套颜色与字号。
   图标：Lucide 内联 SVG（stroke-width 2），同界面只用这一套，不用 Emoji 顶替。
@@ -82,7 +89,8 @@ svg{display:block}
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 
 /* =====================================================================
-   2. 顶部切换条：深色一条，一行说明。两类体验稿共用，不参与页面配色
+   2. 顶部切换条：深色一条，一行说明。两类体验稿共用，不参与页面配色。
+      标签固定写「方案 A」「方案 B」，说明不加「方案 A：」前缀
    ===================================================================== */
 .pickbar{position:sticky;top:0;z-index:20;background:var(--bar-bg);color:var(--bar-fg)}
 .pickbar-in{display:flex;align-items:center;gap:16px;min-height:50px;padding:7px 0}
@@ -225,7 +233,7 @@ th.act,td.act{text-align:right;white-space:nowrap}
   <div class="wrap">
     <div class="pickbar-in">
       <div class="seg" role="tablist" aria-label="方案切换">
-        <!-- 填：两个方案的实际名字 -->
+        <!-- 标签固定写「方案 A」「方案 B」，两版共用，不换成方案短名 -->
         <button role="tab" id="tab-a" aria-selected="true" aria-controls="view-a">方案 A</button>
         <button role="tab" id="tab-b" aria-selected="false" aria-controls="view-b">方案 B</button>
       </div>
@@ -237,24 +245,27 @@ th.act,td.act{text-align:right;white-space:nowrap}
 
 <main class="stage wrap">
 
-  <!-- ==================== 方案 A：正文自己搭 ==================== -->
+  <!-- ==================== 第一个方案（tab-a）：正文自己搭 ==================== -->
   <section id="view-a" role="tabpanel" aria-labelledby="tab-a">
-    <p class="foot">填：方案 A 的正文。分区、内容、行列数都按这个项目来。</p>
+    <p class="foot">填：这一版的正文。分区、内容、行列数都按这个项目来。</p>
   </section>
 
-  <!-- ==================== 方案 B：正文自己搭 ==================== -->
+  <!-- ==================== 第二个方案（tab-b）：正文自己搭 ==================== -->
   <section id="view-b" role="tabpanel" aria-labelledby="tab-b" hidden>
-    <p class="foot">填：方案 B 的正文。分区、内容、行列数都按这个项目来。</p>
+    <p class="foot">填：这一版的正文。分区、内容、行列数都按这个项目来。</p>
   </section>
 
 </main>
 
 <script>
 (function(){
-  /* 说明就是一句话，说清两版差别；不加动效、不做折叠、不做悬浮提示 */
+  /* 说明就是一句话：骨架稿说这一版先看见什么、再怎么动手，
+     视觉稿说两种气质差在哪。
+     两级都不要「方案 A：」这类前缀，也不拿方案短名或风格名当句子开头的标签。
+     不加动效、不做折叠、不做悬浮提示 */
   var HINT = {
-    a:'填：方案 A 先看见什么，再怎么动手。',
-    b:'填：方案 B 先看见什么，再怎么动手。'
+    a:'填：这一版先看见什么，和另一版差在哪。',
+    b:'填：这一版先看见什么，和另一版差在哪。'
   };
   var KEYS = { a:'view-a', b:'view-b' };
   var tabs = { a:document.getElementById('tab-a'), b:document.getElementById('tab-b') };

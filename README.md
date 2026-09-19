@@ -1,6 +1,6 @@
 # 渐进式建站 Skills
 
-一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.0.0）。
+一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.1）。
 
 ## 定位
 
@@ -9,7 +9,7 @@
 默认体验只有一条短路径：
 
 ```text
-理解核心任务 → 展示一个方向 → 用户确认 → 实现 → 验证核心任务 → 交付
+理解核心任务 → 展示一个方向 → 用户确认 → 实现 → 交给他看 → 他点头才验证 → 交付
 ```
 
 复杂度服务于风险，不服务于流程完整感。
@@ -118,11 +118,12 @@ python3 release/site-builder/scripts/state.py decide PROJECT \
   --direction "单工作台展示当前库存和新增入口" \
   --quote "就按这个方向做"
 python3 release/site-builder/scripts/state.py start PROJECT
-python3 release/site-builder/scripts/state.py begin-check PROJECT
+python3 release/site-builder/scripts/state.py handoff PROJECT
+python3 release/site-builder/scripts/state.py begin-check PROJECT --quote "看着没问题，测吧"
 python3 release/site-builder/scripts/state.py verify PROJECT --report .site/check/report.json
 ```
 
-`begin-check` 开一轮验证，这一轮关掉之前源码是禁写的；要回去修就先 `cancel-check --reason`。
+`handoff` 把这一版交到用户手上并停下等他回话；`begin-check` 只能开在他点头之后，要带上他的原话。页面在他看过之后又改过（源码或合同任一变动），这一轮就开不起来，得重新交一次。这一轮关掉之前源码是禁写的，要回去修就先 `cancel-check --reason`，修完重新交给他看。
 
 `verify` 只收检查报告，不收手写的 `--status`：状态由报告里的轴算出来，报告先过 `check.py validate-report` 这一关，指纹对不上当前源码、或某条轴没写清自己查了什么，都不算数。没重跑的轴在报告里如实记 `limited` 并写明是哪条，strict 的 `limited` 不能交付。局部修改不初始化 `.site`。
 
@@ -140,10 +141,24 @@ python3 release/site-builder/scripts/state.py select-structure PROJECT \
 
 状态工具只防止顺序错误、空证据和不满足模式要求的跃迁。它不能判断用户原话的真实语义，也不能证明证据内容属实；strict 的 `--independent` 只能在独立 Checker 上下文实际完成检查后使用。
 
+## 1.1 变更
+
+验证轮之前多了一道停：构建完成后先 `handoff` 把这一版交到用户手上，他看过并点头，才用 `begin-check --quote "他的原话"` 开验证轮。理由是一轮验证比他自己翻一遍贵得多，而报告只对写它的那一版成立，他看完再让你改一次，刚跑完的那轮就白跑了。`handoff` 记下当时的合同与源码指纹，之后动过其中任何一个，开轮会被拒，要求重新交付。`cancel-check` 之后同理：修完要重新交付，并拿到一句新的原话。
+
+检查协议修了一处 fail-open：合同文件读不出来时，`validate-report` 原先是跳过指纹比对，结果是删掉合同就能拿旧报告交付；现在直接判报告无效。
+
+源码指纹的排除规则改了。`AGENTS.md`、`CLAUDE.md`、声明了 `skills.json` 时的工具链目录、`skills.json`、`install.py`、`.playwright-cli` 都不进指纹；状态文件后缀（`.db` 之类）改成任意层级都忽略，不再只限根目录。检查器自己所在的 `site-check` 目录仍留在指纹里：能被中途放松的检查说不了算数。
+
+`plan` 去掉了 `--full-manifest`，源码清单始终输出。site-builder 与 site-check 现在随包分发自己的测试。
+
 ## 维护与测试
 
 ```text
-python3 -m unittest discover -s tests -p 'test_*.py'
-python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
+python3 -m unittest discover -s tests -p 'test_*.py'                              # 开发用测试
+python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'  # 随包分发
+python3 -m unittest discover -s release/site-builder/scripts/tests -p 'test_*.py'
+python3 -m unittest discover -s release/site-check/scripts/tests -p 'test_*.py'
 python3 release/site-design/scripts/design.py validate
 ```
+
+`release/site-*/scripts/tests/` 下的是随包分发的测试，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再装一次，确认分发包自带的东西是完整的。

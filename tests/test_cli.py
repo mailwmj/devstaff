@@ -151,8 +151,14 @@ class StateCliTests(unittest.TestCase):
                 "就按这个方向做",
             )
             report = self.write_contract_report(root)
-            self.run_cli("start", root, "--contract-report", report)
-            self.run_cli("begin-check", root)
+            started = self.run_cli("start", root, "--contract-report", report)
+            # 1.1: the build goes to the user before any round opens. handoff
+            # moves the sub-phase to review, and begin-check only opens a round
+            # on those reviewed fingerprints with the user's own words.
+            self.assertEqual(started["next_action"], "build_then_handoff")
+            handed = self.run_cli("handoff", root)
+            self.assertEqual(handed["next_action"], "wait_for_user_review")
+            self.run_cli("begin-check", root, "--quote", "看着没问题，去验吧")
             delivered = self.run_cli(
                 "verify",
                 root,
@@ -161,10 +167,18 @@ class StateCliTests(unittest.TestCase):
             )
             self.assertEqual(delivered["next_action"], "report_delivery")
 
-    def test_plan_cli_keeps_default_output_small(self):
+    def test_plan_cli_always_reports_the_source_manifest(self):
+        """1.1 dropped --full-manifest: the manifest is part of every plan.
+
+        The manifest is what a later --changed-from run needs to list changed
+        files, so it is no longer an opt-in extra. The old flag is gone rather
+        than silently ignored, and the default output carries the manifest.
+        """
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.write_contract_report(root)
+            (root / "index.html").write_text("<html></html>", encoding="utf-8")
+
             def run_check(*args):
                 result = subprocess.run(
                     [sys.executable, str(CHECK), *map(str, args)],
@@ -175,9 +189,16 @@ class StateCliTests(unittest.TestCase):
                 return json.loads(result.stdout)
 
             summary = run_check("plan", root)
-            self.assertNotIn("source_manifest", summary)
-            full = run_check("plan", root, "--full-manifest")
-            self.assertIn("source_manifest", full)
+            self.assertIn("source_manifest", summary)
+            self.assertIn("index.html", summary["source_manifest"])
+            self.assertEqual(summary["source_files"], len(summary["source_manifest"]))
+            rejected = subprocess.run(
+                [sys.executable, str(CHECK), "plan", str(root), "--full-manifest"],
+                check=False, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(rejected.returncode, 2,
+                             "the removed --full-manifest flag must not be accepted")
 
     def test_verify_rejects_a_stale_report(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -187,11 +208,38 @@ class StateCliTests(unittest.TestCase):
                          "单工作台", "--quote", "就按这个方向做")
             self.run_cli("start", root, "--contract-report", self.write_contract_report(root))
             report = self.write_check_report(root)
-            # The product changes after the report was written.
+            self.run_cli("handoff", root)
+            self.run_cli("begin-check", root, "--quote", "看着没问题，去验吧")
+            # The product changes after the report was written: the report now
+            # describes a tree that no longer exists and cannot be recorded.
             (root / "app.js").write_text("show()", encoding="utf-8")
-            self.run_cli("begin-check", root)
             result = self.run_cli("verify", root, "--report", report, expected=2)
             self.assertIn("fresh report", result["error"])
+
+    def test_user_review_gates_the_verification_round(self):
+        """1.1: a round opens only on the version the user was shown.
+
+        handoff records the fingerprints he looked at. Without a handoff there
+        is nothing to approve, and an edit after the handoff means he never saw
+        this tree -- both are refused, and only a fresh handoff reopens the gate.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.run_cli("init", root, "--mode", "guided")
+            self.run_cli("decide", root, "--task", "登记库存", "--direction",
+                         "单工作台", "--quote", "就按这个方向做")
+            self.run_cli("start", root, "--contract-report", self.write_contract_report(root))
+            early = self.run_cli("begin-check", root, "--quote", "去验吧", expected=2)
+            self.assertIn("handoff", early["error"])
+
+            self.run_cli("handoff", root)
+            (root / "app.js").write_text("show()", encoding="utf-8")
+            stale = self.run_cli("begin-check", root, "--quote", "可以，去验吧", expected=2)
+            self.assertIn("handoff", stale["error"])
+
+            self.run_cli("handoff", root)
+            opened = self.run_cli("begin-check", root, "--quote", "这回可以，去验吧")
+            self.assertEqual(opened["next_action"], "finish_verification")
 
     def test_invalid_transition_returns_machine_readable_error(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -244,7 +292,8 @@ class StateCliTests(unittest.TestCase):
             )
             report = self.write_contract_report(root)
             self.run_cli("start", root, "--contract-report", report)
-            self.run_cli("begin-check", root)
+            self.run_cli("handoff", root)
+            self.run_cli("begin-check", root, "--quote", "看着没问题，去验吧")
             delivered = self.run_cli(
                 "verify", root, "--report", self.write_check_report(root)
             )

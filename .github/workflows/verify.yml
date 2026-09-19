@@ -29,6 +29,11 @@ jobs:
       - name: Run design tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
 
+      - name: Run the tests the bundle ships with
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-builder/scripts/tests -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-check/scripts/tests -p 'test_*.py'
+
       - name: Validate design assets
         run: PYTHONDONTWRITEBYTECODE=1 python3 release/site-design/scripts/design.py validate
 
@@ -42,6 +47,8 @@ jobs:
           git archive --format=tar HEAD:release --output="$ARCHIVE_FILE"
           tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-design/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-builder/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-check/scripts/tests" -p 'test_*.py'
           PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/site-design/scripts/design.py" validate
           python3 "$RELEASE_DIR/install.py" "$INSTALL_DIR"
           test -f "$INSTALL_DIR/site-design/references/surface-brief.md"

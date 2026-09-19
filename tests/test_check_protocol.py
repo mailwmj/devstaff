@@ -158,14 +158,31 @@ class PlanTests(_ProjectBase):
         self.assertNotIn("src/data.json", result["source_excluded"])
         self.assertEqual(result["source_files"], len(result["source_manifest"]))
 
-    def test_nested_database_is_product_source(self):
+    def test_nested_state_file_is_excluded_at_any_depth(self):
+        """1.1 matches state-file suffixes at every depth, not just the root.
+
+        The 1.0 rule kept a nested ``.sqlite`` in the fingerprint as product
+        source; now any runtime file the product writes while in use is
+        excluded, wherever it sits. The rule is about the suffix, so nested
+        product source still counts.
+        """
         (self.root / "src").mkdir()
-        path = self.root / "src" / "catalog.sqlite"
-        path.write_bytes(b"v1")
-        before = check.plan(self.root)["source_sha256"]
-        path.write_bytes(b"v2")
-        after = check.plan(self.root)["source_sha256"]
-        self.assertNotEqual(before, after)
+        database = self.root / "src" / "catalog.sqlite"
+        database.write_bytes(b"v1")
+        plan = check.plan(self.root)
+        self.assertNotIn("src/catalog.sqlite", plan["source_manifest"])
+        self.assertIn("src/catalog.sqlite", plan["source_excluded"])
+        before = plan["source_sha256"]
+        database.write_bytes(b"v2")
+        self.assertEqual(check.plan(self.root)["source_sha256"], before,
+                         "a nested state file must not change the fingerprint")
+
+        product = self.root / "src" / "catalog.json"
+        product.write_text("{}", encoding="utf-8")
+        with_product = check.plan(self.root)["source_sha256"]
+        product.write_text('{"items": 1}', encoding="utf-8")
+        self.assertNotEqual(check.plan(self.root)["source_sha256"], with_product,
+                            "nested product source still belongs in the fingerprint")
 
     def test_runtime_state_does_not_invalidate_a_report(self):
         # The failure this replaces: the shopkeeper sells one bottle, the
@@ -390,27 +407,57 @@ class ValidateReportTests(_ProjectBase):
         self.assertTrue(result["errors"])
 
     def test_missing_contract_is_invalid(self):
+        """1.1 refuses to validate a report when the contract cannot be read.
+
+        Skipping the fingerprint comparison here used to accept any stale
+        report once the contract file was gone, which turned a missing spec
+        into a passing delivery.
+        """
         contract = self.root / ".site" / "design" / "surface-brief.md"
         contract.unlink()
         result = self._validate(self._guided_report())
         self.assertFalse(result["valid"])
-        self.assertTrue(any("current project cannot be verified" in e for e in result["errors"]))
+        self.assertTrue(any("contract is missing or unreadable" in e for e in result["errors"]),
+                        result["errors"])
 
-    def test_report_mode_must_match_project_mode(self):
+    def test_report_mode_comes_from_the_report(self):
+        """1.1 removed the cross-check against the project's own mode.
+
+        validate-report no longer reads .site/state.json, so a report is judged
+        by the mode it declares; state.py's verify is what enforces the
+        project's mode when a report is recorded.
+        """
         (self.root / ".site" / "state.json").write_text(
             json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
             encoding="utf-8",
         )
         report = self._guided_report(mode="guided")
         result = self._validate(report)
-        self.assertFalse(result["valid"])
-        self.assertTrue(any("does not match project mode strict" in e for e in result["errors"]))
+        self.assertTrue(result["valid"], result["errors"])
+        self.assertEqual(result["mode"], "guided")
 
-    def test_independent_must_be_boolean(self):
-        report = self._guided_report(independent="false")
-        result = self._validate(report)
-        self.assertFalse(result["valid"])
-        self.assertTrue(any("independent must be a JSON boolean" in e for e in result["errors"]))
+    def test_independent_is_normalised_by_truthiness(self):
+        """1.1 dropped "independent must be a JSON boolean".
+
+        The value is normalised with bool(), so the non-empty string "false"
+        counts as independent. The normalised value is what the guided echo and
+        the strict gate both see; an empty value is still not independent.
+        """
+        guided = self._validate(self._guided_report(independent="false"))
+        self.assertTrue(guided["valid"], guided["errors"])
+        self.assertTrue(guided["independent"], '"false" is a non-empty string, so it normalises to True')
+
+        strict = self._guided_report(mode="strict", independent="false")
+        strict["axes"]["reopen"] = _measured("刷新后数据保持")
+        strict["axes"]["risk"] = _measured("密钥与公开数据面")
+        result = self._validate(strict, name="strict.json")
+        self.assertTrue(result["independent"])
+        self.assertTrue(result["valid"], result["errors"])
+
+        strict["independent"] = ""
+        rejected = self._validate(strict, name="strict-empty.json")
+        self.assertFalse(rejected["valid"])
+        self.assertTrue(any("independent" in e for e in rejected["errors"]), rejected["errors"])
 
 
 class StrictModeTests(_ProjectBase):

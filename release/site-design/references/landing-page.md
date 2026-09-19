@@ -123,7 +123,7 @@ $$\text{One Offer} \longrightarrow \text{One Audience} \longrightarrow \text{One
    - 颜色、字阶、间距、圆角必须绑定项目的语义 Token，严禁硬编码裸色值。
    - 遵循 `craft-review.md`：浅色/深色背景采用柔和的 off-black/off-white，拒绝刺眼的高饱和塑料发光色。
 3. **图标与组件规范**：
-   - 默认采用 **Lucide** 图标库；用户或现有工程明确指定其他体系时以该指定为准。同一界面不要混用互不兼容的图标体系。
+   - 统一采用 **Lucide** 图标库，严禁私自引入互不兼容的图标体系。
    - 按钮动词先导，同视口仅允许单个 Filled 强调主操作；嵌套圆角满足同心公式（`outerRadius = innerRadius + padding`）；按压具备物理微缩放（`:active { transform: scale(0.96); }`）。
 4. **轻量与性能底线**：
    - 拒绝华而不实的全局滚动劫持（Scroll Hijacking）或未节流的密集滚动监听。

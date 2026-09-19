@@ -15,7 +15,7 @@ def load_bundle(root: Path) -> dict:
     config = json.loads((root / "skills.json").read_text(encoding="utf-8"))
     skills = config.get("skills")
     version = config.get("version")
-    if version not in {1, "1.0.0", 3} or not isinstance(skills, dict) or not skills:
+    if version not in {1, "1.0.0", "1.1", 3} or not isinstance(skills, dict) or not skills:
         raise ValueError("invalid skills.json")
     for name, details in skills.items():
         if not isinstance(details, dict) or not isinstance(details.get("directory"), str):

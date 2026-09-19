@@ -110,7 +110,7 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 | `state.py init / preflight` | 建立状态；每轮读取下一步 |
 | `state.py discover / select-structure` | 登记结构判断（`single` 或 `choice`）与用户选定的候选 |
 | `state.py decide / start` | 记录方向确认原话；凭通过的 prebuild 合同报告进入构建 |
-| `state.py begin-check / cancel-check` | 开一轮验证并在这一轮内禁写源码；要回去修就带 `--reason` 取消这一轮 |
+| `state.py handoff / begin-check / cancel-check` | 先把这一版交给用户看并在 `review` 停下；开一轮验证要带他的原话（`--quote`），并在这一轮内禁写源码；要回去修就带 `--reason` 取消这一轮 |
 | `state.py verify / block / resume / reopen` | 记录验证结论、阻断、恢复与重开；`verify` 只收检查报告，报告先过协议校验 |
 | `design.py catalog / research` | 看能力目录；按一个问题检索领域或技术栈 |
 | `design.py check-contract --phase direction|prebuild|precheck` | 合同门禁；默认加 `--summary` 先看摘要，完整报告落盘 |
@@ -142,7 +142,9 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 
 切片状态、验证证据、发现的缺陷和被推翻的假设都写 `.site/journal.md`：合同参与指纹，改一个字节就作废已经跑过的验证，而日志每轮都在追加。
 
-所有切片打勾后做一次集成构建，用 `state.py begin-check` 开一轮验证，再交 `site-check` 只读浏览器验证；首次浏览器验证前，合同、类型、构建和受影响测试必须已通过。这一轮关掉之前源码是禁写的，要回去修就先 `cancel-check --reason`。
+所有切片打勾后做一次集成构建，先跑便宜的自检（合同引用、类型、构建、受影响测试，页面能打开、核心那条走得通），再 `state.py handoff` 把这一版交到用户手上，停下等他回话。给他入口地址，说清这条核心任务怎么走一遍，并交底：下一轮独立验证要拿浏览器逐项核对、比他自己翻一遍慢得多、跑完才敢说能不能用，以及这轮打算查哪几项（他随时可以往里加）。他点头后才用 `state.py begin-check --quote "他的原话"` 开验证轮，交 `site-check` 只读浏览器验证。
+
+首次浏览器验证前，合同、类型、构建和受影响测试必须已通过。报告只对写它的那一版成立：他看过之后再改一次，刚跑完的那轮就白跑了。这一轮关掉之前源码是禁写的，要回去修就先 `cancel-check --reason` 说清这轮查出了什么，改完重新交给他看一遍再开新的一轮。
 
 ## 交付与沟通
 

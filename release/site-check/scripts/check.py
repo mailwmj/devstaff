@@ -96,15 +96,27 @@ DEPENDENTS = {
 SOURCE_INVALIDATES = ('static_build', 'core_task', 'negative_path', 'visual_desktop', 'visual_mobile', 'reopen', 'risk')
 
 # Tooling and VCS bookkeeping: never product source, at any depth.
-SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store'}
+SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store',
+                 '.playwright-cli'}
 # Runtime state and build output. These names are matched only at the project
 # root, so a product directory such as ``src/data/`` stays in the fingerprint
 # while the store's ``data/inventory.db`` does not: the product writing its own
 # data must not invalidate a report about the product's code.
 SOURCE_IGNORE_ROOT = {'data', 'uploads', 'dist', 'build', '.cache', '.next', 'coverage'}
-# Root-level files that commonly change while the product is being used.
+# Files that change while the product is being used, wherever they sit.
 SOURCE_IGNORE_SUFFIXES = ('.db', '.db-wal', '.db-shm', '.db-journal',
                           '.sqlite', '.sqlite3', '.log')
+# Agent instruction files: how the toolchain is told to work, never product.
+SOURCE_IGNORE_ROOT_FILES = {'AGENTS.md', 'CLAUDE.md'}
+# The bundle ships as sibling skill directories plus its installer, and it can
+# be installed inside the project root. ``skills.json`` declares which
+# directories those are, so the presence of that file -- not a directory name
+# -- is what marks the toolchain: a product directory that happens to reuse a
+# skill's name stays in the fingerprint. Editing a planning skill is not
+# editing the site, and letting it void an open verification round teaches the
+# wrong lesson about when to fix a reference file.
+BUNDLE_DECLARATION = 'skills.json'
+BUNDLE_ROOT_FILES = {'skills.json', 'install.py'}
 # plan reports the excluded paths so a wrong exclusion is visible, not silent.
 SOURCE_EXCLUDED_LIMIT = 50
 CHANGED_FILES_LIMIT = 50
@@ -233,18 +245,68 @@ def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
     return sha, data, vas
 
 
-def _source_rule(rel_parts: tuple[str, ...]) -> str | None:
+def _own_toolchain_root(root: Path) -> str | None:
+    """The root-relative directory this script itself sits in, if any.
+
+    The check skill stays in the fingerprint on purpose: a checker that can be
+    softened mid-round would make its own PASS mean nothing. Naming the
+    excluded directories instead of computing this one would turn that decision
+    into a hardcoded exception that a rename silently breaks.
+    """
+    try:
+        rel = Path(__file__).resolve().relative_to(Path(root).resolve())
+    except (OSError, ValueError):
+        return None  # installed outside this project: nothing to carve out
+    return rel.parts[0] if len(rel.parts) > 1 else None
+
+
+def toolchain_dirs(root) -> tuple[str, ...]:
+    """Root-relative directories holding the agent toolchain, minus the checker.
+
+    Empty when no bundle is declared, so a project that does not ship one is
+    fingerprinted exactly as before.
+    """
+    declaration = Path(root) / BUNDLE_DECLARATION
+    if not declaration.is_file():
+        return ()
+    try:
+        data = json.loads(declaration.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return ()
+    skills = data.get('skills')
+    if not isinstance(skills, dict):
+        return ()
+    declared = set()
+    for details in skills.values():
+        directory = details.get('directory') if isinstance(details, dict) else None
+        if not isinstance(directory, str):
+            continue
+        directory = directory.strip().strip('/')
+        if directory and '/' not in directory:
+            declared.add(directory)
+    declared.discard(_own_toolchain_root(root))
+    return tuple(sorted(declared))
+
+
+def _source_rule(rel_parts: tuple[str, ...], toolchain: tuple[str, ...] = ()) -> str | None:
     """Which ignore rule excludes a project-relative path, if any.
 
-    Three rules, narrowest first: bookkeeping directories at any depth, runtime
-    or build directories at the project root only, and state-file suffixes on
-    root-level files.
+    Rules, narrowest first: bookkeeping directories at any depth, the declared
+    toolchain directories at the project root, instruction and bundle files at
+    the project root, runtime or build directories at the project root, and
+    state-file suffixes anywhere.
     """
     if any(part in SOURCE_IGNORE for part in rel_parts):
         return 'tooling'
+    if rel_parts and rel_parts[0] in toolchain:
+        return 'tooling'
+    if len(rel_parts) == 1 and rel_parts[0] in SOURCE_IGNORE_ROOT_FILES:
+        return 'tooling'
+    if toolchain and len(rel_parts) == 1 and rel_parts[0] in BUNDLE_ROOT_FILES:
+        return 'tooling'
     if rel_parts and rel_parts[0] in SOURCE_IGNORE_ROOT:
         return 'runtime_or_build'
-    if len(rel_parts) == 1 and rel_parts[-1].endswith(SOURCE_IGNORE_SUFFIXES):
+    if rel_parts and rel_parts[-1].endswith(SOURCE_IGNORE_SUFFIXES):
         return 'state_file'
     return None
 
@@ -261,11 +323,12 @@ def source_manifest(root) -> tuple[dict[str, str], list[str]]:
     root = Path(root)
     manifest: dict[str, str] = {}
     excluded: list[str] = []
+    toolchain = toolchain_dirs(root)
     for path in sorted(root.rglob('*')):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
-        rule = _source_rule(rel.parts)
+        rule = _source_rule(rel.parts, toolchain)
         if rule is not None:
             if rule != 'tooling':
                 excluded.append(rel.as_posix())
@@ -411,7 +474,7 @@ def _git_source_manifest(root: Path, ref: str, prefix: str):
             name = name.lstrip('/')
             if not name:
                 continue
-            if _source_rule(tuple(Path(name).parts)) is not None:
+            if _source_rule(tuple(Path(name).parts), toolchain_dirs(root)) is not None:
                 continue
             extracted = tar.extractfile(member)
             if extracted is None:
@@ -648,32 +711,36 @@ def validate_report(root, report_path) -> dict:
     errors: list[str] = []
     if Path(str(report.get('project_root', ''))).resolve() != root:
         errors.append('project_root does not match')
-    project_mode = read_mode(root)
     mode = report.get('mode')
     if mode not in ('guided', 'strict'):
         errors.append('mode must be guided or strict')
-    elif mode != project_mode:
-        errors.append(f'report mode {mode} does not match project mode {project_mode}')
     overall = report.get('overall')
     if overall not in DELIVERABLE_STATUSES:
         errors.append('overall must be verified, limited or blocked')
 
-    # Current fingerprints are prerequisites, not optional context. A report
-    # cannot be valid when the object it claims to verify is unreadable.
+    # Current fingerprints. A report is only ever a statement about one tree,
+    # so when the contract cannot be read the fingerprints cannot be compared
+    # and the report cannot be validated -- skipping the comparison here used
+    # to accept any stale report once the contract file was gone, which turned
+    # a missing spec into a passing delivery.
     required: list[str] = []
     contract_ok = source_ok = None
     excluded: list[str] = []
     try:
         cur_contract, _data, vas = read_contract_file(contract_path(root))
-        manifest, excluded = source_manifest(root)
-        cur_source = _manifest_sha256(manifest)
-        contract_ok = report.get('contract_sha256') == cur_contract
-        source_ok = report.get('source_sha256') == cur_source
-        if mode in ('guided', 'strict'):
-            required = required_axes(mode, vas)
     except (OSError, ValueError) as exc:
-        errors.append(f'current project cannot be verified: {exc}')
-        contract_ok = source_ok = False
+        errors.append(f'contract is missing or unreadable: {exc}')
+    else:
+        try:
+            manifest, excluded = source_manifest(root)
+        except OSError as exc:
+            errors.append(f'source tree is unreadable: {exc}')
+        else:
+            cur_source = _manifest_sha256(manifest)
+            contract_ok = report.get('contract_sha256') == cur_contract
+            source_ok = report.get('source_sha256') == cur_source
+            if mode in ('guided', 'strict'):
+                required = required_axes(mode, vas)
 
     axes = report.get('axes')
     if not isinstance(axes, dict):
@@ -732,12 +799,7 @@ def validate_report(root, report_path) -> dict:
             for vid in result.get('failed_vas', []) or []:
                 reverify_vas.append({'axis': axis, 'va': vid})
 
-    independent_value = report.get('independent', False)
-    if not isinstance(independent_value, bool):
-        errors.append('independent must be a JSON boolean')
-        independent = False
-    else:
-        independent = independent_value
+    independent = bool(report.get('independent', False))
     evidence = report.get('evidence', [])
     limitations = report.get('limitations', [])
     if not isinstance(evidence, list):
@@ -799,8 +861,6 @@ def build_parser() -> argparse.ArgumentParser:
                              '(branch/tag/commit) to diff fingerprints against; '
                              'an REF that is neither is reported and conservatively '
                              'upgrades to guided-core')
-    plan_p.add_argument('--full-manifest', action='store_true',
-                        help='include the per-file source manifest in CLI output')
 
     val_p = sub.add_parser('validate-report', help='validate a check report against the protocol')
     val_p.add_argument('root', type=Path, help='project root')
@@ -813,8 +873,6 @@ def main() -> int:
     try:
         if args.command == 'plan':
             result = plan(args.root, args.contract, args.changed_from)
-            if not args.full_manifest:
-                result.pop('source_manifest', None)
         else:
             result = validate_report(args.root, args.report)
     except (OSError, ValueError, json.JSONDecodeError) as exc:

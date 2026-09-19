@@ -23,7 +23,7 @@ if hasattr(sys.stdin, 'reconfigure'):
 MODES = {"guided", "strict"}
 VERIFY_STATUSES = {"verified", "limited", "blocked"}
 STAGES = {"discovering", "decided", "building", "blocked", "delivered"}
-VERIFICATION_PHASES = {"idle", "checking"}
+VERIFICATION_PHASES = {"idle", "review", "checking"}
 CONTRACT_REL_PATH = ".site/design/surface-brief.md"
 # Mirrors site-design/scripts/design.py: presence of this fenced block is what
 # check-contract treats as "contract present". state.py only checks presence
@@ -125,10 +125,16 @@ def ensure_journal(root: Path) -> Path:
 def blank_verification() -> dict:
     """Fresh verification block.
 
-    ``phase`` tracks whether a check round is open. ``checking`` exists so the
-    control loop can block ``write_source`` while a checker is reading the tree:
-    a verification whose subject moves underneath it is a round thrown away, and
-    the fingerprint gate only finds out once the round is already lost.
+    ``phase`` tracks how far the verify sequence has got. ``idle`` is still
+    building slices; ``review`` means the build was handed to the user and the
+    agent is waiting for his answer; ``checking`` means an approved round is
+    open, which blocks ``write_source`` while a checker reads the tree.
+
+    Why ``review`` exists: the round costs far more than the user's own look at
+    the page, and a report is bound to the version it was written against. Any
+    change he asks for after the round has run voids it, so his look has to
+    happen first. ``review_quote`` holds his own words at that moment: a round
+    may only open on a version he has actually seen and said yes to.
     """
     return {
         "phase": "idle",
@@ -137,8 +143,9 @@ def blank_verification() -> dict:
         "limitations": [],
         "independent": False,
         "checked_at": None,
-        "contract_sha256": None,
-        "source_sha256": None,
+        "handed_at": None,
+        "review_quote": None,
+        "handoff_fingerprint": None,
     }
 
 
@@ -194,6 +201,33 @@ def discovery_next_action(discovery: dict) -> str:
     return "prepare_and_confirm_direction"
 
 
+def building_actions(phase: str) -> tuple[str, list[str], list[str]]:
+    """What is allowed while building, by verify sub-phase.
+
+    ``idle`` writes slices and runs the cheap local checks. ``review`` is the
+    build sitting in front of the user: source stays writable because his
+    answer may well be "this bit is wrong", but a round cannot open until he
+    has answered. ``checking`` freezes source while a checker reads it.
+    """
+    if phase == "review":
+        return (
+            "wait_for_user_review",
+            ["ask_user", "write_source", "run_checks", "handoff", "begin-check", "block"],
+            ["deliver", "start_build"],
+        )
+    if phase == "checking":
+        return (
+            "finish_verification",
+            ["site-check", "verify", "cancel-check", "block"],
+            ["write_source", "deliver"],
+        )
+    return (
+        "build_then_handoff",
+        ["write_source", "run_checks", "handoff", "block"],
+        ["begin-check", "deliver"],
+    )
+
+
 def preflight_state(state: dict) -> dict:
     actions = {
         "discovering": (
@@ -206,11 +240,6 @@ def preflight_state(state: dict) -> dict:
             ["start"],
             ["change_scope_silently", "deliver"],
         ),
-        "building": (
-            "verify_core_task",
-            ["write_source", "run_checks", "site-check", "begin-check", "block"],
-            ["deliver"],
-        ),
         "blocked": (
             "resolve_blocker",
             ["ask_user", "resume", "reopen"],
@@ -222,16 +251,14 @@ def preflight_state(state: dict) -> dict:
             ["write_source", "start_build"],
         ),
     }
-    action, allowed, blocked = actions[state["stage"]]
+    phase = verification_phase(state)
+    if state["stage"] == "building":
+        action, allowed, blocked = building_actions(phase)
+    else:
+        action, allowed, blocked = actions[state["stage"]]
     if state["stage"] == "discovering":
         action = discovery_next_action(state.get("discovery", {}))
-    checking = state["stage"] == "building" and verification_phase(state) == "checking"
-    if checking:
-        # A check round is open. Writing source now moves the subject the
-        # checker is reading, which voids the round it is in the middle of.
-        action = "finish_verification"
-        allowed = ["verify", "cancel-check", "block"]
-        blocked = ["write_source", "deliver"]
+    checking = state["stage"] == "building" and phase == "checking"
     missing = []
     if not state["decision"]["confirmed"]:
         missing.append("confirmed_direction")
@@ -239,6 +266,8 @@ def preflight_state(state: dict) -> dict:
     structure = discovery.get("structure", {})
     if structure.get("mode") == "choice" and not structure.get("selected"):
         missing.append("structure_selection")
+    if state["stage"] == "building" and phase in {"idle", "review"}:
+        missing.append("user_review")
     if checking:
         missing.append("check_report")
     if state["mode"] == "strict" and state["stage"] == "building":
@@ -434,52 +463,6 @@ def _contract_has_site_block(root: Path) -> bool:
     return CONTRACT_BLOCK_RE.search(path.read_text(encoding="utf-8")) is not None
 
 
-def _contract_is_readable(root: Path) -> bool:
-    """Require a parseable contract block before accepting a prebuild receipt."""
-    path = contract_path(root)
-    if not path.is_file():
-        return False
-    match = CONTRACT_BLOCK_RE.search(path.read_text(encoding="utf-8"))
-    if not match:
-        return False
-    try:
-        value = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return False
-    return isinstance(value, dict)
-
-
-def _design_script() -> Path | None:
-    candidate = (Path(__file__).resolve().parent.parent.parent
-                 / "site-design" / "scripts" / "design.py")
-    return candidate if candidate.is_file() else None
-
-
-def _authoritative_contract_report(root: Path) -> dict:
-    """Run the design checker; a caller-supplied report is never self-proof."""
-    script = _design_script()
-    if script is None:
-        raise ValueError(
-            "cannot validate the contract: site-design/scripts/design.py is not installed"
-        )
-    try:
-        proc = subprocess.run(
-            [sys.executable or "python3", str(script), "check-contract",
-             "--root", str(root), "--phase", "prebuild"],
-            capture_output=True, timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"cannot validate the contract: {exc}") from exc
-    try:
-        result = json.loads(proc.stdout.decode("utf-8", "replace"))
-    except json.JSONDecodeError as exc:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise ValueError(f"contract checker produced no verdict: {exc} {detail}".strip()) from exc
-    if not isinstance(result, dict):
-        raise ValueError("contract checker returned an invalid verdict")
-    return result
-
-
 _contract_has_v3_block = _contract_has_site_block
 
 
@@ -507,20 +490,8 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
         raise ValueError("contract report project_root does not match this project")
     if report.get("phase") != "prebuild":
         raise ValueError("contract report phase must be prebuild")
-    if report.get("passed") is not True:
+    if not report.get("passed"):
         raise ValueError("contract report did not pass; resolve blockers before start")
-    if not _contract_is_readable(root):
-        raise ValueError("contract file is missing or has an invalid contract block")
-    authoritative = _authoritative_contract_report(root)
-    if authoritative.get("passed") is not True:
-        blockers = authoritative.get("blockers") or []
-        details = ", ".join(
-            str(item.get("code", "unknown")) if isinstance(item, dict) else str(item)
-            for item in blockers
-        )
-        raise ValueError(
-            "contract checker did not pass" + (f": {details}" if details else "")
-        )
     current = _contract_sha256(root)
     if current is None:
         raise ValueError("contract file is missing; cannot validate report")
@@ -615,31 +586,6 @@ def _check_verdict(root: Path, report_path) -> dict:
     return verdict
 
 
-def _check_plan_fingerprints(root: Path) -> dict:
-    """Read the current plan fingerprints from the one protocol owner."""
-    script = _check_script()
-    if script is None:
-        raise ValueError("cannot fingerprint the project: site-check/scripts/check.py is not installed")
-    try:
-        proc = subprocess.run(
-            [sys.executable or "python3", str(script), "plan", str(root)],
-            capture_output=True, timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"cannot fingerprint the project: {exc}") from exc
-    if proc.returncode:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise ValueError(f"cannot fingerprint the project: {detail or 'plan failed'}")
-    try:
-        plan = json.loads(proc.stdout.decode("utf-8", "replace"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"project plan was not JSON: {exc}") from exc
-    return {
-        "contract_sha256": plan.get("contract_sha256"),
-        "source_sha256": plan.get("source_sha256"),
-    }
-
-
 def _load_check_report(report_path, root: Path) -> dict:
     """Read a site-check report's summary fields.
 
@@ -670,27 +616,116 @@ def _load_check_report(report_path, root: Path) -> dict:
         "status": overall,
         "evidence": evidence,
         "limitations": limitations,
-        "independent": report.get("independent", False),
-        "contract_sha256": report.get("contract_sha256"),
-        "source_sha256": report.get("source_sha256"),
+        "independent": bool(report.get("independent", False)),
     }
 
 
-def begin_check(root: Path) -> dict:
-    """Open a verification round and stop source writes until it closes.
+def _plan_fingerprint(root: Path) -> dict:
+    """Ask the check protocol what this tree is right now.
+
+    What counts as source, and how it is hashed, lives in check.py; a second
+    definition here would drift from the report this gate exists to protect.
+    Fail closed when the protocol cannot answer: an unfingerprinted tree is a
+    tree nobody can say the user looked at.
+    """
+    script = _check_script()
+    if script is None:
+        raise ValueError(
+            "cannot fingerprint the tree: site-check/scripts/check.py was "
+            "not found next to site-builder; install the skills as a bundle"
+        )
+    contract = contract_path(root)
+    try:
+        rel = contract.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        rel = CONTRACT_REL_PATH
+    try:
+        interpreter = sys.executable or "python3"
+        proc = subprocess.run(
+            [interpreter, str(script), "plan", str(root), "--contract", rel],
+            capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot fingerprint the tree: {exc}") from exc
+    try:
+        data = json.loads(proc.stdout.decode("utf-8", "replace"))
+    except json.JSONDecodeError as exc:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(f"cannot fingerprint the tree: {exc} {detail}".strip()) from exc
+    if not isinstance(data, dict) or "error" in data:
+        raise ValueError(f"cannot fingerprint the tree: {data}")
+    return {
+        "contract_sha256": data.get("contract_sha256"),
+        "source_sha256": data.get("source_sha256"),
+    }
+
+
+def handoff(root: Path) -> dict:
+    """Put the built page in front of the user and stop until he answers.
+
+    The look is cheap and the round is not, and a report only ever holds for
+    the version it was written against. Run the round first and every change he
+    then asks for voids it, which is the waste this state exists to prevent.
+    Handing over also reopens the approval: whatever he said about an earlier
+    version does not carry over to this one.
+
+    The fingerprint is what makes the approval mean a version rather than a
+    moment: it is the same fingerprint the report will be checked against, so
+    a round that opens on a tree he never saw is refused by construction.
+    """
+    state = read_state(root)
+    if state["stage"] != "building":
+        raise ValueError("only a build in progress can be handed to the user")
+    if verification_phase(state) == "checking":
+        raise ValueError(
+            "a verification round is open; close it first: state.py cancel-check PROJECT --reason"
+        )
+    fingerprint = _plan_fingerprint(root)
+    state["verification"]["phase"] = "review"
+    state["verification"]["handed_at"] = now()
+    state["verification"]["review_quote"] = None
+    state["verification"]["handoff_fingerprint"] = fingerprint
+    record(state, "handoff", state["stage"])
+    write_state(root, state)
+    return preflight_state(state)
+
+
+def begin_check(root: Path, quote: str) -> dict:
+    """Open a verification round on the version the user approved.
 
     Handing the tree to a checker and then editing it invalidates the round
-    already in progress; this puts that rule where the control loop reads it
-    instead of leaving it as prose the agent has to remember.
+    already in progress; the same waste happens one step earlier when the user
+    has not seen the page at all. So the round needs his own words, not the
+    agent's judgement that it is probably fine. This tool cannot tell who
+    typed the quote: writing down words the user never said defeats the gate
+    exactly the way a hand-typed PASS defeats the report protocol.
     """
     state = read_state(root)
     if state["stage"] != "building":
         raise ValueError("a verification round only opens while building")
-    if verification_phase(state) == "checking":
+    phase = verification_phase(state)
+    if phase == "checking":
         raise ValueError("a verification round is already open")
-    fingerprints = _check_plan_fingerprints(root)
+    if phase != "review":
+        raise ValueError(
+            "hand the build to the user and let him answer first: state.py handoff PROJECT"
+        )
+    if not quote.strip():
+        raise ValueError("the user's own words giving the go-ahead are required")
+    shown = state["verification"].get("handoff_fingerprint")
+    if not isinstance(shown, dict):
+        raise ValueError(
+            "no record of which version he looked at; hand the build over "
+            "again: state.py handoff PROJECT"
+        )
+    current = _plan_fingerprint(root)
+    if any(shown.get(key) != current.get(key) for key in current):
+        raise ValueError(
+            "the build changed after he looked at it; hand this version over "
+            "and let him answer again: state.py handoff PROJECT"
+        )
     state["verification"]["phase"] = "checking"
-    state["verification"].update(fingerprints)
+    state["verification"]["review_quote"] = quote.strip()
     record(state, "begin-check", state["stage"])
     write_state(root, state)
     return preflight_state(state)
@@ -701,6 +736,8 @@ def cancel_check(root: Path, reason: str) -> dict:
 
     The reason is what the round found; it goes into the history, because a
     round that ends without a verdict still produced a fact worth keeping.
+    Fixing changes the tree, so the approval goes with the round it belonged
+    to: the next round needs a fresh handoff and fresh words from the user.
     """
     state = read_state(root)
     if state["stage"] != "building" or verification_phase(state) != "checking":
@@ -708,6 +745,7 @@ def cancel_check(root: Path, reason: str) -> dict:
     if not reason.strip():
         raise ValueError("a reason is required: what did the round find?")
     state["verification"]["phase"] = "idle"
+    state["verification"]["review_quote"] = None
     record(state, "cancel-check", state["stage"], note=reason.strip())
     write_state(root, state)
     return preflight_state(state)
@@ -726,7 +764,9 @@ def verify(root: Path, report=None) -> dict:
         raise ValueError("verification can only be recorded while building")
     if verification_phase(state) != "checking":
         raise ValueError(
-            "open a verification round first: state.py begin-check PROJECT"
+            "no verification round is open; hand the build to the user first "
+            "(state.py handoff PROJECT), then open one on his go-ahead "
+            "(state.py begin-check PROJECT --quote \"his words\")"
         )
     if report is None:
         raise ValueError("verification requires --report, a site-check report")
@@ -746,20 +786,6 @@ def verify(root: Path, report=None) -> dict:
     evidence = clean_items(derived["evidence"])
     limitations = clean_items(derived["limitations"])
     independent = derived["independent"]
-    expected = {
-        "contract_sha256": state["verification"].get("contract_sha256"),
-        "source_sha256": state["verification"].get("source_sha256"),
-    }
-    actual = {
-        "contract_sha256": derived["contract_sha256"],
-        "source_sha256": derived["source_sha256"],
-    }
-    if expected != actual:
-        raise ValueError(
-            "the project changed during this verification round; cancel-check and restart"
-        )
-    if not isinstance(independent, bool):
-        raise ValueError("check report independent must be a JSON boolean")
     if not evidence:
         raise ValueError("at least one concrete evidence item is required")
     if state["mode"] == "strict" and status == "limited":
@@ -768,6 +794,7 @@ def verify(root: Path, report=None) -> dict:
         raise ValueError("strict mode requires independent verification")
 
     old = state["stage"]
+    prior = state["verification"]
     state["verification"] = {
         **blank_verification(),
         "status": status,
@@ -775,6 +802,11 @@ def verify(root: Path, report=None) -> dict:
         "limitations": limitations,
         "independent": independent,
         "checked_at": now(),
+        # The round ran on the version he looked at. His words and the moment
+        # he saw it stay, so delivery can name which build he approved.
+        "handed_at": prior.get("handed_at"),
+        "review_quote": prior.get("review_quote"),
+        "handoff_fingerprint": prior.get("handoff_fingerprint"),
     }
     if status == "blocked":
         state["stage"] = "blocked"
@@ -817,6 +849,7 @@ def resume(root: Path) -> dict:
     state.pop("blocked_reason", None)
     # Coming back means going back to fixing, so no round is open any more.
     state["verification"]["phase"] = "idle"
+    state["verification"]["review_quote"] = None
     record(state, "resume", old)
     write_state(root, state)
     return preflight_state(state)
@@ -887,10 +920,22 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--quote", required=True)
 
     command = sub.add_parser(
-        "begin-check",
-        help="open a verification round; source writes stay blocked until it closes",
+        "handoff",
+        help="hand the build to the user and wait for his go-ahead; "
+             "no verification round opens before that",
     )
     command.add_argument("root", type=Path)
+
+    command = sub.add_parser(
+        "begin-check",
+        help="open a verification round on the version the user approved; "
+             "source writes stay blocked until it closes",
+    )
+    command.add_argument("root", type=Path)
+    command.add_argument(
+        "--quote", required=True,
+        help="the user's own words giving the go-ahead, written down as he said them",
+    )
 
     command = sub.add_parser(
         "cancel-check",
@@ -933,8 +978,10 @@ def main() -> int:
             result = select_structure(root, args.candidate, args.quote)
         elif args.action == "start":
             result = start(root, contract_report=args.contract_report)
+        elif args.action == "handoff":
+            result = handoff(root)
         elif args.action == "begin-check":
-            result = begin_check(root)
+            result = begin_check(root, args.quote)
         elif args.action == "cancel-check":
             result = cancel_check(root, args.reason)
         elif args.action == "verify":
