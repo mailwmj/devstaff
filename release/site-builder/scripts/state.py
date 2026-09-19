@@ -787,7 +787,7 @@ def verify(root: Path, report=None) -> dict:
     ):
         raise ValueError(
             "the source or contract changed during verification; cancel-check, "
-            "handoff the current version and begin a new round"
+            "handoff the current version, begin a new round and write a fresh report"
         )
     verdict = _check_verdict(root, report)
     if not verdict.get("valid"):
