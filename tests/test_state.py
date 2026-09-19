@@ -17,6 +17,13 @@ check = importlib.util.module_from_spec(CHECK_SPEC)
 assert CHECK_SPEC.loader is not None
 CHECK_SPEC.loader.exec_module(check)
 
+CLI_SPEC = importlib.util.spec_from_file_location(
+    "site_cli_fixture", Path(__file__).with_name("test_cli.py")
+)
+cli_fixture = importlib.util.module_from_spec(CLI_SPEC)
+assert CLI_SPEC.loader is not None
+CLI_SPEC.loader.exec_module(cli_fixture)
+
 
 def _verify(root: Path, report=None):
     """Run the real two-step flow: open a round if none is open, then record.
@@ -69,13 +76,8 @@ def _valid_check_report(root: Path, *, overall="verified", independent=False,
 
 
 def _write_contract(root: Path) -> str:
-    """Write a minimal contract file under the project and return its SHA-256."""
-    contract = (
-        "# 页面设计合同\n\n"
-        "```site-contract\n"
-        '{"work_type": "new-surface", "structure_mode": "single"}\n'
-        "```\n"
-    )
+    """Write the valid prebuild fixture used by the CLI flow."""
+    contract = cli_fixture.VALID_CONTRACT
     path = root / ".site" / "design" / "surface-brief.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(contract, encoding="utf-8")
@@ -532,6 +534,16 @@ class ContractReportStartTests(unittest.TestCase):
             state.start(self.root, contract_report=report)
         self.assertIn("changed since", str(caught.exception))
 
+    def test_matching_sha_cannot_attest_invalid_contract(self):
+        path = self.root / ".site" / "design" / "surface-brief.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# bad\n```site-contract\n{not-json}\n```\n", encoding="utf-8")
+        report = _report_path(self.root, sha=hashlib.sha256(
+            path.read_bytes()).hexdigest())
+        with self.assertRaises(ValueError) as caught:
+            state.start(self.root, contract_report=report)
+        self.assertIn("invalid contract block", str(caught.exception))
+
     def test_unreadable_report_is_rejected(self):
         bad = self.root / ".site" / "bad.json"
         bad.write_text("{not json", encoding="utf-8")
@@ -643,6 +655,14 @@ class VerifyReportTests(unittest.TestCase):
         message = str(caught.exception)
         self.assertIn("fresh report", message)
         self.assertNotEqual(state.read_state(self.root)["stage"], "delivered")
+
+    def test_verification_round_rejects_changes_after_it_opens(self):
+        state.begin_check(self.root)
+        (self.root / "index.html").write_text("<html>changed</html>", encoding="utf-8")
+        report = _valid_check_report(self.root)
+        with self.assertRaises(ValueError) as caught:
+            self.verify(report)
+        self.assertIn("changed during this verification round", str(caught.exception))
 
     def test_verify_rejects_an_axis_that_says_nothing(self):
         plan = check.plan(self.root)

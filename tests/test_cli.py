@@ -161,6 +161,24 @@ class StateCliTests(unittest.TestCase):
             )
             self.assertEqual(delivered["next_action"], "report_delivery")
 
+    def test_plan_cli_keeps_default_output_small(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_contract_report(root)
+            def run_check(*args):
+                result = subprocess.run(
+                    [sys.executable, str(CHECK), *map(str, args)],
+                    check=False, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            summary = run_check("plan", root)
+            self.assertNotIn("source_manifest", summary)
+            full = run_check("plan", root, "--full-manifest")
+            self.assertIn("source_manifest", full)
+
     def test_verify_rejects_a_stale_report(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

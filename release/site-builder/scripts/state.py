@@ -137,6 +137,8 @@ def blank_verification() -> dict:
         "limitations": [],
         "independent": False,
         "checked_at": None,
+        "contract_sha256": None,
+        "source_sha256": None,
     }
 
 
@@ -432,6 +434,52 @@ def _contract_has_site_block(root: Path) -> bool:
     return CONTRACT_BLOCK_RE.search(path.read_text(encoding="utf-8")) is not None
 
 
+def _contract_is_readable(root: Path) -> bool:
+    """Require a parseable contract block before accepting a prebuild receipt."""
+    path = contract_path(root)
+    if not path.is_file():
+        return False
+    match = CONTRACT_BLOCK_RE.search(path.read_text(encoding="utf-8"))
+    if not match:
+        return False
+    try:
+        value = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return False
+    return isinstance(value, dict)
+
+
+def _design_script() -> Path | None:
+    candidate = (Path(__file__).resolve().parent.parent.parent
+                 / "site-design" / "scripts" / "design.py")
+    return candidate if candidate.is_file() else None
+
+
+def _authoritative_contract_report(root: Path) -> dict:
+    """Run the design checker; a caller-supplied report is never self-proof."""
+    script = _design_script()
+    if script is None:
+        raise ValueError(
+            "cannot validate the contract: site-design/scripts/design.py is not installed"
+        )
+    try:
+        proc = subprocess.run(
+            [sys.executable or "python3", str(script), "check-contract",
+             "--root", str(root), "--phase", "prebuild"],
+            capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot validate the contract: {exc}") from exc
+    try:
+        result = json.loads(proc.stdout.decode("utf-8", "replace"))
+    except json.JSONDecodeError as exc:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(f"contract checker produced no verdict: {exc} {detail}".strip()) from exc
+    if not isinstance(result, dict):
+        raise ValueError("contract checker returned an invalid verdict")
+    return result
+
+
 _contract_has_v3_block = _contract_has_site_block
 
 
@@ -459,8 +507,20 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
         raise ValueError("contract report project_root does not match this project")
     if report.get("phase") != "prebuild":
         raise ValueError("contract report phase must be prebuild")
-    if not report.get("passed"):
+    if report.get("passed") is not True:
         raise ValueError("contract report did not pass; resolve blockers before start")
+    if not _contract_is_readable(root):
+        raise ValueError("contract file is missing or has an invalid contract block")
+    authoritative = _authoritative_contract_report(root)
+    if authoritative.get("passed") is not True:
+        blockers = authoritative.get("blockers") or []
+        details = ", ".join(
+            str(item.get("code", "unknown")) if isinstance(item, dict) else str(item)
+            for item in blockers
+        )
+        raise ValueError(
+            "contract checker did not pass" + (f": {details}" if details else "")
+        )
     current = _contract_sha256(root)
     if current is None:
         raise ValueError("contract file is missing; cannot validate report")
@@ -555,6 +615,31 @@ def _check_verdict(root: Path, report_path) -> dict:
     return verdict
 
 
+def _check_plan_fingerprints(root: Path) -> dict:
+    """Read the current plan fingerprints from the one protocol owner."""
+    script = _check_script()
+    if script is None:
+        raise ValueError("cannot fingerprint the project: site-check/scripts/check.py is not installed")
+    try:
+        proc = subprocess.run(
+            [sys.executable or "python3", str(script), "plan", str(root)],
+            capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot fingerprint the project: {exc}") from exc
+    if proc.returncode:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(f"cannot fingerprint the project: {detail or 'plan failed'}")
+    try:
+        plan = json.loads(proc.stdout.decode("utf-8", "replace"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"project plan was not JSON: {exc}") from exc
+    return {
+        "contract_sha256": plan.get("contract_sha256"),
+        "source_sha256": plan.get("source_sha256"),
+    }
+
+
 def _load_check_report(report_path, root: Path) -> dict:
     """Read a site-check report's summary fields.
 
@@ -585,7 +670,9 @@ def _load_check_report(report_path, root: Path) -> dict:
         "status": overall,
         "evidence": evidence,
         "limitations": limitations,
-        "independent": bool(report.get("independent", False)),
+        "independent": report.get("independent", False),
+        "contract_sha256": report.get("contract_sha256"),
+        "source_sha256": report.get("source_sha256"),
     }
 
 
@@ -601,7 +688,9 @@ def begin_check(root: Path) -> dict:
         raise ValueError("a verification round only opens while building")
     if verification_phase(state) == "checking":
         raise ValueError("a verification round is already open")
+    fingerprints = _check_plan_fingerprints(root)
     state["verification"]["phase"] = "checking"
+    state["verification"].update(fingerprints)
     record(state, "begin-check", state["stage"])
     write_state(root, state)
     return preflight_state(state)
@@ -657,6 +746,20 @@ def verify(root: Path, report=None) -> dict:
     evidence = clean_items(derived["evidence"])
     limitations = clean_items(derived["limitations"])
     independent = derived["independent"]
+    expected = {
+        "contract_sha256": state["verification"].get("contract_sha256"),
+        "source_sha256": state["verification"].get("source_sha256"),
+    }
+    actual = {
+        "contract_sha256": derived["contract_sha256"],
+        "source_sha256": derived["source_sha256"],
+    }
+    if expected != actual:
+        raise ValueError(
+            "the project changed during this verification round; cancel-check and restart"
+        )
+    if not isinstance(independent, bool):
+        raise ValueError("check report independent must be a JSON boolean")
     if not evidence:
         raise ValueError("at least one concrete evidence item is required")
     if state["mode"] == "strict" and status == "limited":

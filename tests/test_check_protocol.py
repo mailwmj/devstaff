@@ -158,137 +158,14 @@ class PlanTests(_ProjectBase):
         self.assertNotIn("src/data.json", result["source_excluded"])
         self.assertEqual(result["source_files"], len(result["source_manifest"]))
 
-    def test_runtime_state_does_not_invalidate_a_report(self):
-        # The failure this replaces: the shopkeeper sells one bottle, the
-        # database changes, and every axis is invalidated.
-        baseline = check.plan(self.root, ".site/design/surface-brief.md")
-        report = self._validate(self._guided_report())
-        self.assertTrue(report["valid"], report["errors"])
-        (self.root / "data").mkdir()
-        (self.root / "data" / "inventory.db").write_bytes(b"sold one bottle")
-        after = check.plan(self.root, ".site/design/surface-brief.md")
-        self.assertEqual(after["source_sha256"], baseline["source_sha256"])
-        self.assertTrue(self._validate(self._guided_report())["valid"])
-
-    def test_editing_a_check_script_is_a_source_change(self):
-        # Check scripts are evidence, not bookkeeping: changing one invalidates
-        # the report it produced, because the PASS came from the old script.
-        (self.root / "app").mkdir()
-        (self.root / "app" / "check.mjs").write_text("run()", encoding="utf-8")
-        prior = check.plan(self.root, ".site/design/surface-brief.md")
-        (self.root / "app" / "check.mjs").write_text("run(2)", encoding="utf-8")
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from=self._write_report(prior, "prior.json"))
-        self.assertEqual(result["changed_from"]["changed_files"]["modified"],
-                         ["app/check.mjs"])
-
-
-class GitRefTests(_ProjectBase):
-    """--changed-from also accepts a git revision; the project subtree is
-    re-fingerprinted at that revision and compared to the working tree."""
-
-    def _git(self, *args):
-        import subprocess
-        env = {"GIT_TERMINAL_PROMPT": "0",
-               "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-        subprocess.run(["git", "-C", str(self.root), *args],
-                        capture_output=True, env=env, timeout=30, check=True)
-
-    def setUp(self):
-        super().setUp()
-        # Commit the plan's contract + source so HEAD is a usable baseline.
-        self._git("init")
-        self._git("add", "-A")
-        self._git("-c", "commit.gpgsign=false", "commit", "-m", "baseline")
-        # Re-derive the plan against the now-committed working tree.
-        self.plan = check.plan(self.root, ".site/design/surface-brief.md")
-
-    def test_git_ref_no_change(self):
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="HEAD")
-        cf = result["changed_from"]
-        self.assertTrue(cf["available"])
-        self.assertEqual(cf["source"], "git")
-        self.assertTrue(cf["commit"])
-        self.assertFalse(cf["contract_changed"])
-        self.assertFalse(cf["source_changed"])
-        self.assertEqual(cf["changed_files"], {"added": [], "removed": [],
-                                               "modified": [], "truncated": False})
-
-    def test_git_ref_source_only_change(self):
-        (self.root / "index.html").write_text(
-            "<html><body>changed</body></html>", encoding="utf-8")
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="HEAD")
-        cf = result["changed_from"]
-        self.assertTrue(cf["source_changed"])
-        self.assertFalse(cf["contract_changed"])
-        self.assertEqual(cf["changed_files"]["modified"], ["index.html"])
-        self.assertEqual(result["source_sha256"],
-                         check.source_sha256(self.root))
-
-    def test_git_ref_lists_added_and_removed_files(self):
-        (self.root / "extra.css").write_text("body{}", encoding="utf-8")
-        (self.root / "index.html").unlink()
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="HEAD")
-        cf = result["changed_from"]["changed_files"]
-        self.assertEqual(cf["added"], ["extra.css"])
-        self.assertEqual(cf["removed"], ["index.html"])
-        self.assertEqual(cf["modified"], [])
-
-    def test_git_ref_contract_change(self):
-        path = self.root / ".site" / "design" / "surface-brief.md"
-        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="HEAD")
-        cf = result["changed_from"]
-        self.assertTrue(cf["contract_changed"])
-        # The contract lives under .site (ignored by the source scan), so a
-        # contract-only edit must not also trip the source gate.
-        self.assertFalse(cf["source_changed"])
-        self.assertEqual(cf["changed_files"]["modified"], [])
-
-    def test_git_ref_contract_added_since_ref(self):
-        # Baseline ref predates the contract: the contract is absent at ref but
-        # present now, which must conservatively count as a contract change
-        # (never silently drop L0).
-        contract = self.root / ".site" / "design" / "surface-brief.md"
-        contents = contract.read_text(encoding="utf-8")
-        contract.unlink()
-        self._git("add", "-A")
-        self._git("-c", "commit.gpgsign=false", "commit", "-m", "no-contract")
-        contract.write_text(contents, encoding="utf-8")
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="HEAD")
-        cf = result["changed_from"]
-        self.assertTrue(cf["available"])
-        self.assertTrue(cf["contract_changed"])
-
-    def test_git_ref_invalid_revision_is_honest(self):
-        result = check.plan(self.root, ".site/design/surface-brief.md",
-                            changed_from="not-a-real-ref-xyz")
-        cf = result["changed_from"]
-        self.assertFalse(cf["available"])
-        self.assertTrue(cf["error"])
-        self.assertIsNone(cf["changed_files"])
-
-
-class ValidateReportTests(_ProjectBase):
-    def test_valid_guided_verified_report(self):
-        result = self._validate(self._guided_report())
-        self.assertTrue(result["valid"], result["errors"])
-        self.assertEqual(result["overall"], "verified")
-        self.assertTrue(result["hash"]["contract_valid"])
-        self.assertTrue(result["hash"]["source_valid"])
-
-    def test_verified_axis_needs_to_say_what_it_looked_at(self):
-        report = self._guided_report()
-        report["axes"]["visual_desktop"] = {"status": "verified"}
-        result = self._validate(report)
-        self.assertFalse(result["valid"])
-        self.assertTrue(any("what was observed" in e for e in result["errors"]))
+    def test_nested_database_is_product_source(self):
+        (self.root / "src").mkdir()
+        path = self.root / "src" / "catalog.sqlite"
+        path.write_bytes(b"v1")
+        before = check.plan(self.root)["source_sha256"]
+        path.write_bytes(b"v2")
+        after = check.plan(self.root)["source_sha256"]
+        self.assertNotEqual(before, after)
 
     def test_runtime_state_does_not_invalidate_a_report(self):
         # The failure this replaces: the shopkeeper sells one bottle, the
@@ -512,9 +389,36 @@ class ValidateReportTests(_ProjectBase):
         self.assertFalse(result["valid"])
         self.assertTrue(result["errors"])
 
+    def test_missing_contract_is_invalid(self):
+        contract = self.root / ".site" / "design" / "surface-brief.md"
+        contract.unlink()
+        result = self._validate(self._guided_report())
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("current project cannot be verified" in e for e in result["errors"]))
+
+    def test_report_mode_must_match_project_mode(self):
+        (self.root / ".site" / "state.json").write_text(
+            json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
+            encoding="utf-8",
+        )
+        report = self._guided_report(mode="guided")
+        result = self._validate(report)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("does not match project mode strict" in e for e in result["errors"]))
+
+    def test_independent_must_be_boolean(self):
+        report = self._guided_report(independent="false")
+        result = self._validate(report)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("independent must be a JSON boolean" in e for e in result["errors"]))
+
 
 class StrictModeTests(_ProjectBase):
     def _strict_report(self, **overrides):
+        (self.root / ".site" / "state.json").write_text(
+            json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
+            encoding="utf-8",
+        )
         report = self._guided_report()
         report["mode"] = "strict"
         report["independent"] = True

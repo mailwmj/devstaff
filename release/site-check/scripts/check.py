@@ -102,7 +102,7 @@ SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__',
 # while the store's ``data/inventory.db`` does not: the product writing its own
 # data must not invalidate a report about the product's code.
 SOURCE_IGNORE_ROOT = {'data', 'uploads', 'dist', 'build', '.cache', '.next', 'coverage'}
-# Files that change while the product is being used, wherever they sit.
+# Root-level files that commonly change while the product is being used.
 SOURCE_IGNORE_SUFFIXES = ('.db', '.db-wal', '.db-shm', '.db-journal',
                           '.sqlite', '.sqlite3', '.log')
 # plan reports the excluded paths so a wrong exclusion is visible, not silent.
@@ -237,14 +237,14 @@ def _source_rule(rel_parts: tuple[str, ...]) -> str | None:
     """Which ignore rule excludes a project-relative path, if any.
 
     Three rules, narrowest first: bookkeeping directories at any depth, runtime
-    or build directories at the project root only, and state-file suffixes
-    anywhere.
+    or build directories at the project root only, and state-file suffixes on
+    root-level files.
     """
     if any(part in SOURCE_IGNORE for part in rel_parts):
         return 'tooling'
     if rel_parts and rel_parts[0] in SOURCE_IGNORE_ROOT:
         return 'runtime_or_build'
-    if rel_parts and rel_parts[-1].endswith(SOURCE_IGNORE_SUFFIXES):
+    if len(rel_parts) == 1 and rel_parts[-1].endswith(SOURCE_IGNORE_SUFFIXES):
         return 'state_file'
     return None
 
@@ -648,15 +648,18 @@ def validate_report(root, report_path) -> dict:
     errors: list[str] = []
     if Path(str(report.get('project_root', ''))).resolve() != root:
         errors.append('project_root does not match')
+    project_mode = read_mode(root)
     mode = report.get('mode')
     if mode not in ('guided', 'strict'):
         errors.append('mode must be guided or strict')
+    elif mode != project_mode:
+        errors.append(f'report mode {mode} does not match project mode {project_mode}')
     overall = report.get('overall')
     if overall not in DELIVERABLE_STATUSES:
         errors.append('overall must be verified, limited or blocked')
 
-    # Current fingerprints; if the contract is unreadable the hash check is
-    # skipped (it cannot prove or disprove the report on its own).
+    # Current fingerprints are prerequisites, not optional context. A report
+    # cannot be valid when the object it claims to verify is unreadable.
     required: list[str] = []
     contract_ok = source_ok = None
     excluded: list[str] = []
@@ -668,8 +671,9 @@ def validate_report(root, report_path) -> dict:
         source_ok = report.get('source_sha256') == cur_source
         if mode in ('guided', 'strict'):
             required = required_axes(mode, vas)
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as exc:
+        errors.append(f'current project cannot be verified: {exc}')
+        contract_ok = source_ok = False
 
     axes = report.get('axes')
     if not isinstance(axes, dict):
@@ -728,7 +732,12 @@ def validate_report(root, report_path) -> dict:
             for vid in result.get('failed_vas', []) or []:
                 reverify_vas.append({'axis': axis, 'va': vid})
 
-    independent = bool(report.get('independent', False))
+    independent_value = report.get('independent', False)
+    if not isinstance(independent_value, bool):
+        errors.append('independent must be a JSON boolean')
+        independent = False
+    else:
+        independent = independent_value
     evidence = report.get('evidence', [])
     limitations = report.get('limitations', [])
     if not isinstance(evidence, list):
@@ -790,6 +799,8 @@ def build_parser() -> argparse.ArgumentParser:
                              '(branch/tag/commit) to diff fingerprints against; '
                              'an REF that is neither is reported and conservatively '
                              'upgrades to guided-core')
+    plan_p.add_argument('--full-manifest', action='store_true',
+                        help='include the per-file source manifest in CLI output')
 
     val_p = sub.add_parser('validate-report', help='validate a check report against the protocol')
     val_p.add_argument('root', type=Path, help='project root')
@@ -802,6 +813,8 @@ def main() -> int:
     try:
         if args.command == 'plan':
             result = plan(args.root, args.contract, args.changed_from)
+            if not args.full_manifest:
+                result.pop('source_manifest', None)
         else:
             result = validate_report(args.root, args.report)
     except (OSError, ValueError, json.JSONDecodeError) as exc:

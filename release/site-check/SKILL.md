@@ -9,7 +9,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 ## 协议
 
-`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴和门禁顺序，并输出 `source_files / source_excluded / source_manifest`——哪些文件算产品、哪些被排除，都摆出来。产品源码之外的运行期状态（根目录下的 `data/`、`uploads/`、构建产物、`*.db`、`*.sqlite`、`*.log`）不进指纹：店主卖出第一瓶水不该作废一份关于代码的报告。检查脚本仍算源码，改了它，它产出过的 PASS 就不再作数。
+`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴和门禁顺序。默认输出摘要；需要逐文件核对时加 `--full-manifest`，查看 `source_files / source_excluded / source_manifest`。产品源码之外的运行期状态（根目录下的 `data/`、`uploads/`、构建产物、`*.db`、`*.sqlite`、`*.log`）不进指纹。检查脚本仍算源码，改了它，它产出过的 PASS 就不再作数。
 
 `source_excluded` 是给你核对的：如果里面出现了真正属于产品的东西（比如一个随产品发布的只读 `.db`），那说明排除规则猜错了，把它当成限制如实写进报告，不要当作已覆盖。
 
@@ -27,7 +27,6 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
   "independent": false,
   "contract_sha256": "plan 的 contract_sha256",
   "source_sha256": "plan 的 source_sha256",
-  "source_manifest": "plan 的 source_manifest，原样带上",
   "axes": {
     "core_task": {"status": "verified", "observed": "登记 → 刷新 → 数量正确，5 条记录"}
   },
@@ -36,7 +35,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 }
 ```
 
-`axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。`source_manifest` 原样抄 `plan` 的输出：带上它，下一轮 `--changed-from` 这份报告就能直接列出改过哪些文件；不带也能校验，只是只能告诉你"变了"。代价是体积，每个文件约 100 字节，一万个文件约 1MB——现在无所谓，文件数上到几千再说。
+`axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。报告不需要携带 `source_manifest`；只带两个聚合指纹即可。需要逐文件差异时，用 `--full-manifest` 生成的计划或直接使用 git revision 作为 `--changed-from`。
 
 六个层级、八条轴：
 
@@ -57,7 +56,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 - **视觉复验范围**：视觉轴没过只复验受影响的页面、状态和视口（报告里记 `failed_vas`），不重跑全部视口。
 - **哈希失效**：合同或源码的 SHA-256 对不上，整份报告不成立（合同在 `.site` 下单独指纹，改源码不影响 L0）。指纹管的是"这份报告还算不算数"，不是"哪几条轴要重跑"：对不上之后，重验范围由 `changed_files` 加你的判断决定，别拿后缀当映射。
 - **轴依赖**：一条轴没过，依赖它的轴要复验（L0→全部，L1→L2-L5，L2→L3-L5，L3/L4→L5）。
-- **说清查了什么**：报 `verified` 的轴必须写 `observed`。这个字段是给下一个读报告的人看的，不是机器在核对你说没说真话——没有字段能承担那件事。写的时候带上数字（"扫了 24 个文字节点"比"对比度检查通过"有用得多），因为空样本是这套流程里唯一能静默通过的错误：选择器一个都没命中时被测对象是 0 个，`every()` 对空列表恒真，你手上那 80 条断言会全部通过并报出 PASS。**这件事只有探针自己能拦**：扫到 0 个对象必须判失败，不能报 PASS。写探针时就把这条写进去，别指望报告能替你发现它。
+- **说清查了什么**：报 `verified` 的轴必须写 `observed`。探针没有命中对象时必须失败，不能让空样本通过。
 - **排除项**：指纹只覆盖产品源码，`plan` 的 `source_excluded` 列出被排掉的路径。随产品发布的只读库（种子库、字典）和运行期状态在指纹里长得一样，机器分不出来，所以这份清单要人读一遍：排掉的确实是运行期状态就继续，是产品的一部分就把规则改掉。
 - **模式**：`guided` 可以如实返回 `limited`；`strict` 不能 `limited`，而且 `verified` 必须带 `independent`。`independent` 只有在宿主用独立 Checker 上下文真的查过之后才算数；做不到就返回 `blocked`，不要自己打标。
 

@@ -83,7 +83,7 @@ release/          唯一分发根。整个目录可独立打包安装，不依�
 └── site-brief/ site-builder/ site-check/ site-design/
 tests/            开发用测试
 .github/          开发用 CI
-README.md  AGENT-GUIDE.md  REVIEW-MANIFEST.md   开发用文档
+README.md  AGENT-GUIDE.md   开发用文档
 ```
 
 只分发 `release/`。校验、安装与测试命令都从仓库根目录执行，路径以 `release/` 开头。
@@ -126,7 +126,7 @@ python3 release/site-builder/scripts/state.py verify PROJECT --report .site/chec
 
 `verify` 只收检查报告，不收手写的 `--status`：状态由报告里的轴算出来，报告先过 `check.py validate-report` 这一关，指纹对不上当前源码、或某条轴没写清自己查了什么，都不算数。没重跑的轴在报告里如实记 `limited` 并写明是哪条，strict 的 `limited` 不能交付。局部修改不初始化 `.site`。
 
-新建与整体改版默认采用“骨架双选 ➔ 视觉双选（轻量且可继承）”递进确认：先用 `discover --structure choice` 登记 2 种信息架构候选，并复制 `site-design/assets/design/preview-shell.html` 写成单文件骨架预览（色板与深色切换条用现成的，正文按项目自己搭，两版只在结构上不同，优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录；随后提供 2 种视觉风格单页体验稿（同一骨架、同一顶栏，轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
+新建与整体改版先判断是否存在真实的信息拓扑分歧：没有分歧时用 `discover --structure single`，跳过结构选择进入方向准备；有分歧时才用 `choice` 登记 2 种候选并复制 `site-design/assets/design/preview-shell.html` 写成单文件骨架预览（色板与深色切换条用现成的，正文按项目自己搭，两版只在结构上不同，优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录。之后提供 2 种视觉风格单页体验稿（同一骨架、同一顶栏，轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
 
 ```text
 python3 release/site-builder/scripts/state.py discover PROJECT \
