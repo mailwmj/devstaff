@@ -210,7 +210,7 @@ class ReportPolicyTests(ProjectFixture):
         self.assertEqual(check.read_mode(self.root), 'strict')
 
     def test_unknown_schema_revision_is_rejected_by_both_tools(self):
-        for revision in (0, 3, 99, '2', True, None):
+        for revision in (0, 4, 99, '2', True, None):
             with self.subTest(revision=revision):
                 path = self.root / '.site/state.json'
                 payload = json.loads(path.read_text())

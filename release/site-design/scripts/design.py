@@ -1325,15 +1325,27 @@ def _is_exempt(rel_posix, exemptions):
 
 
 def _iter_ui_files(root):
-    def fail(exc): raise ValueError('UI source unreadable: ' + str(exc)) from exc
+    """Prune ignored directories without classifying by absolute parent names."""
+    root = Path(root)
+    def fail(exc):
+        raise ValueError('UI source unreadable: ' + str(exc)) from exc
+    ignored = LINT_IGNORE_DIRS | LINT_FIXTURE_DIR_PARTS
     for directory, dirs, files in os.walk(root, followlinks=False, onerror=fail):
-        dirs[:] = sorted(name for name in dirs if name not in LINT_IGNORE_DIRS and name not in LINT_FIXTURE_DIR_PARTS)
+        dirs[:] = sorted(name for name in dirs if name not in ignored)
         for name in dirs:
-            if (Path(directory) / name).is_symlink(): raise ValueError('UI source symlink is unsupported')
+            if (Path(directory) / name).is_symlink():
+                raise ValueError('UI source symlink is unsupported')
         for name in sorted(files):
             path = Path(directory) / name
-            if LINT_FIXTURE_NAME_RE.search(name) or path.suffix.lower() not in LINT_UI_EXTENSIONS: continue
-            if path.is_symlink(): raise ValueError('UI source symlink is unsupported')
+            relative = path.relative_to(root)
+            if any(part in ignored for part in relative.parts[:-1]):
+                continue
+            if LINT_FIXTURE_NAME_RE.search(path.name):
+                continue
+            if path.suffix.lower() not in LINT_UI_EXTENSIONS:
+                continue
+            if path.is_symlink():
+                raise ValueError('UI source symlink is unsupported')
             yield path
 
 
