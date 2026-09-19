@@ -1,0 +1,43 @@
+name: Roadmap integration
+on:
+  push:
+    branches: ['agent/devstaff-complete-20260919']
+    paths: ['.agent-upgrade.json']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.ref == 'refs/heads/agent/devstaff-complete-20260919'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/devstaff-complete-20260919
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply reviewed source transformation
+        run: |
+          set -euo pipefail
+          STAGING="$(mktemp -d)"
+          python3 -m zipfile -e .agent-upgrade.zip "$STAGING"
+          python3 "$STAGING/upgrade/apply.py" "$GITHUB_WORKSPACE" "$STAGING/staging"
+          rm .agent-upgrade.zip .agent-upgrade.json .github/workflows/agent-upgrade.yml
+          git config user.name 'devstaff implementation agent'
+          git config user.email 'devstaff-agent@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: complete the staged runtime, workflow and delivery implementation'
+          git push origin HEAD:refs/heads/agent/devstaff-complete-20260919
+          git rev-parse HEAD
+      - name: Run full integration validation
+        run: python3 tools/verify_all.py --browser
+      - name: Upload validation and complete bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devstaff-complete-validation
+          path: |
+            .verification/
+            dist/skill.zip
+          if-no-files-found: warn
