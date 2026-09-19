@@ -49,6 +49,10 @@ import sys
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "site-builder" / "scripts"))
+from site_runtime import contract as runtime_contract
+from site_runtime.common import JsonParser as RuntimeParser, metadata_dir as runtime_metadata_dir, atomic_json as runtime_atomic_json, error_result as runtime_error_result
+from site_runtime.source import scan as runtime_scan, archive_manifest as runtime_archive_manifest
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -131,24 +135,11 @@ def _sha256_bytes(data: bytes) -> str:
 
 
 def contract_path(root) -> Path:
-    for rel in (CONTRACT_REL_PATH, '.SITE/design/surface-brief.md', '.v3/design/surface-brief.md'):
-        candidate = Path(root) / rel
-        if candidate.is_file():
-            return candidate
-    return Path(root) / CONTRACT_REL_PATH
+    return runtime_contract.path(root)
 
 
 def _parse_contract_block(text: str) -> dict:
-    match = CONTRACT_BLOCK_RE.search(text)
-    if not match:
-        raise ValueError('contract block is missing')
-    try:
-        data = json.loads(match.group(1))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f'contract block is not valid JSON: {exc}') from exc
-    if not isinstance(data, dict):
-        raise ValueError('contract block must be a JSON object')
-    return data
+    return runtime_contract.parse(text)
 
 
 def _strip_contract_block(text: str) -> str:
@@ -232,17 +223,7 @@ def _acceptance_vas(body: str, exempt: set[str]) -> list[dict]:
 
 
 def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
-    """Return (contract_sha256, parsed_block, acceptance_vas) for a contract file."""
-    if not path.is_file():
-        raise ValueError(f'contract not found: {path}')
-    text = path.read_text(encoding='utf-8')
-    sha = _sha256_bytes(text.encode('utf-8'))
-    data = _parse_contract_block(text)
-    lists = _contract_lists(data)
-    body = _strip_contract_block(text)
-    exempt = set(lists['intentional_exceptions'])
-    vas = _acceptance_vas(body, exempt)
-    return sha, data, vas
+    return runtime_contract.read(path)
 
 
 def _own_toolchain_root(root: Path) -> str | None:
@@ -312,29 +293,7 @@ def _source_rule(rel_parts: tuple[str, ...], toolchain: tuple[str, ...] = ()) ->
 
 
 def source_manifest(root) -> tuple[dict[str, str], list[str]]:
-    """Fingerprint input for the working tree.
-
-    Returns ``(rel_path -> sha256 hex of content, notable exclusions)``. Only
-    paths excluded by a judgment about the project's shape are listed as
-    exclusions: tooling directories are structural and would bury the signal,
-    while a rule that swallowed product source is indistinguishable from a
-    correct one unless it is reported.
-    """
-    root = Path(root)
-    manifest: dict[str, str] = {}
-    excluded: list[str] = []
-    toolchain = toolchain_dirs(root)
-    for path in sorted(root.rglob('*')):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root)
-        rule = _source_rule(rel.parts, toolchain)
-        if rule is not None:
-            if rule != 'tooling':
-                excluded.append(rel.as_posix())
-            continue
-        manifest[rel.as_posix()] = _sha256_bytes(path.read_bytes())
-    return manifest, excluded
+    return runtime_scan(Path(root), _source_rule, toolchain_dirs(root))
 
 
 def _manifest_sha256(manifest: dict[str, str]) -> str:
@@ -383,39 +342,16 @@ def _file_diff(prior: dict[str, str], current: dict[str, str]) -> dict:
 
 
 def read_mode(root) -> str:
-    """Read the project policy. Only absence, never corruption, defaults to guided.
-
-    Keep the legacy mode-only fixture format readable. Known version fields,
-    when supplied, must have their exact types and supported values. Multiple
-    state files are ambiguous and cannot be used to downgrade a project.
-    """
-    root = Path(root)
-    candidates = []
-    if root.is_dir():
-        for directory in sorted(root.iterdir()):
-            if directory.is_dir() and directory.name.lower() in ('.site', '.v3'):
-                path = directory / 'state.json'
-                if path.exists() or path.is_symlink():
-                    candidates.append(path)
-    if not candidates:
-        return 'guided'
-    if len(candidates) != 1:
-        raise ValueError('ambiguous project state: multiple state.json files')
-    try:
-        state = json.loads(candidates[0].read_text(encoding='utf-8'))
-    except (OSError, ValueError) as exc:
-        raise ValueError(f'project state is unreadable: {exc}') from exc
-    if not isinstance(state, dict):
-        raise ValueError('project state must be a JSON object')
-    mode = state.get('mode')
-    if mode not in ('guided', 'strict'):
-        raise ValueError('project state mode must be guided or strict')
-    if 'version' in state and (type(state['version']) is not int or state['version'] != 3):
-        raise ValueError('unsupported project state version')
-    if 'schema_revision' in state and (
-            type(state['schema_revision']) is not int or state['schema_revision'] not in (1, 2)):
-        raise ValueError('unsupported project state schema_revision')
-    return mode
+    path = runtime_metadata_dir(root) / 'state.json'
+    if not path.exists(): return 'guided'
+    if path.is_symlink(): raise ValueError('state cannot be a symlink')
+    state = json.loads(path.read_bytes())
+    if not isinstance(state, dict) or type(state.get('version')) is not int or state['version'] != 3:
+        raise ValueError('invalid state version')
+    if state.get('mode') not in ('guided', 'strict'): raise ValueError('invalid project mode')
+    revision = state.get('schema_revision', 1)
+    if type(revision) is not int or revision not in (1, 2, 3): raise ValueError('unsupported state schema_revision')
+    return state['mode']
 
 
 def required_axes(mode: str, vas: list[dict]) -> list[str]:
@@ -467,39 +403,13 @@ def _git_repo_paths(root: Path):
 
 
 def _git_source_manifest(root: Path, ref: str, prefix: str):
-    """Source manifest at ``ref``, mirroring :func:`source_manifest`.
-
-    Materializes the tracked tree under the project subtree at ``ref`` via a
-    single in-memory ``git archive`` (no disk extraction, no browser), applies
-    the same ignore rules, and returns ``rel_path -> sha256 hex``. Returns
-    ``None`` when the tree at ``ref`` is unreadable.
-    """
     pathspec = ['--', prefix] if prefix else []
     rc, out, _ = _git(root, 'archive', '--format=tar', ref, *pathspec)
-    if rc != 0 or not out:
-        return None  # unreadable tree at ref → caller treats ref as unresolvable
-    manifest: dict[str, str] = {}
+    if rc != 0 or not out: return None
     try:
-        tar = tarfile.open(fileobj=io.BytesIO(out), mode='r:')
-    except tarfile.TarError:
+        return runtime_archive_manifest(out, prefix, _source_rule, _own_toolchain_root(root))
+    except (ValueError, tarfile.TarError, OSError):
         return None
-    with tar:
-        for member in tar.getmembers():
-            if not member.isfile():
-                continue
-            name = member.name
-            if prefix and name.startswith(prefix):
-                name = name[len(prefix):]
-            name = name.lstrip('/')
-            if not name:
-                continue
-            if _source_rule(tuple(Path(name).parts), toolchain_dirs(root)) is not None:
-                continue
-            extracted = tar.extractfile(member)
-            if extracted is None:
-                continue
-            manifest[name] = _sha256_bytes(extracted.read())
-    return manifest
 
 
 def _git_source_sha256(root: Path, ref: str, prefix: str):
@@ -672,7 +582,11 @@ def plan(root, contract_rel: str | None = None, changed_from: str | None = None)
                     'that carries source_manifest'
                 )
 
+    state_file = runtime_metadata_dir(root) / "state.json"
+    state_data = json.loads(state_file.read_bytes()) if state_file.exists() else {}
     return {
+        "round_id": (state_data.get("verification") or {}).get("round_id"),
+        "delivery": state_data.get("delivery", {"scope": "preview", "risks": []}),
         'project_root': str(root),
         'mode': mode,
         'contract_path': contract_rel,
@@ -708,25 +622,62 @@ def _axis_status(axes: dict, axis: str) -> str | None:
 
 
 def validate_report(root, report_path) -> dict:
-    """Check a report against the protocol for the tree as it is right now.
-
-    Fingerprints are an identity check, not a re-run schedule: a report whose
-    ``contract_sha256``/``source_sha256`` differ from the current tree is not
-    valid and cannot be re-scoped into validity. The answer is a fresh report
-    for the current tree, with any axis that was not re-run reported honestly
-    as ``limited``. A report that still reuses an earlier tree's fingerprints
-    is the failure this gate exists to catch.
-    """
     root = Path(root).resolve()
     try:
-        report = json.loads(Path(report_path).read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError) as exc:
-        return {'project_root': str(root), 'valid': False,
-                'errors': [f'report unreadable: {exc}']}
-    if not isinstance(report, dict):
-        return {'project_root': str(root), 'valid': False,
-                'errors': ['report must be a JSON object']}
+        payload = json.loads(Path(report_path).read_bytes())
+    except (OSError, ValueError) as exc:
+        return {'project_root': str(root), 'valid': False, 'errors': ['report unreadable: ' + str(exc)]}
+    if not isinstance(payload, dict):
+        return {'project_root': str(root), 'valid': False, 'errors': ['report must be a JSON object']}
+    return validate_report_data(root, payload)
 
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = RuntimeParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('plan')
+    p.add_argument('root', type=Path)
+    p.add_argument('--contract', default=None)
+    p.add_argument('--changed-from')
+    p.add_argument('--compact', action='store_true')
+    p.add_argument('--manifest-out', type=Path)
+    p = sub.add_parser('validate-report')
+    p.add_argument('root', type=Path)
+    p.add_argument('report', type=Path)
+    return parser
+
+
+def main() -> int:
+    try:
+        args = build_parser().parse_args()
+        if args.command == 'plan':
+            result = plan(args.root, args.contract, args.changed_from)
+            if args.compact or args.manifest_out:
+                target = args.manifest_out or runtime_metadata_dir(args.root) / 'check' / 'source-manifest.json'
+                target = target.resolve()
+                if target.is_relative_to(args.root.resolve()) and not target.is_relative_to(runtime_metadata_dir(args.root)):
+                    raise ValueError('manifest output must be outside product source')
+                runtime_atomic_json(target, {'source_sha256': result['source_sha256'], 'source_manifest': result['source_manifest']})
+                result['source_manifest_artifact'] = str(target)
+                if args.compact: result.pop('source_manifest')
+            code = 0
+        else:
+            result = validate_report(args.root, args.report)
+            code = 0 if result.get('valid') else 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return code
+    except (OSError, ValueError, TypeError) as exc:
+        print(json.dumps(runtime_error_result(exc), ensure_ascii=False))
+        return 2
+
+
+
+
+def validate_report_data(root, report):
+    """Validate a single already-read immutable report snapshot."""
+    root = Path(root).resolve()
+    if not isinstance(report, dict):
+        return {"valid": False, "errors": ["report must be a JSON object"]}
     errors: list[str] = []
     if Path(str(report.get('project_root', ''))).resolve() != root:
         errors.append('project_root does not match')
@@ -759,7 +710,7 @@ def validate_report(root, report_path) -> dict:
     else:
         try:
             manifest, excluded = source_manifest(root)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f'source tree is unreadable: {exc}')
         else:
             cur_source = _manifest_sha256(manifest)
@@ -867,6 +818,17 @@ def validate_report(root, report_path) -> dict:
         if computed != overall:
             errors.append(f'overall {overall} does not match axis results ({computed})')
 
+    if report.get('standalone') is True:
+        errors.append('standalone starter observations are not a deliverable product report')
+    try:
+        state_file = runtime_metadata_dir(root) / 'state.json'
+        current_state = json.loads(state_file.read_bytes()) if state_file.exists() else {}
+        if current_state.get('schema_revision', 1) >= 3:
+            round_id = (current_state.get('verification') or {}).get('round_id')
+            if round_id and report.get('round_id') != round_id:
+                errors.append('report round_id does not match the open round')
+    except (OSError, ValueError) as exc:
+        errors.append(str(exc))
     valid = not errors and not invalidated
     return {
         'project_root': str(root),
@@ -881,40 +843,6 @@ def validate_report(root, report_path) -> dict:
         'browser_blocked': browser_blocked,
         'errors': errors,
     }
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest='command', required=True)
-
-    plan_p = sub.add_parser('plan', help='generate a verification plan from the project contract')
-    plan_p.add_argument('root', type=Path, help='project root')
-    plan_p.add_argument('--contract', default=CONTRACT_REL_PATH,
-                        help='contract path relative to the project root')
-    plan_p.add_argument('--changed-from', default=None,
-                        help='a prior plan/report JSON path OR a git revision '
-                             '(branch/tag/commit) to diff fingerprints against; '
-                             'an REF that is neither is reported and conservatively '
-                             'upgrades to guided-core')
-
-    val_p = sub.add_parser('validate-report', help='validate a check report against the protocol')
-    val_p.add_argument('root', type=Path, help='project root')
-    val_p.add_argument('report', type=Path, help='check report JSON to validate')
-    return parser
-
-
-def main() -> int:
-    args = build_parser().parse_args()
-    try:
-        if args.command == 'plan':
-            result = plan(args.root, args.contract, args.changed_from)
-        else:
-            result = validate_report(args.root, args.report)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        print(json.dumps({'error': str(exc)}, ensure_ascii=False))
-        return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
 
 
 if __name__ == '__main__':

@@ -158,23 +158,17 @@ class ReviewGateTest(unittest.TestCase):
 
     def test_delivery_keeps_the_words_he_said(self):
         state.handoff(self.root)
-        state.begin_check(self.root, "看着没问题，测吧")
-        original_verdict = state._check_verdict
-        original_report = state._load_check_report
-        state._check_verdict = lambda root, report: {"valid": True}
-        state._load_check_report = lambda report, root: {
-            "status": "verified",
-            "evidence": ["核心任务走通，1 条记录"],
-            "limitations": [],
-            "independent": True,
-        }
-        try:
-            result = state.verify(self.root, report="report.json")
-        finally:
-            state._check_verdict = original_verdict
-            state._load_check_report = original_report
+        state.begin_check(self.root, "yes, test this version")
+        fingerprint = state._plan_fingerprint(self.root)
+        report = {"project_root": str(self.root), "mode": "guided", "overall": "verified", "independent": False,
+                  **fingerprint, "axes": {a: {"status": "verified", "observed": "fixture " + a}
+                      for a in ("contract", "static_build", "core_task", "negative_path")},
+                  "evidence": ["fixture completed"], "limitations": []}
+        path = self.root / ".site" / "report.json"
+        path.write_text(json.dumps(report), encoding="utf-8")
+        result = state.verify(self.root, report=path)
         self.assertEqual(result["stage"], "delivered")
-        self.assertEqual(result["verification"]["review_quote"], "看着没问题，测吧")
+        self.assertEqual(result["verification"]["review_quote"], "yes, test this version")
         self.assertTrue(result["verification"]["handed_at"])
 
     def test_state_written_before_this_rule_still_reads(self):

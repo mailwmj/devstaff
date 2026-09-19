@@ -92,56 +92,23 @@
 
 风格名可以出现在给创作者的说明和 [页面设计合同](surface-brief.md) 的视觉方向表里，帮助理解和选择；它是结果的短标题，不是证据，所以不上预览页的切换条（标签固定写 `方案 A` / `方案 B`），也不当顶栏说明句开头的标签，规则见 [体验稿](prototype.md) 的视觉体验稿铁律。每个候选都要用日常语言说明：**为什么适合这个项目、它会让什么更突出、会牺牲什么。**
 
-## 3. 视觉风格双选与轻量对比
+## 3. Compare only an unresolved decision
 
-骨架被用户选定之后（`state.py select-structure` 记下他的原话之后），先按 [体验稿](prototype.md) 问一轮参照物：用户给得出（自家产品或品牌素材、别人的网站、一张截图）就按 [参考输入](reference-input.md) 做一版贴着参考的，不凑第二版；给不出，新建与重大改版**默认提供 2 种视觉风格差异显著的方案**供用户直观选择。骨架还没选定就不做这一步：选视觉之前必须先有选定的骨架。两版候选必须**在设计主线层与视觉世界不同**，不是在同一页面上换调色板。
+Default to one recommended direction. Keep the five-step evidence-based design method above; do not require alternatives for protocol completeness.
 
-**候选差异判据（7 轴发散与遮色自检）**：
-候选差异必须发生在设计轴上，不能仅停留在表面涂色。建立 7 大正交轴自检：
-1. **明度轴**：亮底 ↔ 暗底；
-2. **字体家族轴**：无衬线现代 ↔ 衬线人文 ↔ 等宽工业 ↔ 艺术展示体；
-3. **色彩策略轴**：单色克制 ↔ 双色对撞 ↔ 多色系统；
-4. **布局结构轴**：对称网格 ↔ 编辑杂志不等比 ↔ 自由流体构成；
-5. **密度轴**：美术馆宽阔留白 ↔ 紧凑控制台；
-6. **时代气质轴**：复古印刷 ↔ 当代科技极简 ↔ 未来科幻；
-7. **材质质感轴**：极平扁平 ↔ 物理纸质印刷 ↔ 微拟物触感。
+Declare `comparison_type` in the contract:
 
-- **硬性判据**：双选的两套方案**至少在 3～4 条轴上取值截然不同**，且必须包含“明度轴”或“时代气质轴”之一；
-- **遮住颜色自检（Color-blind Test）**：将两个候选全部抽掉颜色变为纯灰度，如果骨架留白、空间韵律与排版层级依然清晰可辨，才算两个独立方向；互换两个候选的配色和字体后差异基本消失的，判定为换肤反模式，直接判为不合格。
+| Type | Hold constant | Change |
+| --- | --- | --- |
+| structure | real content, task, base visual language | organization, navigation, flow topology |
+| style | task, information architecture, content, primary actions | typography hierarchy, rhythm, colors, boundaries, material and image treatment |
+| interaction | business rules and outcome | controls, operation sequence and feedback |
 
-### 轻量对比与防过度测试（铁律）
+Style alternatives may share DOM and data. A second valid light theme need not become dark to manufacture contrast. No fixed number of different axes, mandatory era contrast or two-render-branch rule. Explain the visible tradeoff and fit; render both under the same content/state/viewport before judging.
 
-视觉双选的目标是让用户直观看到视觉方案并定调，绝不能沉重：
-- **极简呈现**：只做单页轻量预览，仅呈现首屏与最具代表性的核心卡片；
-- **拒绝业务逻辑**：数据全部写死，不写业务逻辑代码，不连真实数据库或假接口；
-- **严禁过度测试**：**绝对禁止在此阶段执行单元测试、合同校验（`check-contract` 留给 prebuild）或自动化跨端深度测试**，仅做基础的 HTML 语法可渲染检查；
-- **不承诺绝对速度**：使用“轻量快速生成”等客观表述，不承诺“秒级”。
+A tool can deliberately inherit a familiar table or workbench. Marketing can emphasize brand expression. A reusable convention is not automatically generic failure. Aesthetic conclusions come from rendered comparison, not a regex matching a sentence about reskinning.
 
-### 换肤反模式（直接失败）
-
-以下实现只能算一个方向，不能作为两个候选交付：
-
-- 同一套 HTML 骨架、同一组组件顺序和同一套 CSS 布局，只通过 `data-theme`、CSS 变量、颜色、阴影或字体切换来制造差异；
-- 两个候选在黑白化、统一字体、关闭阴影后仍然拥有相同的栅格、卡片形态、信息密度和视觉重心；
-- 只更换风格名、色板或图标，不更换承载主任务的组件形态或构图关系。
-
-实时切换体验稿可以共享数据和交互状态，但必须由两套明确的 DOM/渲染分支承载；只切换主题属性不合格。
-
-同时满足：
-
-- 固定已选定的骨架结构、同一组真实内容、状态和主要操作；视觉方案不改变信息架构；
-- 每个候选写出自己的匹配依据、第 1～5 步结论，尤其是**设计主线**和**构图命题**；
-- 候选使用项目可获得的同一批素材，不靠不同素材质量制造差异；
-- 每个候选只做到足以判断，不展开全部页面；
-- 给出一个推荐项及理由，同时允许创作者选择、混合或快速微调；推荐不等于替用户确认；
-- **资产平滑继承**：用户确认满意的 Demo 直接作为正式代码胚胎，CSS 变量沉淀为正式 Token，核心 HTML 结构直接作为第一条纵向切片模板。
-
-检索词和风格家族可以帮助命名和扩展候选，但以下内容不能单独产生候选：
-
-- 只有风格标签（海报感、杂志感、科技感、粗野风、极简），没有项目匹配依据；
-- 相册或配方目录里的相邻选项；
-- 同一个设计主线的三种强度；
-- 为制造反差而随机加入的大胆款。
+Keep previews lightweight. Inherit approved tokens, hierarchy and content; productionize data and error behavior separately. Missing materials stay honest. User approval and final technical verification are different decisions.
 
 ## 4. 反默认
 
@@ -177,4 +144,4 @@
 推荐：推荐项及理由；等待创作者选择
 ```
 
-方向与结构是两个设计轴，采用“骨架双选 ➔ 视觉（先问参照物：贴参考一版，或双选两版）（轻量且可继承）”的递进确认，并在视觉风格选定与微调满意后，由 `site-builder` 记录一次 `decide` 锁定完整方向进入构建；本文件不写协作状态，也不授予高风险操作。
+方向与结构是两个设计轴，采用“按未决问题选择预览 ➔ 视觉（先问参照物：贴参考一版，或双选两版）（轻量且可继承）”的递进确认，并在视觉风格选定与微调满意后，由 `site-builder` 记录一次 `decide` 锁定完整方向进入构建；本文件不写协作状态，也不授予高风险操作。

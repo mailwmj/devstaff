@@ -27,7 +27,7 @@ def load_bundle(root: Path) -> dict:
         raise ValueError("skills.json must be a JSON object")
     skills = config.get("skills")
     version = config.get("version")
-    if version not in (1, "1.0.0", "1.1", 3) or not isinstance(skills, dict) or not skills:
+    if version not in (1, "1.0.0", "1.1", "1.2.0", 3) or not isinstance(skills, dict) or not skills:
         raise ValueError("invalid skills.json")
     if not isinstance(config.get("bundle"), str) or not config["bundle"].strip():
         raise ValueError("bundle name is required")

@@ -1,74 +1,60 @@
-# 渐进式建站：执行指令
+# Progressive website execution protocol 1.2
 
-这份文件写给 Agent。用户不需要看到其中的路径、状态或协议名。
+Serve nontechnical users in their own language. Users decide purpose, important tradeoffs, appearance and real-world risk; the agent owns implementation and proportionate isolated checks. Do not expose state names, internal IDs or command arguments in the conversation.
 
-## 唯一控制回路
+## One owner and one loop
 
-```text
-preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 preflight
-```
+`site-builder` is the only orchestrator. `site-brief`, `site-design` and `site-check` return `status / summary / artifacts / evidence / limitations`; they do not invoke each other or announce delivery. Missing information is a receipt to builder, not a nested handoff.
 
-不要凭记忆猜下一步。`state.py preflight` 给出的 `next_action` 就是本轮该做的事；只做 `allowed_actions` 里的事，不做 `blocked_actions` 里的事。
+Run `site-builder/scripts/doctor.py PROJECT` when entering a new installation/environment. Shared instructions are installed at `site-builder/references/AGENTS.md`; the repository source of that copy is this file. Never overwrite the host project's own instructions.
 
-先找到 `site-builder` 的安装目录，脚本都按相对它的路径跑。第一轮：项目里没有 `.site/state.json`、请求又是新建或整体改版时，先 `state.py init PROJECT --mode guided`，再 `preflight`；涉及支付、权限、隐私、共享数据、公开部署或多人协作才用 `strict`。已有项目做局部修改不建 `.site`，直接改。
+`preflight -> execute next_action -> record result -> preflight` remains the control loop. Read `action.inputs` and the relevant reference only, not the entire knowledge base. Unknown actions and malformed data return JSON with a stable code and recovery. Do not hand-edit state to bypass a gate.
 
-## 走哪条路
+## Route by actual task
 
-| 用户说了什么 | 走哪条路 | 谁干，按顺序 | 到哪停 |
-| --- | --- | --- | --- |
-| 改文案、改颜色、改间距、修一个明确的 Bug | 直接改，不建 `.site` | `site-builder` | 不问、不停，改完做相称的检查就给他 |
-| 新建、整体改版、主流程变化 | `guided` | `site-brief` → `site-design` → `site-builder` → `site-check` | 走完下面那六次 |
-| 支付、权限、隐私、共享数据、公开部署、多人协作 | `strict` | 同上，另加独立验证和风险证据 | 走完六次，而且不能带 `limited` 交付 |
-| 只要梳理需求，不要动手 | 只走第一站 | `site-brief` | 交回执就停 |
-| 只要设计：视觉方向、流程体验稿、只读视觉审查 | 只走设计那条 | `site-design` | 交回执就停 |
-| 只要检查，不要修复 | 只走验证那站 | `site-check` | 交回执就停 |
+| Request | Route | User decision |
+| --- | --- | --- |
+| Small change in an unmanaged project | Direct proportional change; no new state | Only unresolved product or risk tradeoff |
+| Small change in a managed project | `revise --change-kind local`; preserve current task and design | No repeated brief/style approval |
+| Add a feature or page | `revise --change-kind feature`; inherit unaffected decisions | Only changed scope |
+| Change main task, data ownership or core structure | `revise --change-kind scope` | Confirm affected product/risk decisions |
+| New website | brief -> recommended visible direction -> implementation -> isolated verification | Purpose/scope and meaningful design preference |
+| Design only, brief only, check only | Call only the requested skill | Stop at requested output |
 
-拿不准走哪条时按 `guided`，不悄悄缩小范围；只有真实风险或多人协作才升 `strict`。有 `.site/state.json` 时先 `preflight`；已有项目做局部修改，没有状态文件也不用建。
+Default to one recommended direction. Use `discover --structure single` when there is no genuine information-architecture disagreement. Use `choice` with at least two distinct candidates only for a real choice. Reusing the same word, such as two separate replies of "yes", is legal; confirmations are associated with their object and revision, not judged by different wording.
 
-## 有哪些 Skill，各解决什么
+## Conditional decision points, not six compulsory stops
 
-《走哪条路》说一个请求该走哪条链，这张表说每个 Skill 手里有什么、什么情况下该想到它。四个 Skill，按流程排：
+Ask when an answer changes the main task, expensive rework or risk. Use an explicit low-risk assumption for reversible details. Existing references and answers are not asked again. A user saying to use recommendations is not permission to pay, publish, send real messages or write sensitive data.
 
-| 阶段 | Skill | 解决什么问题 | 什么时候用 | 核心方法 |
-| --- | --- | --- | --- | --- |
-| 收敛 | `site-brief` | 做错东西：需求没说清就动手 | 新建、主流程变化 | 一轮 3～5 题带推荐；事实 / 决定 / 假设 / 待确认分开记；主场景走查 |
-| 收敛 | `site-brief` | 拿猜测当事实 | 外部事实会改变范围或风险 | 只查会改变首版的一手来源；结论标已证实 / 仍不确定 / 与理解冲突 |
-| 设计 | `site-design` | 页面怎么摆没定 | 新建、整体改版，且真有结构分歧 | 2 种信息架构 + 起手壳单文件骨架预览 |
-| 设计 | `site-design` | 气质没定 | 骨架选定后 | 先问参照物：给得出贴参考做一版，给不出才 2 种风格 |
-| 设计 | `site-design` | 参考能用到什么程度 | 用户给截图或网址 | `replicate / adapt / behavior-only` 加可见依据 |
-| 设计 | `site-design` | 方向没依据、像套模板 | 序列 A 的 A2 起 | 视觉推导 + 反默认 + 设计主线 / 构图命题 / 细节签名 |
-| 设计 | `site-design` | 落地页怎么让人转化 | 落地页、营销官网、单目标转化页 | 序列 B：四类版式 + 说服结构 + 转化文案 |
-| 设计 | `site-design` | 中文排版和暗色对比 | 中文界面或中西文混排 | 系统字体栈、行高 1.5~1.75、暗色 AAA 防线 |
-| 设计 | `site-design` | 方向、实现、验收各说各话 | 进入实现前 | 页面设计合同 `references/surface-brief.md` |
-| 设计 | `site-design` | 交付前工艺不合格 | 有源码与合同 | `references/craft-review.md` §4-§6 加 `design.py lint-ui` |
-| 实现 | `site-builder` | 做不完、跳切片、顺序错 | 进入 `building` | `preflight` 控制回路 + 纵向切片 + 有证据才打勾 |
-| 验证 | `site-check` | 误以为做完 | 有可运行版本，他点头之后 | L0~L5 八条轴只读验证 + 指纹 + 空样本判失败 |
-| 全程 | 四个都遵守 | 说话像 AI、他看不懂 | 所有对用户的输出和网站文案 | 《说人话》 |
+Show a version the user can actually see. Register its artifact/hash and audience with `project.py preview`. A local path, agent-accessible localhost URL or successful OS open command does not establish user reachability. A screenshot is an honest visual fallback, not an interactive experience. Do not publish a private prototype just to solve access.
 
-没列进来的两件事也归 `site-design`：成熟系统里的局部页面修复，和检索方向候选或栈注意项（`design.py catalog / research`）。它的《先选分支》表是这些事的唯一入口判断，遇到先看那里。每行怎么做在各 Skill 自己的 `SKILL.md` 和 references 里，本文件不复述。
+Schema 3: direction approval and technical execution are separate. Basic checks and tests on isolated synthetic data run automatically. `begin-check` creates a new immutable-identity round without requiring a fake user quote. `--quote` is optional and only records feedback on the exact current handed-over version. Pure bug fixes cancel the old round, fix and begin a new one; do not re-ask layout questions.
 
-## 他出面的六次
+Keep the main state names. New `init` uses schema revision 3. Older revisions keep their review gate until the explicit `migrate` command backs up and converts them. Do not silently delete old confirmations. `reopen` is a scope revision, not the default for every edit.
 
-只有这六次需要他出面，按顺序发生，每次只让他决定一件事。除此之外不要停，尤其不要拿“要不要开始”“现在能不能测”“要不要继续”去打断他。
+## Implementation and data
 
-| 序 | 什么时候 | 他决定什么 | 谁干 | 交出去什么 |
-| --- | --- | --- | --- | --- |
-| 1 | 他说完想做什么 | 从 3～5 个会改变结果的问题里选，每题带选项和你的推荐，手机一屏读完 | `site-brief` | `.site/brief.md` |
-| 2 | 新建或整体改版，要定页面怎么摆 | 两种差别明显的页面骨架选一个。这一步只看东西怎么摆，不看好看不好看 | `site-design` | 单文件骨架预览页 |
-| 3 | 骨架定了，要看气质 | 报一个想照着做的产品或网站；都没有就从两版气质差得开的里选一个 | `site-design` | 单文件风格预览页 |
-| 4 | 他在预览上看到不满意的 | 说哪里不对，你在预览上当场改，改到他点头 | `site-design` | 改好的预览页，就是正式代码的样板 |
-| 5 | 代码写完，能打开的页面交到他手上 | 说哪里不对，你改完重新给他看；或者说可以，你才开测 | `site-builder` | `handoff`，入口地址和核心那条怎么走 |
-| 6 | 验证跑完 | 收交付说明：入口在哪、做成了哪件事、查了什么、没查什么、这次是你自己查的还是另一双眼睛查的、数据存在哪、还有什么限制 | `site-check` 查、`site-builder` 说 | 交付说明 |
+Use vertical slices: an observable business result, its data/rules/UI and a likely failure path. Keep specifications in the contract and progress/evidence in `.site/journal.md`; changes in specifications invalidate their report fingerprint. Components are judged by responsibility and change coupling, not arbitrary line/prop counts.
 
-除了验证那一站由 `site-check` 只读做，其余每站做完都回到 `site-builder`，重新跑 `preflight` 看 `next_action` 再决定叫谁。子 Skill 做完一件事返回一次五字段回执：`status / summary / artifacts / evidence / limitations`；它们不接着编排、不改别人负责的产物、不说项目已交付。第 4 次收尾、方向用他的原话 `decide` 锁定后，`site-builder` 拿通过的 prebuild 合同报告跑 `start` 进构建。
+Existing projects keep their stack. Empty projects may use `scaffold.py` with content, personal or shared profiles of one tested stdlib Web foundation. Shared means a real owner-scoped backend, never hidden buttons or localStorage security. The generated development server binds loopback and is not an Internet production server.
 
-- 第 2、3 次默认都要走。真的不存在结构分歧时才能跳过，跳过时用 `discover` 写明理由。
-- 每一次的措辞按《说人话》：先给结果和下一步，再给理由；只讲他能打开的东西、他要做的决定、做完以后的结果。
-- 怎么给（给几版、这一步看什么、打不开怎么办、停下等谁回话）不在本文件：问怎么问在 `site-brief/SKILL.md`，两次双选和微调怎么给在 `site-design/SKILL.md` 与它的 `references/prototype.md`《交付即停》。照那边的做，不要在这里另立一套。
-- 验证没过只修这一轮查出来的问题，修完重新交给他看一遍再开新的一轮，不整个重做。进入 `delivered` 之后源码就冻住了，任何改动都要先 `reopen`，再走一遍这六次。
-- 他说出更早阶段才该定的事（第 5 次要改结构、第 6 次之后要加范围），不要当场改：先说清这会作废哪一版查过的东西，再 `reopen` 退回对应那一处。
+Explain storage across reload, closing, changing devices and clearing local state. Keep amount/date/domain rules independently testable. Import preview precedes one transaction; export is reversible; repeat requests use appropriate idempotency. Centralize low-frequency copy in content configuration rather than forcing a CMS.
+
+## Check and delivery semantics
+
+Read-only means product source is not modified by checker; isolated test data may be written. Production data and external side effects are not authorized by the name "check". The runner snapshots supported starter sources into a temporary directory and never opens original data.
+
+Report mode comes from project state. Core/static/negative-path checks must be verified before schema-3 usable delivery. `limited` is for named ancillary coverage, not an untested main task. A failed or unavailable core can still be returned as an explicitly nonfunctional preview, never marked usable. Strict requires genuine independent checking and applicable risk/reopen evidence. A Boolean cannot prove who performed the check.
+
+A report is read once; validation and recording consume that same snapshot. The open round, current source/contract and report must agree. State changes during validation are rejected. Fingerprints detect changes; they are not a filesystem sandbox or a complete concurrent transaction. Source inclusion policy is itself fingerprinted. Do not copy old results into a new hash.
+
+Keep delivery scope (`preview/personal/shared/public`) separate from risk (`sensitive_data/money/permissions/external_write/irreversible`). Internal systems can need strict checks; public static content does not automatically have payment risk. Public publishing still requires specific authorization. The packaged local release provider is not a cloud host and refuses public delivery.
+
+Handoff explains: entry, completed task, actually checked and untested behavior, checker independence, data location, editing entry, export/recovery, owner/cost and limitations. A deploy command exit code is not a working URL. Release smoke failure rolls back and remains blocked.
 
 ## 说人话
+
 
 你对用户说的话，和你写进网站的文案，都按这一节写。文风只有这一处来源，别处不要复述。
 
@@ -117,40 +103,3 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 写网站文案时再加两条：写用户能核对的具体结果，不写抽象价值；按钮和标题先动词后宾语，长度按合同 `TX-*` 的目标来。
 
 发出去之前过一遍这两问，任一答不上来就重写：这段话里有没有他打不开、用不上、也不关心的东西（工序名、像素、状态名、断言条数、你的核对过程）？有没有一件他要做的事，或者一个他能打开的东西？他关心的是货和下一步点什么。
-
-## 四条红线
-
-1. 核心任务和方向没确认前，不写正式源码。
-2. 影响大的选择没确认前，不替用户决定。
-3. 没有实际验证就不能说“已验证”，`verified`、`limited`、`blocked` 要分开说。
-4. 体验稿和视觉预览阶段守住轻量边界，不堆业务逻辑，不跑重度测试。
-
-费用、系统变更、密钥、真实敏感数据和公开发布，每次都要单独停下来等用户明确决定。
-
-## 实现循环
-
-`building` 阶段按纵向切片推进：每条切片从数据、规则、界面一直做到用户能看到的结果，不先铺完数据层、接口和所有页面再统一验证。每条切片在合同里引用 `BR-* / IC-* / PG-* / SC-* / CP-* / VA-*`，写明成功路径、最可能失败的路径和必要状态。写代码时按三步走：
-
-1. **先读切片表**：每轮写代码前读 `.site/design/surface-brief.md` 的纵向切片表，到 `.site/journal.md` 看哪条还没做完，在日志里标成进行中 `[-]`。不要凭印象跳切片或跨切片开发。
-2. **小步改**：明确这次动哪些文件的哪些位置；检查会不会破坏前面切片已经验证过的 DOM 结构、CSS 类名和事件监听；只做局部增量修改，不顺手重写整个文件。下面这几条 references 里没有，写在这里：单个组件文件不超过 200 行；用插槽或子组件组合，不写布局属性超过 5 个的黑盒大组件；纯展示层继承体验稿里的 HTML/CSS，取数据和副作用放进容器或 Hook；筛选、分页、Tab 这类影响视图的参数放进 URL Query（L5 再次打开 `reopen` 和分享链接时才能还原），局部瞬态用 local state，属性跨 3 层往下传就要重构；异步和列表组件在业务上可能出现 Loading / Empty / Error 时，各做一份；极端内容也要有设计，长到 60 字符不换行的词要能安全折行或截断而不破容器，320px 窄屏不重叠挤压，一条数据都没有时给出下一步引导而不是白屏，按钮文案变长不溢出。其余工艺门禁（动词先导、单一 Filled、危险操作二次确认、不拦截粘贴、按压缩放、可中断过渡、同心圆角、语义 Token、组件血统）以 `site-design/references/craft-review.md` §4-§6 为唯一来源，本文件不复述。
-3. **有证据再打勾**：合同引用检查、typecheck/lint、受影响的单测和最短行为检查都通过后，在日志里写一行客观的验证事实（写清查了多少个对象，比如"扫了 24 个文字节点"），才打 `[x]`，再进入下一条。
-
-切片全部打勾后做一次集成构建，再走上面表里的第 5、6 次。第 5 次之前跑完便宜的自检：合同引用、类型、构建、受影响的测试，页面能打开、核心那条走得通。第 5 次要带一句交底——接下来的浏览器验证会逐项核对、比他自己翻一遍慢得多、跑完才敢说能不能用，这轮打算查哪几项，他随时可以往里加。他点头才用 `state.py begin-check --quote "他的原话"` 开验证轮，交给 `site-check` 在浏览器里只读验证。没拿到他的话，`begin-check` 会直接拒绝：报告只对写它的那一版成立，他看完再让你改一次，刚跑完的那轮就白跑了。
-
-第一次浏览器验证前，合同、类型、构建和受影响的测试必须都已通过。失败只修这次发现的问题，不重做整个项目。这一轮没关掉之前源码是禁写的：验证的对象在验证途中被移动，整轮工作作废。要回去修就先 `cancel-check --reason` 说清这轮查出了什么，改完重新交给他看一遍再开新的一轮。
-
-### 工作日志（`.site/journal.md`）
-
-`.site/design/surface-brief.md` 是冻结的规格，改动它会让已经跑过的验证全部作废——合同参与指纹，这是设计使然。所以切片勾选、验证证据、发现的缺陷、被推翻的假设，都写进 `.site/journal.md`。它在 `.site` 下，不参与指纹，写日志不作废任何验证。
-
-只追加，不改旧行。每行四列：时间、对象（切片名或 `VA-*` / `BR-*` 编号）、客观事实（写清查了多少个对象）、影响（要复验什么，没有就写"无"）。发现缺陷记下来，不要为了日志好看而删。
-
-## 交付
-
-只说这几件事：入口在哪、完成了哪个核心任务、检查了什么、没检查什么、这次是谁查的、数据存在哪里、有哪些限制。
-
-“检查了什么”说的是他能不能放心用，不是你的自检记录。写了「按钮点到不会误触、数字对得上」就够了，不要写按钮多高、对比度多少、跑了几项断言。没检查的那部分要如实说，因为那关系到他的数据。
-
-“这次是谁查的”是自检还是独立检查，一句话说清。自检通过和另一双眼睛看过，对他意味着的风险不一样，这个信息不能只留在报告里。
-
-构建成功不等于产品验证过。

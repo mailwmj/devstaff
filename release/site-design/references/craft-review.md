@@ -1,3 +1,11 @@
+# Review policy levels (1.2)
+
+A blocker is a demonstrated usability/accessibility defect, invalid reference, missing critical content or broken behavior. Defaults (semantic tokens, coherent icons, limited motion) allow justified project exceptions. Radius equations, exact press scales, hue spacing, punctuation preferences and pure-white/black preferences are recipes, not universal gates. No one-filled-button-per-entire-viewport rule should override independent task groups.
+
+Use applicable accessibility targets: normal-text AA contrast 4.5:1; large-text AA 3:1; AAA is a separately declared higher target. Dark mode does not automatically require AAA everywhere. Check actual adjacent rendered colors and states. Chinese typography guidance is contextual, including font coverage and fallback, not a mandatory font vendor.
+
+Star characters, generic names and a sentence mentioning reskinning cannot alone prove fabricated evidence or bad design. Verify the underlying source and actual render. The rest of this reference remains professional review guidance; apply these policy levels when a recipe uses absolute wording.
+
 # 工艺审查与只读评审
 
 本文件是视觉质量、排版、色彩/素材、构图、任务界面和评审证据的唯一运行时协议。只读评审与体验稿自检使用同一把尺；区别是只读评审不修复、不写项目、不改变确认状态。
@@ -39,7 +47,6 @@
 - 系统/开源字体优先；若用网络字体，核对许可、中文覆盖、回退、加载失败和离线能力。**加载字体必须配系统栈回退**：断网或字体加载失败时，首屏与主任务版式不得破裂或大面积重排；允许外部资源作增强，不允许它成为唯一可用字体。字体未加载成功时不得以目标字体结论验收。
 - 不用全大写、字距或浅色小字弥补层级；层级主要靠尺度、字重、位置和留白。密集界面与 B 端/SaaS 严守“字重与颜色胜于字号”：不靠机械放大字号拉层级，同一个基准字号（如 14px）优先通过 `600/primary`（主值）、`500/secondary`（标签）、`400/muted`（辅助信息）三阶字重与对比度明确拉开。
 - 标题换行推荐 `text-wrap: balance`，长正文推荐 `text-wrap: pretty` 避免末行孤字。
-- 界面里不出现破折号（Dash Ban）：标题、标签、按钮、正文和微文案里的 `—`（em-dash）与 `–`（en-dash）都算典型 AI 痕迹；数字、日期和版本范围用普通连字符 `-`，其余关系用逗号、句号、冒号、括号或分栏表达。
 - 文案措辞按 `AGENTS.md` 的《说人话》写。中西文的空话都算：中文的“极致、一站式、赋能”，英文的 Elevate、Seamless、Next-Gen，都是没有信息的词。
 - 涉及中文或中西文混排时，严格遵循 [中文排版规范](chinese-typography.md)，包括系统字体栈、行高 1.5~1.75、字重 500/600 避坑、盘古之白与暗色 AAA（7:1）防线；正文与 UI 严禁斜体。
 - 主行动按钮（CTA）文案控制在 6 个汉字（或 3 个西文单词）以内，桌面端不折行；全页表达同一个转化意图的按钮用同一句话。
@@ -52,7 +59,6 @@
 
 - 在渲染后的实际相邻色对上检查正文、按钮、链接、边框、焦点、选中和每个状态；token 表通过不代表页面通过。
 - 状态不能只靠颜色表达。深色主题不是亮色反相，需独立看彩度、层次和焦点。
-- 一个主要强调色通常足够；第二强调色要有业务语义。状态色不承担品牌装饰。单一 Filled 强调原则：同一视口内 Filled 实色主行动按钮只允许一个，同级次要操作必须保持 Neutral，杜绝多主色争抢视觉焦点。15° 色相安全阈值：相差 15° 以内的色相视为同色，严禁在同一界面混用微小色偏的同族色。
 - 半透明、图片叠字、悬停/按下、动态叠层和色觉辨识需人工看；自动比值只守下限。
 - 表面微步进与阴影工程：浅色模式推荐分层透明微阴影（1px 外环 + 微深度阴影，如 `0 0 0 1px rgba(0,0,0,.06), 0 1px 2px -1px rgba(0,0,0,.06)`），拒绝发黑粗重的投影；深色模式因吸光弃用扩散阴影，改用 1px 微亮半透明外环边框（如 `0 0 0 1px rgba(255,255,255,0.08)`）；输入框背景应比画板微暗以营造容纳内容的内嵌凹陷感，下拉与浮层必须高出父表面一级。图片与卡片建议加 1px 低不透明度外轮廓以获稳定深度感：浅色模式推荐纯黑 `oklch(0 0 0 / 0.1)` 或 `rgba(0,0,0,0.08)`，深色模式推荐纯白 `oklch(1 0 0 / 0.1)` 或 `rgba(255,255,255,0.08)`；严禁使用 zinc/slate 等近黑近灰色做微透明描边，避免因拾取底层色彩导致边缘发脏。
 
@@ -60,7 +66,6 @@
 
 评价、指标、客户 Logo 与其他社会证明没有来源时不得写成正式文案或渲染成界面元素；`design.py lint-ui` 把占位图冒充客户 Logo、Lorem 评价和编造星级评定确定性判为硬失败。
 
-反 AI 塑料味硬防线（Anti-Slop Hygiene）：
 - **材质与色彩去油**：背景与正文避免生硬的纯黑（`#000`）与纯白（`#fff`），改用柔和的 off-black（如 `#111`、`neutral-950`）与 off-white；严禁未经推导直接使用默认 AI 亮紫/霓虹发光（AI-purple）。
 - **杜绝刻板假名与虚假精密（No Jane Doe Effect）**：严禁在演示数据与文案中出现 John Doe、Jane Doe、Acme Corp、Nexus、SmartFlow 等模板化假名与假品牌；严禁编造 `99.99%`、`1234567` 等假装工程精密的虚构数字。
 - **拒绝 `<div>` 伪造假截图**：严禁用纯彩色方块和伪造进度条拼凑假终端或假仪表盘作为背景装饰；无真实产品截图时直接呈现真实组件或保持结构留白。
@@ -70,10 +75,8 @@
 - 首屏只有一个主重心。尺度差异应真实可感；不要靠阴影和渐变制造虚假层级。
 - 缩到 25% 看主轴、分组和留白是否仍可辨；再回到 100% 看基线、边缘、间距和细节签名。
 - 留白必须建立关系或节奏。密度由任务频率、数量和内容决定，不由“高级感”决定。工具/仪表盘面板采用 workbench-tight 紧凑密度（12~16px 间距与内边距），展示区适当舒展，避免全屏均分间距的单调平铺。组间距应至少为组内间距的 2 倍（如组内 8px、组间 16px+），否则分组信息将退化为视觉噪点。
-- 同心圆角铁律：嵌套圆角必须满足 `outerRadius = innerRadius + padding`，严禁内外设置相同圆角半径导致内切突兀或视觉破损。
 - 在真实长标题、空数据、极长列表、错误消息、多位数字和缺图下检查；极端内容要各自有设计，不靠截断掩盖核心信息。
 - 断点从内容失效处得出。至少检查 375px、768px、1440px 的代表结果；移动端按任务重组，不能隐藏核心信息来假装适配。
-- 动效必须表达空间、状态或因果，使用少量共享节奏；无意义动画删除。验证 `prefers-reduced-motion` 后信息和操作仍完整。高频操作（>100次/天、快捷键、命令行调出、表格行切换）零动效以防操作迟滞；下拉与 Popover 展开中心必须匹配触发源（origin-aware）；按压反馈使用 `:active { transform: scale(0.96); }`；动效仅对 GPU 合成属性（`transform`, `opacity`）过渡，严禁 `transition: all`。
 - 动效工程规范：交互状态变化强制使用 CSS transition 保证可随时被用户操作反向中断（Interruptible），严禁用 keyframes 锁死简单状态过渡；首屏初始渲染跳过入场动效，防止加载闪烁；弹窗与浮层入场起点禁止从 `scale(0)` 膨胀，必须使用 `scale(0.95) + opacity: 0`；UI 动效时长上限 300ms（按压 100~160ms，菜单 150~220ms，弹窗 200~280ms）；推荐绑定工业级缓动曲线 `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`（严禁 `ease-in`）、`--ease-in-out` 与 `--ease-drawer`；双图标离散切换推荐采用绝对定位 cross-fade（scale `0.25 -> 1`，opacity `0 -> 1`，blur `4px -> 0px`）。该上限约束状态过渡与 UI 反馈；营销页的入场与滚动叙事动效不受此上限约束，但仍须满足 `prefers-reduced-motion` 与“高频操作零动效”。
 
 两个视觉候选还要做交换检查：统一色板/字体、关闭阴影后，主布局容器、核心组件形态、信息密度与首屏重心仍须不同，否则只是换肤。

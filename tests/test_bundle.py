@@ -20,7 +20,7 @@ class BundleTests(unittest.TestCase):
 
     def test_declared_skill_directories_and_names_match(self):
         manifest = json.loads((RELEASE / "skills.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], "1.1")
+        self.assertEqual(manifest["version"], "1.2.0")
         for name, details in manifest["skills"].items():
             self.assertEqual(details["directory"], name)
             skill_file = RELEASE / details["directory"] / "SKILL.md"

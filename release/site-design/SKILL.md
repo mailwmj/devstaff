@@ -1,79 +1,35 @@
 ---
 name: site-design
-version: 1.1
-description: 网站与 Web 产品设计。用项目事实和这套规范、模板、Token、素材规则做出看得见的方向、流程体验稿或只读视觉审查；不改正式业务源码。
+description: Design website structure, visual direction and flow experiments, or review an existing page. Use project facts, rendered evidence and retained design references; do not change production business source.
 ---
-# 网站设计
+# Product and website design
 
-设计能力整套保留，流程按需加载。目标是从项目事实里长出一个有辨识度、能实现、能被验证的方向，不是套模板，也不是让用户学设计流程。
+Read the shared protocol at the sibling site-builder/references/AGENTS.md (installed), or ../AGENTS.md (source bundle). Apply its user-language guidance. 
 
-对用户说话、以及写网站文案时，按 `AGENTS.md` 的《说人话》来。本文件里的规范只管设计，不管措辞风格。
+Use existing product/brand/content and the approved task. Missing facts return to builder. Do not make external references into unapproved features.
 
-## 先选分支
+## Route and load only the relevant files
 
-| 任务 | 产出 | 怎么读 |
-| --- | --- | --- |
-| 新建、整体改版、核心流程或信息结构变化 | 2 种信息架构（带骨架预览）➔ 视觉：先问参照物，给得出就贴参考一版，给不出才 2 种风格（只比调性）➔ 继承为正式资产 | [序列 A](#序列-a新建或整体改版) |
-| 落地页、营销官网或单目标转化页 | 选转化结构（四类版式）➔ 骨架与转化文案 ➔ 视觉同上（贴参考或 2 种风格）➔ 继承为正式资产 | [序列 B](#序列-b落地页或营销页) |
-| 成熟系统中的局部页面或样式修复 | 继承基线和最小修正，不重做设计系统 | [设计上下文](references/design-context.md) ➔ [工艺审查](references/craft-review.md) |
-| 流程、状态或操作顺序实验 | 可点击状态演示和保留/改变规则 | [体验稿](references/prototype.md) ➔ [页面设计合同](references/surface-brief.md) |
-| 截图、图片或网址参考 | `replicate | adapt | behavior-only` 结论和可见依据 | [参考输入](references/reference-input.md) |
-| 涉及中文界面或中西文混排 | 系统字体栈、行高 1.5~1.75、字重 500/600 避坑、盘古之白与暗色 AAA 防线 | [中文排版规范](references/chinese-typography.md) |
-| 需要方向候选或实现注意项 | 候选 ID 或 `no_verified_match`，及高排名未采用项的理由 | [内置工具链](references/design-toolchain.md) |
-| 只读视觉审查 | 带页面、状态、视口和证据的发现 | [工艺审查](references/craft-review.md) |
+| Task | Read |
+| --- | --- |
+| New surface or redesign | [context](references/design-context.md), then [direction](references/visual-direction.md) |
+| Visible structure/style/interaction experiment | [prototype](references/prototype.md) |
+| Marketing/landing page | [landing](references/landing-page.md) |
+| Chinese text | [Chinese typography](references/chinese-typography.md) |
+| Reference site/image | [reference input](references/reference-input.md) |
+| Final implementation contract | [surface brief](references/surface-brief.md) |
+| Token export | [tokens](references/design-tokens.md) |
+| Current-page review | [craft](references/craft-review.md) |
+| Additional candidate research | [toolchain](references/design-toolchain.md) |
 
-## 按步骤读，不要一次读完
+Default to one clear recommended design. Produce alternatives only for a meaningful unresolved choice. Clear references need no artificial second version. State comparison_type: structure fixes content and visual language; style fixes information architecture/task/content but can vary typography, rhythm, color roles/material; interaction fixes business outcomes and compares control/feedback. Shared DOM is valid for style. No forced dark version, historical style or number of differing axes.
 
-前两个分支各自涉及的文件合计约 74KB。**不要预读整组。** 按下面的序列推进：每步只读该步列出的文件，做完这一步再读下一步。一次全读完不会让判断更准，只会把注意力从眼前这一步分散掉（下面每步的体量是实测值，单步最大 18KB）。
+Tools prioritize task clarity, appropriate density and consistency; marketing prioritizes truthful expression, content hierarchy and suitable differentiation. Reusing a sound category convention is not a failure. Preserve all knowledge assets and calibrated tokens; no catalog ranking decides the product.
 
-[页面设计合同](references/surface-brief.md)（16KB）是全程要填的那份文件：A1 开始时打开一次，之后每步只填对应小节，不要重读全文。它是填空骨架，字段值一律写本项目的事实，不要照抄骨架里的说明句。
+Make lightweight previews from the existing shell, then adapt the body to real content. Register artifact/hash/audience with builder's project.py. If the user cannot access the preview, supply a visible fallback and disclose that interactivity has not been experienced. Do not advance past a genuinely unresolved user decision.
 
-### 序列 A（新建或整体改版）
+Carry approved layout/tokens/content into implementation. Experimental state or hardcoded success is not production functionality. Keep simulated versus implemented capability explicit. Use v2 machine targets for new contracts; explain rationale in Markdown without duplicating a manual acceptance index.
 
-| 步骤 | 这一步做什么 | 只读 | 体量 |
-| --- | --- | --- | --- |
-| A1 | 判断要做到多深，盘点项目事实、任务交互和范围 | [设计上下文](references/design-context.md) | 9KB |
-| A2 | 推出设计判断、设计主线、视觉世界与构图命题 | [视觉方向](references/visual-direction.md) | 14KB |
-| A3 | 做信息架构双选与视觉风格双选 | [体验稿](references/prototype.md) | 13KB |
-| A4 | 方向确认后补正式实现规格与 Token | [设计 token](references/design-tokens.md) | 10KB |
-| A5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 18KB |
+Deterministic lint checks references/source hygiene. It cannot certify aesthetics, infer fake reviews from star characters, or decide semantic negation by grep. Inspect actual rendered page/state/viewport evidence for hierarchy, long content, empty/error states and focus. A generated screenshot is not a completed review.
 
-A2 起，[页面设计合同](references/surface-brief.md) 的 `反默认原因 / 设计主线 / 构图命题 / 细节签名` 四项都要各引用至少一条正文里已经定义的 `BR-* / IC-* / PG-* / SC-* / RP-* / CP-* / AS-* / TX-*`。引不到项目事实，说明方向还没成形。
-
-### 序列 B（落地页或营销页）
-
-| 步骤 | 这一步做什么 | 只读 | 体量 |
-| --- | --- | --- | --- |
-| B1 | 收敛转化目标和需求 | [设计上下文](references/design-context.md) | 9KB |
-| B2 | 选版式、排转化结构、写转化文案 | [落地页指南](references/landing-page.md) | 10KB |
-| B3 | 推出视觉方向与设计主线 | [视觉方向](references/visual-direction.md) | 14KB |
-| B4 | 做骨架双选与视觉风格双选 | [体验稿](references/prototype.md) | 13KB |
-| B5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 18KB |
-
-## 默认工作法
-
-1. 先看现有工程、真实内容、品牌、素材和用户给的参考；缺事实才找 `site-brief`。
-2. 写下使用者、主任务、业务对象、真实内容、关键状态、设备和风险。
-3. **信息架构双选**：用大白话提炼 2 种差别明显的架构方案（各自适合谁、第一眼看到什么、怎么操作），复制 `assets/design/preview-shell.html` 写成单文件骨架预览页：色板和顶部深色切换条用壳里现成的，正文按这个项目自己搭；两版只在结构与密度上不同，颜色字号一致。切换条的两个标签固定写 `方案 A` / `方案 B`，不换成方案短名；旁边一句话说清当前这版先看见什么、再怎么动手，不加"方案 A："这类前缀（不折叠、不做分段列举、不加动效）。**交付即停**：把路径给用户、尽量替他打开，然后停下等他选，不生成下一版也不写正式源码。
-4. **视觉风格双选**：骨架被用户选定之后，先单独问一轮参照物：有想照着做的网站或截图就发我，心里有参照的产品报个名字也行，都没有我直接给两版。问之前先交底：他自己的产品或品牌素材可以照搬，别人家的站只贴布局、密度、层级和调性，不搬 Logo、品牌色、专有字体和标志性画面。给得出参考就按 [参考输入](references/reference-input.md) 做一版贴着参考的，不凑第二版；给不出才在同一个骨架上给 2 种气质差别明显的方案，生成一个单文件静态预览页，顶栏照用同一条深色切换条（两个标签同样固定写 `方案 A` / `方案 B`，不换成风格名），说明换成一两句说清两种气质差在哪，不加"方案 A："这类前缀，也不拿风格名当句子开头的标签；只做一版时不放切换条。**交付后再停一次**，同样给路径、尽量替他打开、停下等他选。骨架没选定就不做这一步。这一步守住轻量：不写业务逻辑代码，不跑单元测试、合同校验和浏览器深度断言。
-5. **微调与继承**：用户在预览页上提的微调，直接改 HTML/CSS 给他看。他确认满意的那一版就是正式代码的起点：CSS 变量提成正式 Token，核心 HTML 作为第一条纵向切片的模板，微调要求记成 `VA-*`。
-6. 方向整体确认后，由 `site-builder` 用一次 `decide` 记下来，正式进入构建。
-7. 在 `.site/design/surface-brief.md` 里只填本轮适用的字段，交回实现和检查。
-
-## 设计资产
-
-- `assets/design/`：Token、gallery、基础样式，以及体验稿起手壳 `preview-shell.html`（定色板与顶栏，正文自己搭）。
-- `scripts/design.py`：设计系统检索、Token 构建和资产校验。
-- `intelligence/`：内置检索数据与 MIT 许可代码。
-- `references/`：上下文、方向、落地页指南、体验稿、参考输入、Token、工具链、中文排版规范、页面设计合同和工艺审查。
-
-## 硬约束
-
-- 行业做法、竞品、模板和检索结果都不能变成首版功能。
-- 配方和色板只用来校准已经成形的位置，不能代替方向。
-- 真的看过才算验证过；文件在、构建成功、截图存在，都不能单独说明设计成立。
-- 素材要记来源、许可、裁剪和 alt；缺了就如实说缺。
-- 方向确认前不改正式业务源码；流程体验稿不接正式数据库。
-- 体验稿和视觉预览阶段守住轻量：不堆业务逻辑，不跑重度测试，不承诺“秒级生成”这类速度。
-
-做完一次，用五字段回执 `status / summary / artifacts / evidence / limitations` 返回，然后停下。
+Return the five-field receipt to builder; don't call brief or check directly, mutate production source or announce final project delivery.

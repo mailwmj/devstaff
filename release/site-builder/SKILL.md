@@ -1,48 +1,27 @@
 ---
 name: site-builder
-version: 1.1
-description: 默认建站入口。把用户的一句话收敛成核心任务，协调需求、设计、实现和验证；改文案、颜色、间距和小 Bug 走快速路径。
+description: Default website creation, implementation and revision entry. Coordinate brief, design and read-only checks; preserve confirmed decisions for small edits.
 ---
-# 建站编排
+# Website orchestration
 
-你是唯一编排者。先找到本 Skill 的安装目录，每轮运行其中的 `scripts/state.py preflight PROJECT`，只做 `next_action` 说的事，做完再跑一次 `preflight`。子 Skill 做完一件事只返回一次五字段回执：`status / summary / artifacts / evidence / limitations`。
+Read the shared protocol at the sibling site-builder/references/AGENTS.md (installed), or ../AGENTS.md (source bundle). Apply its user-language guidance. 
 
-不确定该叫谁、或某个能力归谁管时，看 `AGENTS.md` 的《有哪些 Skill，各解决什么》；它同时给出每个 Skill 手里的能力和触发条件。本文件只管状态怎么走。
+Run scripts relative to this skill directory. Start with `doctor.py PROJECT`, then `state.py preflight PROJECT`. For a new/major project run `state.py init PROJECT`; no `.site` is needed for an unmanaged small edit. Resume by reading state, brief summary, applicable contract targets and unfinished journal entries.
 
-对用户说话时按 `AGENTS.md` 的《说人话》来。下面的规则是内部纪律，只管状态怎么走。
+## Decision and build
 
-## 路径
+Ask site-brief for missing product facts. Ask site-design for the smallest visible experiment that resolves a real decision. Default to one recommendation; register single/choice structure assessment. `select-structure` is needed only for choice. `decide` records the actual user's product decision; don't invent a quote.
 
-- `quick`：明确的局部修改或 Bug，直接改，做相称的检查，不建 `.site`。
-- `guided`：先收敛一条核心任务，给用户看一个方向，确认后实现，再验证这条任务。
-- `strict`：在 `guided` 之上加独立检查、关键反例和适用风险证据。
+Write the contract, run `design.py check-contract --phase prebuild`, and pass its report to `state.py start --contract-report FILE`. Use vertical slices; test each observable result. Keep mutable work progress in the journal, not the frozen contract. Existing code/stack wins; empty projects may use `scaffold.py DEST --profile content|personal|shared --title TITLE`.
 
-## 规则
+## Revision and verification
 
-1. 新建或主流程有变化，先交给 `site-brief`；其他 Skill 不自己扩大范围。
-2. 新建、整体改版、主流程或信息结构有变化，交给 `site-design`。设计结果回来后，正式实现只看 `.site/design/surface-brief.md`，不另造一套视觉规格。已有成熟设计和局部修改，只读受影响的那部分规范。
-3. 新建和整体改版在 `discovering` 阶段先选信息架构、再选视觉风格，一级一停：把这一级的预览交给用户就停下等他回话，他没回话不做下一级。小修小改不适用，直接改。**两级怎么给（给几版、用什么壳、切换条怎么写、打不开怎么办）归 `site-design`，照它的 `SKILL.md` 和 `references/prototype.md`《交付即停》做，这里只记状态怎么走：**
-   - **先选信息架构**：用 `state.py discover` 记下判断。真的没有结构分歧时用 `--structure single` 跳过这一级，并在 `--reason` 里写明理由；有分歧才用 `choice` 登记候选。他选定后用 `state.py select-structure --candidate ... --quote "他的原话"` 记下原话；他没选定之前不做视觉预览。
-   - **再选视觉风格**：骨架被他选定之后才做。他选定并微调满意后，用一句**不同**的原话跑 `state.py decide` 锁定方向，进入构建。
-4. 进入 `building` 后按纵向切片推进，不先把以后要用的能力全铺上。
-5. **先交给他看**：切片全部打勾、集成构建和便宜的自检都过了之后，先 `state.py handoff PROJECT`，把这一版交到他手上并停下等他回话。怎么交、说什么、他回话后怎么办，按 `AGENTS.md` 的《他出面的六次》第 5 次。没交出去、他还没回话、或者交出去之后你又改过源码或合同，`begin-check` 都会拒绝——他点头的那一版和被测的那一版必须是同一个版本。
-6. 验证交给 `site-check` 只读做；检查失败只修这次发现的问题，不重做整个项目。他明确说可以之后，用 `state.py begin-check --quote "他的原话"` 开一轮验证：这一轮没关掉之前 `write_source` 是禁的，改不动。确实要回去修，用 `cancel-check --reason` 说明这轮查出了什么，改完重新交给他看一遍再开新的一轮。验证的对象在验证途中被移动，整轮工作作废。
-7. 只有状态工具放行的结果才能交付。`verify` 只接受 `--report`，报告先过 `check.py validate-report` 这一关：指纹对不上当前源码、或某条轴没写清自己查了什么，都不算数，就去重跑受影响的部分再写一份新报告。`limited` 要写清没验证的部分，不能当成完整通过。报告被拒时这一轮还开着，要么写出站得住的报告，要么 `cancel-check` 说清原因。
-8. 切片状态和验证证据写进 `.site/journal.md`（`init` 已经建好），不写进合同。合同参与指纹，改一个字节就作废已经跑过的验证，而日志每轮都在追加。
+Managed small edit: `revise --change-kind local --reason ...`. Added feature: feature; changed main task: scope. Preserve unrelated decisions; new risks use `--risk permissions` etc. Never repair a validation problem by reducing risk mode.
 
-## 实现循环
+After cheap checks, show a registered preview when useful. Schema 3 `begin-check` starts isolated checks without asking permission for ordinary tests. The checker reads product source and may write only disposable fixtures. Close a failed round with cancel-check before changing code, then create a fresh round. `verify --report FILE` is the only transition to usable delivery. Reports include the current round_id returned by plan.
 
-进入 `building` 后按纵向切片推进，每条切片从数据、规则、界面一直做到用户能看到的结果，不按“先数据层、再接口、最后页面”横向铺开，也不把验证攒到最后一次：
+Legacy projects: `state.py migrate PROJECT` makes a backup and enables the new loop. Do not silently change old behavior.
 
-```text
-读通过的合同 → 拆纵向切片表（带状态 Checklist）
-→ [1. 锁定切片] → [2. 小步编码] → [3. 查证据并打勾]
-→ 下一条切片 → 集成构建 → 交给用户看 → 他点头 → 浏览器验证
-```
+## Operating references
 
-- **读合同**：`state.py start` 已经凭通过的 prebuild 合同报告放行，实现只消费合同里的 ID，不再重问确认过的范围。合同是冻结的规格，不改合同（切片状态和证据的去处见规则 8）。
-- **拆切片**：在 `.site/design/surface-brief.md` 的纵向切片表里登记每条切片，引用 `BR-* / IC-* / PG-* / SC-* / CP-* / VA-*`，写明成功路径、最可能失败的路径和必要状态。
-- **三步走**：锁定切片、小步改、有证据再打勾。写代码的规则、工艺门禁和打勾条件以 `AGENTS.md` 的实现循环为唯一来源，本文件不复述。
-- **集成与浏览器验证**：切片全部打勾后做一次集成构建，先 `handoff` 把页面交给用户看并停下等他回话（规则 5），他点头后用 `begin-check --quote` 开一轮（规则 6），再交给 `site-check` 只读验证。第一次浏览器验证前，合同、类型、构建和受影响的测试必须都已通过。
-
-简单项目可以只有一条切片。失败只修这次发现的问题，不重做整个项目。
+Read [runtime and maintenance](references/runtime.md) for supported commands, storage, release boundaries and local previews. For design standards read only the current site-design branch. For checks use site-check. Return user-facing results, not internal traces.

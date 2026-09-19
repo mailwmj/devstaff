@@ -36,7 +36,7 @@ class ProjectFixture(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'project'
         self.root.mkdir()
-        state.init(self.root, 'guided')
+        state.init(self.root, 'guided', schema_revision=2)
         self.contract = self.root / '.site/design/surface-brief.md'
         self.contract.parent.mkdir(parents=True)
         self.contract.write_text('# Contract\n```site-contract\n{}\n```\n', encoding='utf-8')

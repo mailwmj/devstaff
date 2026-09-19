@@ -81,6 +81,9 @@ VALID_CONTRACT = """# 页面设计合同
 
 class StateCliTests(unittest.TestCase):
     def run_cli(self, *args, expected=0):
+        # Retained compatibility cases explicitly request schema 2.
+        if args and args[0] == "init":
+            args = (*args, "--schema-revision", "2")
         result = subprocess.run(
             [sys.executable, str(SCRIPT), *map(str, args)],
             check=False,

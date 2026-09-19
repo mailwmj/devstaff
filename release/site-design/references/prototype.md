@@ -1,119 +1,25 @@
-# 回答一个问题的可见实验
+# A visible experiment for one unresolved question
 
-体验稿用低成本成果回答一个明确问题，不是提前开发半个产品。开始前至少知道核心用户、场景、首版任务与范围、代表内容、主要设备和高风险边界；否则调用 `site-brief`。
+Use the retained preview-shell.html for quick, self-contained experiments. It provides neutral tokens, simple components and optional variant controls, not the information architecture. Existing approved visuals take priority over the shell's defaults.
 
-制作前在 [页面设计合同](surface-brief.md) 记录本轮事实和原型覆盖；展示前标明哪些已演示、模拟或未覆盖。原型不能反向创造正式范围。
+## Choose only the necessary experiment
 
-## 1. 选择实验类型
+A structure experiment compares organization while holding real content and base visual language constant. A style experiment preserves task and information architecture while exploring typography, rhythm, color roles, material and image treatment. An interaction experiment compares controls/feedback with the same business outcome. Declare comparison_type; do not force two variants. One reference-aligned recommendation is enough when there is no meaningful alternative.
 
-| 未决问题 | 成果 |
-| --- | --- |
-| 页面如何组织、什么最重要、核心路径如何展开 | 骨架体验稿（默认 2 种高区分度结构，通俗白话对比） |
-| 整体气质、排版、色彩、质感与细节调性 | 视觉体验稿（先问参照物：给得出就贴参考做一版，给不出才在已定骨架上给 2 种差异显著的视觉风格） |
-| 操作顺序、可达状态或业务规则 | 流程/状态体验稿 |
+For real alternatives, describe the tradeoff in ordinary language and recommend one. A/B labels are optional; understandable names are allowed. Shared DOM, reusable components and theme tokens are valid for style alternatives. Two dark/light extremes are not obligatory. The same assets/content must be used so quality differences do not bias the comparison.
 
-新建与整体改版任务默认采用“骨架体验稿双选 ➔ 视觉体验稿（问一轮参照物，再决定贴参考还是双选）（资产平滑继承）”的推进节奏。
+## Lightweight construction
 
-## 2. 形成完整页面方向
+Show enough of the first screen, representative content and key state to resolve the question. Use real content or clearly marked synthetic records. No production database, real sending, payment or fake connected service. Make controls real only when testing interaction. Check basic rendering and navigation; avoid full production testing before the decision is stable.
 
-### 起手壳与公用外观（两类体验稿共用）
+Keep readable Chinese system fonts, coherent icon use, keyboard access, meaningful focus and bounded long text. Pure expressions such as radius/shadow/animation are design choices, not universally mandatory values. Use the craft reference as a context-aware review, not a recipe gate.
 
-- **从起手壳开始，不要每次重写色板**：复制 `assets/design/preview-shell.html` 到项目 `prototypes/` 下再写正文。这个壳只固定三件事——颜色/字阶/间距/圆角、顶部深色切换条与切换脚本、一套通用组件样式（按钮、卡片、读数、控件、列表、表格、标记、空状态，类名清单在文件头注释里）。它**不预设页面长什么样**：台账页、落地页、流程页都从同一个壳开始，正文自己搭。重画一遍色板等于每次重新决定一遍观感，还容易在两版之间漂移。
-- **两版只共用顶栏和色板**：除切换条与颜色、字号、圆角外，两版的分区、组件、密度都可以不同——那正是要比较的东西。共用的是"看起来出自同一个产品"，不是"长得一样"。颜色不参与方案差异（"A 版蓝、B 版绿"会让用户误以为在选风格），配色留给后面的视觉双选。
-- **颜色怎么用**：中性、低饱和。画板与卡面用灰白，文字分四级灰，一个低饱和强调色只表示"能点的东西"（主按钮、选中项、正向状态），一个警示色只表示异常（缺货、超限这类要立刻处理的）。颜色只用来分区块、分文字层级、标状态，不做装饰。骨架稿里出现的颜色越少，后面视觉双选的空间越大。
-- **顶部切换条：深色一条 + 一句说明**：切换条用固定深色底、选中的方案用浅色块，让工具条和下面的页面明确分开；深色条的配色不跟着页面主题走，它是两类体验稿共用的外壳。两个标签固定写 `方案 A` / `方案 B`，两版一模一样，不换成方案短名，也不写成"证据优先 / 顾虑优先"这类轴名；方案的短名只留在 [页面设计合同](surface-brief.md) 的结构候选表里。旁边常驻一句话说明当前这版，直接说这一版先看见什么、再怎么动手，不加"方案 A："这类前缀（编号已经在标签上了）；说明就是一句话，不写"适合谁：… 操作：…"这类同句式的分段列举，不用折叠、不用悬浮提示、不挂问号图标；一行放不下就换行，不截断、不缩小字号。整页只在页脚留一段更长的解释。
-- **切换不加动效**：点下去立刻就是最终样子。切换条、标签和方案切换都不做过渡；动效只留给真正表达状态变化的地方。
-- **字体与数字**：中文与界面文字一律系统字体栈，体验稿阶段不为好看去引外部字体。数字用 `font-variant-numeric: tabular-nums` 对齐。
-- **图标只用 Lucide 一套**：内联 SVG、`stroke-width="2"`、24×24 viewBox，同一界面不混第二套体系，不用 Emoji 或 Unicode 字符顶替按钮、导航和状态图标。图标只用来消除歧义，能删就删。
+## Deliver a visible version
 
-### 交付即停（两级共用）
+Coordinate with builder to register the artifact/version/audience using project.py preview. Prefer the host's actual embedded surface, then an authorized accessible URL or usable file. Screenshots are a fallback; state that interaction has not been experienced. An OS open command and an agent-local localhost URL do not prove the user can access it. No private-data upload to solve access without authorization.
 
-骨架和视觉两级各自做完，都按下这套交付，然后停下：
+Stop only when a material decision needs the user's answer. Reuse references already provided. Do not mechanically ask another reference question or regenerate a stage already decided. A user may accept the recommendation. Record the decision object and its version, not a requirement for unique wording.
 
-- **给路径**：把预览页的文件路径写给用户，他随时能自己打开。
-- **尽量替他打开**：客户端有 open 类工具或内置浏览器，就直接用它渲染这个本地文件；没有就用系统默认浏览器打开（Windows `Start-Process`、macOS `open`、Linux `xdg-open`，按当前系统选一个）。打不开不算交付失败，路径照给，不要为了打开反复重试。
-- **停下等他回话**：只交当前这一级，回话之前不生成下一版、不做下一级。骨架没被选定就不做视觉预览；两级都没选定就不写正式源码。他明确说选哪个才算选定，一句含糊的“还行”不算。
+## Inherit, then productionize
 
-### 骨架体验稿（结构双选）
-
-新建或整体改版默认提供 2 种区分度显著的信息架构方案。用起手壳生成单文件骨架预览页（如 `prototypes/structure-preview.html`），按上面的《交付即停》给路径、尽量替他打开，然后停下等他选定，再进视觉一级。
-
-骨架体验稿规范：
-- **单轴变异原则（Single-Axis Variation）**：双选方案差异必须聚焦在一条主要轴线上（如拓扑轴：“全景看板流” vs “任务向导流”），不在多条轴上同时发散，确保用户与团队可明确归因差异价值；
-- **业务真实性**：使用相同的真实业务对象与文本结构，展示本质拓扑差异；
-- **通俗沟通**：切换条上的一句说明直接说这一版先看见什么、怎么动手，不加"方案 A："这类前缀；更长的解释放页脚；
-- **轻量切换与 URL 驱动**：切换条保持 `[ 方案 A | 方案 B ]` 的轻量切换，标签就是这两个编号，不换成方案短名；切换状态同步绑定至 URL 查询参数（如 `?structure=board` / `?structure=wizard`），刷新不丢失且支持链接直达；
-- **上色但不比色**：骨架稿允许上色（见上方公用外观），但颜色不承担方案差异。用户在这一步只判断信息怎么摆，不判断好不好看。
-
-### 视觉体验稿（贴参考或风格双选）
-
-骨架被用户选定之后，先单独问一轮参照物，再决定做几版。这一轮只问这一句，不问别的：
-
-- **问法固定成一句，三个出口**：有想照着做的网站或截图就发我；心里有参照的产品，报个名字也行；都没有的话我直接给两版，你看完再挑。问句里就带上默认出口，他回一句"没有"就能往下走。**只有一个问题，不编号（`Q1` 是给一轮 3～5 题用的）、不分点列、不加小标题，两三句话说完整条消息**；出口写进句子里，不排成选项清单。
-- **不问"你喜欢什么风格"**：答案多半是"高级、简约、科技感"这类落不到页面上的词。风格名不算依据（见 [视觉方向](visual-direction.md)），问了也只是多一轮客气话。用户主动说了偏好就记成线索，不当依据。
-- **问之前先交底**：他自己的产品或品牌素材可以照搬；别人家的站只贴布局、密度、层级和调性，不搬 Logo、品牌色、专有字体和标志性画面。不说清他以为"照着做"是逐像素克隆，做完才发现不一样。
-- **有参照物就按 [参考输入](reference-input.md) 走**：先看实际图片或打开网址，判断他要的是还原、借鉴还是功能相似；已有明确参考不强制多稿，做一版贴着参考的够用，他想看另一种可能时再补。
-- **没参照物才做两版**：按 [视觉方向](visual-direction.md) 推导 2 种视觉气质截然不同的方案（如：现代科技极简 vs 温暖杂志人文）。
-- **不重复问，也不漏问**：简报或合同里已经记了参考，直接用，不再问一遍。但简报写着"没有官网、没有截图"只说明他没有自家现成素材，不等于他没有想照着做的站——这两件事分开，该问的还是要问。
-- **先看这一级走过没有**：动手前读一次 `state.json` 的状态和合同里的视觉方向。这一步已经选定、方向已经 `confirmed`，说明视觉一级早定了——问句不再问，稿也不再出。用户这时候要的是改现有页面，走局部修改，不重开双选。
-
-定了版数再动手：在选定的骨架上生成单文件视觉预览页（如 `prototypes/visual-preview.html`），按《交付即停》交付并停下。骨架没选定就不做这一步。
-
-视觉体验稿铁律：
-- **单轴调性差异（Different answers, not different tints）**：在同一骨架上通过不同设计主线、色彩角色、字阶韵律与卡片形态拉开实质气质差异，禁止毫无解释的表层换色；
-- **顶栏照用同一套做法**：切换条仍是那条深色条，两个标签同样固定写 `方案 A` / `方案 B`，不换成风格名，也不写"现代 / 编辑"这类气质词；说明换成一两句说清两种气质差在哪，不加"方案 A："这类前缀，也不拿风格名当句子开头的标签。风格名要出现就融进句子里，说清它落在哪些看得见的地方（字阶、色彩角色、卡片形态、密度），或者只写在给用户的说明和 [页面设计合同](surface-brief.md) 的视觉方向表里。切换条是两类体验稿共用的外壳，不参与候选之间的调性比较，也不加动效；只做一版时不放切换条（没有可比的第二版），把要说明的挪到页脚；
-- **只比调性，不动骨架与内容**：两版的信息结构、区块顺序、真实内容与数据完全一致，差异只来自设计主线、色彩角色、字阶与卡片形态；改骨架等于回到结构双选，不是这一步的事；
-- **URL Query 变体切换**：单文件双风格通过 URL 查询参数（如 `?style=modern` / `?style=editorial`）或同一套顶栏切换，天然支持链接分享与再次打开；
-- **坚守轻量，拒绝过度编码**：只展示首屏与代表性核心卡片，数据写死，不写业务逻辑与假接口；
-- **严禁过度测试（红线）**：**绝对禁止在此阶段执行单元测试、合同校验或全套浏览器深度断言**，仅需确保 HTML 语法无致命断裂、本地浏览器可正常渲染；严控 Token 消耗与响应时间；
-- **不承诺绝对速度**：使用“轻量快速生成”等稳健客观表述，不承诺“秒级”。
-
-## 3. 流程或状态体验稿
-
-当文字不足以判断操作顺序、状态转换或业务规则时，制作一个轻量演示：
-
-1. 用一句话说明要回答的问题；
-2. 用业务语言显示相关状态，不只展示 JSON；
-3. 提供少量自由操作；
-4. 提供正常流程、关键边界和应被阻止的操作；
-5. 每次操作后显示发生了什么和当前状态。
-
-默认状态留在内存，使用真实或明确标注的示例内容。不连接正式数据库，不实现登录、支付或真实外部写入。状态演示还要核对派生计数、筛选、详情与列表同步、未保存内容、取消、返回和恢复。
-
-## 4. 微调收敛与资产平滑继承（Demo 即胚胎）
-
-体验稿阶段坚守轻量，但用户确认满意的 Demo 绝非一次性玩具，而是正式开发的**胚胎（Embryo）**：
-
-1. **轻量微调响应**：
-   - 用户针对视觉 Demo 提出的调性偏好（如“色调再明亮些”、“卡片改为两列”），Agent 直接在 Demo 单页的 CSS 变量或局部 HTML 中快速修改响应；
-   - 用户在客户端内置浏览器即时刷新查看效果；
-   - 若用户过早陷入动态数据或复杂业务逻辑细节，明确告知：“当前 Demo 先锁定整体视觉气质与核心排布，进入正式构建后将结合真实数据精准打磨”。
-2. **Token 直接继承**：
-   - Demo 验证通过的 CSS 变量（色彩、字阶、间距、圆角阴影），直接提取并沉淀为正式项目资产 `tokens.css` 或 `tokens.json`。
-3. **HTML 模板直接继承**：
-   - Demo 中经用户敲定的首屏与核心卡片 HTML，直接作为正式开发**第一条纵向切片（Slice 1）**的前端视图蓝本，无需从零手写。
-4. **用户偏好沉淀入约**：
-   - 用户在微调中表达的明确偏好同步写入 `.site/design/surface-brief.md` 的视觉验收标准（`VA-*`）。
-
-确认后，在 `.site/design/surface-brief.md` 中记录：
-
-```text
-本稿回答的问题
-核心页面、状态与主行动
-选定的完整方向与用户原话
-方向来源与项目依据
-设计主线、色彩来源、字体角色和构图命题
-体验稿路径
-素材来源、许可和模拟范围
-正式实现必须补齐的内容
-实际查看的页面、状态和视口
-仍未关闭的发现与限制
-```
-
-交给 `site-builder` 时明确体验稿提取的正式资产。补全内部实现规格不需要用户再次确认；只有出现新的高影响方向或风险决定时才重新确认。
-
-## 5. 完成条件
-
-成果必须实际可见，目标视口已经查看，模拟和缺失范围已经说明。展示前仅需确保页面无致命渲染错误，无需运行重型自动化测试。
-
-文件存在、等待超时、构建成功或一句含糊的“还行”都不能自动构成方向确认。需要用户决定时，只展示当前真正影响结果的一个取舍。
+Preserve selected tokens, layout relationships, content and visual behavior. Keep an explicit inventory of real/simulated/missing capabilities. Experimental DOM glue, hardcoded data and fake success do not become production logic unchanged. Capture requested adjustments as observable acceptance targets. Return one receipt to builder; do not orchestrate another skill.
