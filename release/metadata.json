@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2.0",
   "id": "website-developer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "agent",
   "ownership": "general",
   "name": "website-developer",
@@ -23,7 +23,7 @@
     "quickPrompts": [
       {
         "id": "new-system",
-        "text": "我想建一个客户线索管理后台，先帮我梳理功能和页面结构。"
+        "text": "我想建一个客户线索管理后台，先帮我梳理首版要做的核心功能和流程。"
       },
       {
         "id": "style-redesign",

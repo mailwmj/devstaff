@@ -1,11 +1,11 @@
 ---
 name: site-brief
-version: 1.1
+version: 1.1.0
 description: 核心任务与首版范围收敛。摸清非技术用户的核心任务与边界，严禁提问设计与信息架构。
 ---
 # 需求收敛与发现
 
-遵守 Agent 指令文件（分发根的 `agent/Agent.md`，安装后由宿主注入）里的《说人话》指引。
+遵守 Agent 指令文件的《说人话》指引（分发根为 `agent/Agent.md`，安装后由宿主注入为项目根 `AGENTS.md`）。
 
 ## 职责与红线
 

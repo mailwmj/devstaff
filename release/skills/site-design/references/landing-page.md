@@ -96,7 +96,7 @@ $$\text{One Offer} \longrightarrow \text{One Audience} \longrightarrow \text{One
 
 ### 3. 不要写 AI 腔
 
-中文的 AI 味主要来自句式，不来自词够不够高级。下面这些骨架出现一次就要改写，改写方法见 `AGENTS.md` 的《说人话》：
+中文的 AI 味主要来自句式，不来自词够不够高级。下面这些骨架出现一次就要改写，改写方法见 Agent 指令文件的《说人话》（`AGENTS.md`；分发根 `agent/Agent.md`）：
 
 | 别写 | 改成 |
 | --- | --- |

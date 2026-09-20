@@ -1,6 +1,6 @@
 ---
 name: site-check
-version: 1.1
+version: 1.1.0
 description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴只读验证核心任务和相称的静态、错误、移动端、再次打开行为，不改源码。
 ---
 # 网站检查与验证
@@ -66,7 +66,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 ## 五字段回执
 
-返回 `status / summary / artifacts / evidence / limitations`，说完发现、证据和限制就停下，不改源码、不改需求、不说交付。这些字段最终会变成用户看到的话，措辞按 `AGENTS.md` 的《说人话》。`status` 用 `verified`、`limited` 或 `blocked`：
+返回 `status / summary / artifacts / evidence / limitations`，说完发现、证据和限制就停下，不改源码、不改需求、不说交付。这些字段最终会变成用户看到的话，措辞按 Agent 指令文件的《说人话》（安装后为项目根 `AGENTS.md`，分发根为 `agent/Agent.md`）。`status` 用 `verified`、`limited` 或 `blocked`：
 
 - `verified`：这轮核心任务真的跑通了，有证据。
 - `limited`：核心任务实现了，但有明确没验证的部分；`guided` 可以据此交付，但要把限制说清楚。

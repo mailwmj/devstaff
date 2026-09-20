@@ -1,6 +1,6 @@
 # 渐进式建站 Skills
 
-一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.1）。
+一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.1.0）。
 
 ## 定位
 
@@ -35,7 +35,7 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 
 子 Skill 不继续调用其他 Skill，也不自行宣布交付。它们完成一个任务后只返回 `status / summary / artifacts / evidence / limitations` 五个字段；`site-builder` 重新读取状态后继续。
 
-四个 Skill 对用户说话、以及写网站文案时，统一按 `AGENTS.md` 的《说人话》写：说清谁做了什么，不抬高、不凑三连、不用大词。文风只有这一处来源，其他文件只引用不复述。
+四个 Skill 对用户说话、以及写网站文案时，统一按 Agent 指令文件的《说人话》写（分发根的 `agent/Agent.md`，安装后注入为项目根 `AGENTS.md`）：说清谁做了什么，不抬高、不凑三连、不用大词。文风只有这一处来源，其他文件只引用不复述。
 
 ## 第一性原理
 
@@ -81,6 +81,7 @@ release/          唯一分发根。整个目录可独立打包，不依赖仓�
 ├── package-files.txt 发布文件清单
 ├── agent/            Agent 指令、入口配置与图标
 └── skills/           site-brief/ site-builder/ site-check/ site-design/
+tools/            开发用脚本（从清单重建 dist/ 平台包）
 tests/            开发用测试
 .github/          开发用 CI
 README.md  AGENT-GUIDE.md   开发用文档
@@ -153,6 +154,9 @@ python3 -m unittest discover -s release/skills/site-design/scripts/tests -p 'tes
 python3 -m unittest discover -s release/skills/site-builder/scripts/tests -p 'test_*.py'
 python3 -m unittest discover -s release/skills/site-check/scripts/tests -p 'test_*.py'
 python3 release/skills/site-design/scripts/design.py validate
+python3 tools/build_dist.py                        # 从发布清单重建 dist/ 平台包
 ```
 
-`release/skills/site-*/scripts/tests/` 下的是随包分发的测试，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.9、3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试和 `design.py validate`，确认分发包自带的东西是完整的。
+`release/skills/site-*/scripts/tests/` 下的是随包分发的测试，`package-files.txt` 里已按此列入，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.9、3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试和 `design.py validate`，确认分发包自带的东西是完整的。
+
+`dist/` 不是源码，由 `tools/build_dist.py` 按 `release/package-files.txt` 重建；改了 `release/` 里被清单覆盖的任何文件都要重跑一次。`tests/test_bundle.py` 在 `dist/` 存在时会逐字节校验它和 `release/` 一致，忘重建会直接报错；CI 会先执行一次构建，再跑这组一致性测试。

@@ -4,7 +4,7 @@
 
 安装后四个 Skill 位于同一个 `agent-skills/` 目录下。先解析 `site-builder` 的安装目录，再用相对它的路径运行脚本。
 
-本文件里的 Skill 相对路径都相对**分发根**。分发根在本仓库中是 `release/`，安装后是 `agent-skills/`：在仓库里读作 `release/skills/site-builder/scripts/state.py`，安装后读作 `agent-skills/site-builder/scripts/state.py`。仓库根目录只放开发文件（`tests/`、`.github/`、README 等）。
+本文件里的 Skill 相对路径都相对**分发根**。分发根在本仓库中是 `release/`，安装后是 `agent-skills/`：在仓库里读作 `release/skills/site-builder/scripts/state.py`，安装后读作 `agent-skills/site-builder/scripts/state.py`。仓库根目录只放开发文件（`tests/`、`tools/`、`.github/`、README 等）。
 
 ## 一句话
 
@@ -70,7 +70,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 | 微调收敛与资产继承 | `site-design` | 用户对 Demo 提出偏好 | Demo 的 CSS 变量 → 正式 Token；核心 HTML → 第一条纵向切片模板；偏好 → `VA-*` |
 | 视觉方向：设计主线、视觉世界、构图命题、细节签名 | `site-design` | A2 起 | 合同的"设计推导"与"视觉方向"节 |
 | 落地页与营销转化：版式选型、说服结构、转化文案 | `site-design` | 目标为落地页或营销页 | 合同的"文案台账"等节 |
-| 对用户说的话与网站文案的文风 | 四个 Skill 共同遵守 | 所有对用户的输出 | `AGENTS.md` 的《说人话》 |
+| 对用户说的话与网站文案的文风 | 四个 Skill 共同遵守 | 所有对用户的输出 | Agent 指令文件的《说人话》（`agent/Agent.md`，注入后 `AGENTS.md`） |
 | 中文排版与暗色对比防线 | `site-design` | 中文界面或中西文混排 | 合同相关字段与 `VA-*` |
 | 设计 Token 与基础样式 | `site-design` | 方向确认后 | `assets/design/`；合同"Design Token"节 |
 | 检索候选与实现注意项 | `site-design` | 需要候选或栈注意项 | 合同"设计方法来源"决策记录 |
@@ -84,7 +84,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 
 | 需要什么 | 读 |
 | --- | --- |
-| 对用户怎么说话、网站文案怎么写 | `AGENTS.md` 的《说人话》 |
+| 对用户怎么说话、网站文案怎么写 | Agent 指令文件的《说人话》（`agent/Agent.md`，注入后 `AGENTS.md`） |
 | 项目事实、任务交互合同、范围防火墙、冲突优先级 | `site-design/references/design-context.md` |
 | 视觉推导五步、风格候选、反默认 | `site-design/references/visual-direction.md` |
 | 体验稿、双选、微调与资产继承 | `site-design/references/prototype.md` |
@@ -148,7 +148,7 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 
 ## 交付与沟通
 
-- 对用户说的话按 `AGENTS.md` 的《说人话》写：不用大词、不凑三连、不写没有信息量的开场和收尾、不硬缝转折。
+- 对用户说的话按 Agent 指令文件的《说人话》写（分发根 `agent/Agent.md`，安装后注入为 `AGENTS.md`）：不用大词、不凑三连、不写没有信息量的开场和收尾、不硬缝转折。
 - 只说明：入口、完成的核心任务、实际检查内容、未检查内容、是自检还是独立检查、数据位置与限制。
 - 不把"构建成功"说成"产品已验证"；`limited` 必须点名未验证项。
 - 用户全程不需要看到状态名、路径、模式、回执字段或证据 ID。给用户的是他能看懂的结果、能打开的东西和诚实的边界。

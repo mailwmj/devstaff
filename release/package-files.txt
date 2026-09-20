@@ -10,10 +10,12 @@ skills/site-builder/SKILL.md
 skills/site-builder/VERSION
 skills/site-builder/metadata.json
 skills/site-builder/scripts/state.py
+skills/site-builder/scripts/tests/test_state.py
 skills/site-check/SKILL.md
 skills/site-check/VERSION
 skills/site-check/metadata.json
 skills/site-check/scripts/check.py
+skills/site-check/scripts/tests/test_check.py
 skills/site-design/SKILL.md
 skills/site-design/VERSION
 skills/site-design/agents/openai.yaml
@@ -79,3 +81,4 @@ skills/site-design/references/reference-input.md
 skills/site-design/references/surface-brief.md
 skills/site-design/references/visual-direction.md
 skills/site-design/scripts/design.py
+skills/site-design/scripts/tests/test_design.py
