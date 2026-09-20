@@ -8,13 +8,12 @@
   体验稿起手壳（site-design）
   ==================================================================
   这是骨架双选稿和视觉双选稿的起手件，它只做三件事：
-    1. 把颜色、字阶、间距、圆角固定下来（下面的 :root，不用改）；
+    1. 把颜色、字阶、间距、圆角固定下来（下面的 :root 是两版共同的起点）；
     2. 给出顶部那条深色切换条和切换脚本；
     3. 备一套通用组件样式（按钮、卡片、标记、表单控件…），按需取用。
 
   它不预设页面长什么样。台账页、落地页、流程页都从这里开始，
   正文区自己搭：该有什么分区、放几张卡、要不要表格，由项目和方案决定。
-  只有顶栏切换条和色板是两版共用的，其余都不共用。
 
   只做一版时（用户给了参考网站或截图，按参考贴一版），整条切换条连脚本一起删掉：
   没有可比的第二版，留着这条只会让人以为还有另一版可看；要说明的话放进页脚。
@@ -28,14 +27,19 @@
     3. 两个 view 里的正文全部自己写。
   不要改的：顶栏两个标签固定写「方案 A」「方案 B」，两版一模一样。
   骨架稿不换成方案短名，视觉稿不换成风格名，也不写成「证据优先 / 顾虑优先」这类轴名。
-  颜色纪律：颜色只用来分区块、分文字层级、标状态，不用来区分方案。
-           两个方案必须共用同一套颜色与字号。
+  颜色纪律按阶段分：
+    骨架稿（结构双选）两版共用同一套颜色与字号——颜色只用来分区块、分文字层级、
+    标状态，不参与方案差异，配色留给后面的视觉双选。
+    视觉稿（风格双选）两版共用同一份正文与内容，各自覆盖自己那一版的 token（见 :root
+    下面的作用域说明）：排版层级、韵律与密度、边界与材质、色彩角色里至少换掉两条；
+    把两版配色统一或去色后仍要一眼可分，只换配色和圆角的两版是同一个方向。
+    交付前跑一次 `design.py check-preview --file <本稿>`，它按作用域算两版的机制轴差异。
   图标：Lucide 内联 SVG（stroke-width 2），同界面只用这一套，不用 Emoji 顶替。
   切换：不加动效。
 -->
 <style>
 /* =====================================================================
-   1. Token：固定。改这里就等于改整套稿子的观感
+   1. Token：两版共同的起点。骨架稿两版共用这里；视觉稿在此基础上按作用域覆盖。
    同心圆角：外框 16 时，内部元素不超过 16 − 6 = 10
    ===================================================================== */
 :root{
@@ -54,6 +58,12 @@
   /* 强调色：低饱和，只表示「能点的东西」 */
   --accent:#41648C;
   --accent-weak:#E8EEF6;
+  --accent-hover:#34506F;
+  --accent-line:#CFDCEA;
+  --on-accent:#FBFCFD;
+  /* 可交互与安静表面（悬停、表头） */
+  --surface-hover:#F6F7F8;
+  --surface-quiet:#FAFBFB;
   /* 状态色 */
   --warn:#A6493B;
   --warn-weak:#F7EAE7;
@@ -65,6 +75,18 @@
   --r-inner:10px;
   --r-chip:999px;
   --lift:0 0 0 1px rgba(0,0,0,.05), 0 1px 2px -1px rgba(0,0,0,.05);
+  /* 字阶与韵律：视觉稿两版在这一组拉开差距 */
+  --fs-body:14px;
+  --lh-body:1.65;
+  --fs-title:22px;
+  --fs-h2:14.5px;
+  --fs-sub:13px;
+  --fs-lead:26px;
+  /* 间距与密度 */
+  --gap:14px;
+  --pad-stage:22px 0 64px;
+  --pad-panel:14px 16px;
+  --wrap:1120px;
   /* 只用于可中断的状态过渡；切换条不做动效 */
   --ease:cubic-bezier(.23,1,.32,1);
   --dur:160ms;
@@ -78,15 +100,27 @@
   /* 字体：系统栈，不引外部字体 */
   --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
 }
+/* ---------------------------------------------------------------------
+   视觉稿的作用域：两版共用上面的 :root 作为同一起点，再各自覆盖自己那一版。
+   骨架稿删掉这一段——骨架稿两版共用同一套颜色与字号，差异写在正文结构上。
+   只覆盖语义角色与尺度（色彩角色、字体角色、字阶、间距、圆角、阴影），不改组件类名，
+   也不给两版各抄一份 DOM；字体只换系统栈，体验稿阶段不引外部字体。
+   换强调色时连它的一家一起换（--accent-weak / --accent-hover /
+   --accent-line / --on-accent），否则悬停与描边还是旧色。
+   例（按项目方向填，不是配色建议）：
+     #view-a{ --canvas:#F7F3EC; --accent:#B4562F; --r-card:20px; --fs-title:26px; --gap:18px; }
+     #view-b{ --canvas:#EDF1F5; --accent:#1F6FEB; --r-card:8px;  --fs-title:19px; --gap:9px; }
+   底色要跟着这一版走时，给这个 view 加 background:var(--canvas)；body 与顶栏是共用外壳。
+   --------------------------------------------------------------------- */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--canvas);color:var(--text);font:14px/1.65 var(--font);-webkit-font-smoothing:antialiased}
+body{background:var(--canvas);color:var(--text);font:var(--fs-body)/var(--lh-body) var(--font);-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 h1,h2,h3,p{margin:0}
 [hidden]{display:none !important}
 .tnum{font-variant-numeric:tabular-nums}
 svg{display:block}
-.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px}
 
 /* =====================================================================
    2. 顶部切换条：深色一条，一行说明。两类体验稿共用，不参与页面配色。
@@ -104,10 +138,10 @@ svg{display:block}
 /* =====================================================================
    3. 通用组件：按需取用，不是每样都要用上
    ===================================================================== */
-.stage{padding:22px 0 64px}
+.stage{padding:var(--pad-stage)}
 .pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
-.pagehead h1{font-size:22px;font-weight:600}
-.pagesub{font-size:13px;color:var(--text-3);margin-top:4px}
+.pagehead h1{font-size:var(--fs-title);font-weight:600}
+.pagesub{font-size:var(--fs-sub);color:var(--text-3);margin-top:4px}
 .foot{margin-top:16px;font-size:12.5px;line-height:1.75;color:var(--text-4);max-width:60em}
 
 /* 按钮：一屏只留一个实心主行动 */
@@ -117,29 +151,29 @@ svg{display:block}
   padding:0 14px;min-height:38px;font-size:13.5px;font-weight:500;white-space:nowrap;
   transition:background-color var(--dur) var(--ease);
 }
-.btn:hover{background:#F6F7F8}
+.btn:hover{background:var(--surface-hover)}
 .btn:active{transform:scale(.96)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#FBFCFD;min-height:42px;padding:0 18px;font-weight:600}
-.btn-primary:hover{background:#34506F}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);min-height:42px;padding:0 18px;font-weight:600}
+.btn-primary:hover{background:var(--accent-hover)}
 .btn-lg{min-height:46px;padding:0 22px;font-size:14.5px}
 .btn-sm{padding:0 11px;min-height:32px;font-size:13px}
 
 /* 卡片与分区 */
 .panel{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--lift);overflow:hidden}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
-.panel-head h2{font-size:14.5px;font-weight:600}
+.panel-head h2{font-size:var(--fs-h2);font-weight:600}
 .panel-head .more{font-size:12.5px;color:var(--text-3)}
-.panel-body{padding:14px 16px}
-.grid{display:grid;gap:14px}
+.panel-body{padding:var(--pad-panel)}
+.grid{display:grid;gap:var(--gap)}
 .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 /* 读数 */
 .stat{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--lift);padding:14px 16px}
 .stat .k{font-size:12.5px;color:var(--text-3)}
-.stat .v{font-size:26px;font-weight:600;line-height:1.2;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .v{font-size:var(--fs-lead);font-weight:600;line-height:1.2;margin-top:3px;font-variant-numeric:tabular-nums}
 .stat .v i{font-style:normal;font-size:12.5px;font-weight:400;color:var(--text-3);margin-left:4px}
-.stat-lead{border:1px solid #CFDCEA;box-shadow:none;background:var(--accent-weak)}
+.stat-lead{border:1px solid var(--accent-line);box-shadow:none;background:var(--accent-weak)}
 .stat-lead .v{color:var(--accent)}
 .stat-warn .v{color:var(--warn)}
 
@@ -155,7 +189,7 @@ svg{display:block}
 
 /* 标签与筛选项 */
 .chip{font-size:13px;padding:6px 12px;border-radius:var(--r-chip);border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);white-space:nowrap}
-.chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#FBFCFB}
+.chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:var(--on-accent)}
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1;padding:5px 9px;border-radius:6px;white-space:nowrap}
 .tag::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
 .tag-out{background:var(--warn-weak);color:var(--warn);box-shadow:inset 0 0 0 1px rgba(166,73,59,.22)}
@@ -165,14 +199,14 @@ svg{display:block}
 /* 列表与表格 */
 .list-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .list-row:last-child{border-bottom:0}
-.list-row:hover{background:#FAFBFB}
+.list-row:hover{background:var(--surface-quiet)}
 .list-row .who{flex:1;min-width:0}
 .list-row .who b{display:block;font-size:14px;font-weight:500;overflow-wrap:anywhere}
 .list-row .who em{display:block;font-style:normal;font-size:12.5px;color:var(--text-3);margin-top:2px;overflow-wrap:anywhere}
 .list-row .side-note{font-size:12.5px;color:var(--text-2);white-space:nowrap}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
-thead th{font-size:12.5px;font-weight:500;color:var(--text-3);background:#FAFBFB;white-space:nowrap}
+thead th{font-size:12.5px;font-weight:500;color:var(--text-3);background:var(--surface-quiet);white-space:nowrap}
 tbody tr:last-child td{border-bottom:0}
 th.num,td.num{text-align:right;white-space:nowrap}
 th.act,td.act{text-align:right;white-space:nowrap}

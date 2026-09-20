@@ -22,11 +22,11 @@ Use existing product/brand/content, the approved task and the facts recorded in 
 | Current-page review | [craft](references/craft-review.md) |
 | Additional candidate research | [toolchain](references/design-toolchain.md) |
 
-Stage the design as two visible choices. A new surface or changed core structure always compares at least two information-architecture skeletons (comparison_type: structure) before any visual work; do not present a single finished design for a new site. After the user picks a skeleton, ask for a reference, screenshot or style preference: a supplied reference yields one reference-aligned version, no reference yields at least two style candidates (comparison_type: style). State comparison_type: structure fixes content and visual language; style fixes information architecture/task/content but can vary typography, rhythm, color roles/material; interaction fixes business outcomes and compares control/feedback. Shared DOM is valid for style. No forced dark version, historical style or number of differing axes.
+Stage the design as two visible choices. A new surface or changed core structure always compares at least two information-architecture skeletons (comparison_type: structure) before any visual work; do not present a single finished design for a new site. After the user picks a skeleton, ask for a reference, screenshot or style preference: a supplied reference yields one reference-aligned version, no reference yields at least two style candidates (comparison_type: style). State comparison_type: structure fixes content and visual language; style fixes information architecture/task/content but can vary typography, rhythm, color roles/material; interaction fixes business outcomes and compares control/feedback. Two style candidates give two different answers, not two tints: at least two visible mechanisms differ, and the pair stays distinguishable after the palettes are unified or the color is stripped. Shared DOM is valid for style; a token-only swap is still one direction. No forced dark version, historical style or number of differing axes.
 
 Tools prioritize task clarity, appropriate density and consistency; marketing prioritizes truthful expression, content hierarchy and suitable differentiation. Reusing a sound category convention is not a failure. Preserve all knowledge assets and calibrated tokens; no catalog ranking decides the product.
 
-Make lightweight previews from the existing shell, then adapt the body to real content. Register artifact/hash/audience with builder's project.py. If the user cannot access the preview, supply a visible fallback and disclose that interactivity has not been experienced. Do not advance past a genuinely unresolved user decision.
+Make lightweight previews from the existing shell, then adapt the body to real content. Deliver every structure and style choice as a page you have rendered and, on a same-machine runtime, opened in the user's browser; a path or a screenshot alone is not the handover. For a style pair, run design.py check-preview before handover and report the axes that differ; a colour-only pair is not a handover. Register artifact/hash/audience with builder's project.py. If the user cannot access the preview, supply a visible fallback and disclose that interactivity has not been experienced. Do not advance past a genuinely unresolved user decision.
 
 Carry approved layout/tokens/content into implementation. Experimental state or hardcoded success is not production functionality. Keep simulated versus implemented capability explicit. Use v2 machine targets for new contracts; explain rationale in Markdown without duplicating a manual acceptance index.
 
@@ -38,19 +38,19 @@ Return the five-field receipt to builder; don't call brief or check directly, mu
 
 The design paths below load one reference per step. Read the next step only when needed; skip inapplicable stages. A is a product surface; B is a conversion page.
 
-合计约 62KB，单步最大 17KB。
+合计约 64KB，单步最大 17KB。
 
 [Contract](references/surface-brief.md)（18KB） is the shared artifact; read once and update only applicable sections.
 
 | Step | Purpose | Read | Size |
 | --- | --- | --- | --- |
 | A1 | Establish task context | [design-context](references/design-context.md) | 9KB |
-| A2 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 12KB |
-| A3 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
+| A2 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 13KB |
+| A3 | Render the necessary experiment | [prototype](references/prototype.md) | 4KB |
 | A4 | Export approved tokens | [design-tokens](references/design-tokens.md) | 10KB |
 | A5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |
 | B1 | Establish task context | [design-context](references/design-context.md) | 9KB |
 | B2 | Arrange truthful conversion content | [landing-page](references/landing-page.md) | 10KB |
-| B3 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 12KB |
-| B4 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
+| B3 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 13KB |
+| B4 | Render the necessary experiment | [prototype](references/prototype.md) | 4KB |
 | B5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |

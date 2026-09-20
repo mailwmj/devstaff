@@ -94,7 +94,9 @@
 
 ## 3. 新建站固定两段选择
 
-新建页面、整体改版或信息结构变化时，结构阶段固定给两套信息架构骨架（`comparison_type: structure`），用户选定骨架后才进入视觉。视觉阶段先问参照物：用户给了网站、截图或风格偏好，就贴着参照做一版；没有参照，才出两套气质不同的视觉候选（`comparison_type: style`）。局部修改或已有成熟设计系统，继承现状，不重跑这两段；五步推导方法照旧适用。
+新建页面、整体改版或信息结构变化时，结构阶段固定给两套信息架构骨架（`comparison_type: structure`），用户选定骨架后才进入视觉。两段都用浏览器实际打开来交付：自己先看过渲染和 `方案 A` / `方案 B` 的切换，再在用户同机时替他把页面打开；只发路径、只发截图都不算交付，宿主完全没有浏览器时说明情况并按 [体验稿](prototype.md) 的降级规则处理。视觉阶段先问参照物：用户给了网站、截图或风格偏好，就贴着参照做一版；没有参照，才出两套气质不同的视觉候选（`comparison_type: style`）。局部修改或已有成熟设计系统，继承现状，不重跑这两段；五步推导方法照旧适用。
+
+风格双选不是同一页换主题。两版要给出**两个不同的答案**：排版层级、空间韵律与密度、边界与材质、色彩角色、构图重心、素材处理里，至少两条机制明显不同；只换配色、圆角或主题变量的是同一个方向的两种上色，只算一版。自检用**交换检查**：把两版的配色统一或去色、字体对齐后，两版仍要一眼可分；分不出来就重做，不靠改风格名或加装饰充数。机械底线是 `design.py check-preview --file <体验稿>`：它按声明过的非颜色属性算机制轴差异，只差颜色、或只差一条轴就阻断；报告 Not applicable 时说明作用域没按起手壳的约定写，这时更要在真实渲染上人工核对并写明结论。
 
 Declare `comparison_type` in the contract:
 
@@ -104,7 +106,7 @@ Declare `comparison_type` in the contract:
 | style | task, information architecture, content, primary actions | typography hierarchy, rhythm, colors, boundaries, material and image treatment |
 | interaction | business rules and outcome | controls, operation sequence and feedback |
 
-Style alternatives may share DOM and data. A second valid light theme need not become dark to manufacture contrast. No fixed number of different axes, mandatory era contrast or two-render-branch rule. Explain the visible tradeoff and fit; render both under the same content/state/viewport before judging.
+Style alternatives may share DOM, components and data, but a theme swap is not a second direction: at least two named mechanisms must differ visibly (typographic hierarchy, spatial rhythm and density, boundaries and material, color roles, composition weight, image treatment), and the pair must stay distinguishable after the palettes are unified or stripped and the fonts aligned. A second valid light theme need not become dark to manufacture contrast. No fixed number of axes, mandatory era contrast or two-render-branch rule. Explain the visible tradeoff and fit; render both under the same content/state/viewport before judging.
 
 A tool can deliberately inherit a familiar table or workbench. Marketing can emphasize brand expression. A reusable convention is not automatically generic failure. Aesthetic conclusions come from rendered comparison, not a regex matching a sentence about reskinning.
 

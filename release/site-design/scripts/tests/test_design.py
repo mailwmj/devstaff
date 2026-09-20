@@ -691,6 +691,30 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.assertIn("unicode-range", cjk)
         self.assertIn("中国大陆不可靠", cjk)
 
+    def test_style_candidates_keep_a_visible_difference_bar(self):
+        # The 1.2 rewrite deleted the differentiation bar (差异显著 / 遮色自检 /
+        # 换肤反模式) from visual-direction.md and prototype.md, but the shell
+        # still told both stages to share one palette and one type scale. A live
+        # run then shipped 方案 A / 方案 B that differed only in background and
+        # accent colour. The bar is a rendered judgment — lint must not fake a
+        # verdict — so pin it in the references the style step actually reads,
+        # and keep the caveats that stopped the old rule demanding a dark variant.
+        direction = (SKILL_ROOT / "references" / "visual-direction.md").read_text(encoding="utf-8")
+        prototype = (SKILL_ROOT / "references" / "prototype.md").read_text(encoding="utf-8")
+        shell = (SKILL_ROOT / "assets" / "design" / "preview-shell.html").read_text(encoding="utf-8")
+
+        self.assertIn("交换检查", direction)
+        self.assertIn("两个不同的答案", direction)
+        self.assertIn("theme swap is not a second direction", direction)
+        self.assertIn("No fixed number of axes", direction)
+        self.assertIn("exchange check", prototype)
+        self.assertIn("not two tints", prototype)
+        self.assertIn("颜色纪律按阶段分", shell)
+        self.assertIn("至少换掉两条", shell)
+        # The floor must be reachable at handover, not only described.
+        self.assertIn("check-preview", prototype)
+        self.assertIn("check-preview", direction)
+        self.assertIn("check-preview", (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8"))
 
     def test_runtime_references_are_flat_and_bounded(self):
         references = SKILL_ROOT / "references"
@@ -848,6 +872,118 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.assertNotIn(".site/design/design-intent.md", content)
         self.assertNotIn(".v3/design/design-intent.md", content)
         self.assertNotIn("MASTER.md", content)
+
+
+class CheckPreviewTests(unittest.TestCase):
+    """The style step's mechanical floor: two candidates must differ on at least
+    two mechanism axes. The 1.2 rewrite dropped the prose requirement and left
+    the shell telling both stages to share one palette, so a live run handed the
+    user 方案 A / 方案 B that differed only in background, accent and radius.
+    This check reads the preview the user actually gets.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _preview(self, scopes, view_a='<section id="view-a"></section>',
+                 view_b='<section id="view-b"></section>'):
+        path = self.root / "preview.html"
+        path.write_text(
+            "<!doctype html><html><head><style>" + scopes + "</style></head><body>"
+            + view_a + view_b + "</body></html>", encoding="utf-8")
+        return path
+
+    def test_color_only_pair_is_blocked(self):
+        path = self._preview("#view-a{--canvas:#FFF;--accent:#B4632F}"
+                             "#view-b{--canvas:#EEF;--accent:#1F5FA8}")
+        report = design.check_preview(path)
+        self.assertTrue(report["applicable"])
+        self.assertFalse(report["passed"])
+        self.assertEqual([b["code"] for b in report["blockers"]],
+                         ["tint_only_candidates"])
+        self.assertIn("--canvas", report["blockers"][0]["detail"])
+
+    def test_color_plus_one_axis_is_still_blocked(self):
+        # The live run's shape: a warm/cool palette plus a radius change.
+        path = self._preview("#view-a{--canvas:#FFF;--r-card:0px}"
+                             "#view-b{--canvas:#EEF;--r-card:8px}")
+        report = design.check_preview(path)
+        self.assertFalse(report["passed"])
+        self.assertEqual([b["code"] for b in report["blockers"]],
+                         ["too_few_mechanism_axes"])
+        self.assertEqual(report["differing_axes"], ["boundaries"])
+
+    def test_two_mechanism_axes_pass(self):
+        path = self._preview("#view-a{--fs-title:30px;--gap:20px}"
+                             "#view-b{--fs-title:18px;--gap:9px}")
+        report = design.check_preview(path)
+        self.assertTrue(report["passed"], report)
+        self.assertEqual(report["differing_axes"], ["typography", "rhythm"])
+        self.assertEqual(report["differing_axis_labels"], ["排版层级", "韵律与密度"])
+
+    def test_unscoped_preview_is_not_applicable_not_failed(self):
+        # A preview the vocabulary cannot read must not be failed by text.
+        path = self._preview(".card{--gap:20px}.panel{--gap:8px}")
+        report = design.check_preview(path)
+        self.assertFalse(report["applicable"])
+        self.assertTrue(report["passed"])
+        self.assertEqual([w["code"] for w in report["warnings"]],
+                         ["preview_variants_not_scoped"])
+
+    def test_root_class_scopes_are_read(self):
+        path = self._preview(".airy .panel{--gap:20px;--fs-title:28px}"
+                             ".dense .panel{--gap:8px;--fs-title:18px}",
+                             view_a='<section id="view-a" class="airy"></section>',
+                             view_b='<section id="view-b" class="dense"></section>')
+        report = design.check_preview(path)
+        self.assertTrue(report["passed"], report)
+        self.assertEqual(report["differing_axes"], ["typography", "rhythm"])
+
+    def test_inline_style_on_the_view_root_counts(self):
+        path = self._preview(
+            "",
+            view_a='<section id="view-a" style="--gap:20px;--fs-title:28px"></section>',
+            view_b='<section id="view-b" style="--gap:8px;--fs-title:18px"></section>')
+        report = design.check_preview(path)
+        self.assertTrue(report["passed"], report)
+
+    def test_color_shorthands_stay_color(self):
+        path = self._preview("#view-a{border-color:#111;background-color:#FFF}"
+                             "#view-b{border-color:#222;background-color:#EEE}")
+        report = design.check_preview(path)
+        self.assertEqual(report["differing_axes"], [])
+        self.assertEqual([b["code"] for b in report["blockers"]],
+                         ["tint_only_candidates"])
+
+    def test_line_height_is_typography_not_color(self):
+        # ``--line`` is a border colour in the shell; ``--line-height`` is not.
+        path = self._preview("#view-a{--line-height:1.7;--gap:18px}"
+                             "#view-b{--line-height:1.4;--gap:8px}")
+        report = design.check_preview(path)
+        self.assertTrue(report["passed"], report)
+        self.assertEqual(report["differing_axes"], ["typography", "rhythm"])
+
+    def test_missing_file_is_reported_not_crashed(self):
+        report = design.check_preview(self.root / "absent.html")
+        self.assertEqual([b["code"] for b in report["blockers"]], ["missing_preview"])
+
+    def test_cli_summary_names_the_axes(self):
+        path = self._preview("#view-a{--fs-title:30px;--gap:20px}"
+                             "#view-b{--fs-title:18px;--gap:9px}")
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "check-preview", "--file", str(path),
+             "--summary"],
+            cwd=SKILL_ROOT.parent, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        summary = json.loads(completed.stdout)
+        self.assertTrue(summary["passed"])
+        self.assertTrue(summary["applicable"])
+        self.assertEqual(summary["differing_axis_labels"], ["排版层级", "韵律与密度"])
 
 
 class LintUiTests(unittest.TestCase):

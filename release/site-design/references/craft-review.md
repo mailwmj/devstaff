@@ -87,7 +87,7 @@ Star characters, generic names and a sentence mentioning reskinning cannot alone
 - 形态出现在营销落地页且与 `landing-page.md` 选定的版式一致时，是合理采用，不是默认；
 - 同页多种默认形态叠加（Hero+卡片流+pill 云+渐变+装饰动画）时，即使每项单独可解释，整体仍是生成式产物，按 §8 列为发现。
 
-`design.py lint-ui` 不报告此类问题；它只报告能从源码文本确定判定的事实（图标体系混用、Emoji 冒充图标、伪造证据、排除能力复现、候选换肤）。
+`design.py lint-ui` 不报告此类问题；它只报告能从源码文本确定判定的事实（图标体系混用、Emoji 冒充图标、伪造证据、排除能力复现）。候选是否只是换肤，由上面的交换检查在真实渲染上判断。
 
 ## 6. 任务、状态与可访问操作
 

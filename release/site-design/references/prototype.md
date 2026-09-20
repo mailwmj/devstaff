@@ -4,9 +4,9 @@ Use the retained preview-shell.html for quick, self-contained experiments. It pr
 
 ## Choose only the necessary experiment
 
-A structure experiment compares organization while holding real content and base visual language constant. A style experiment preserves task and information architecture while exploring typography, rhythm, color roles, material and image treatment. An interaction experiment compares controls/feedback with the same business outcome. Declare comparison_type. A new surface or changed core structure always shows at least two structure variants before any visual work. The visual step shows one reference-aligned version when the user supplied a reference, otherwise at least two style variants. Local edits and inherited design systems keep their confirmed direction without a new comparison.
+A structure experiment compares organization while holding real content and base visual language constant. A style experiment preserves task and information architecture while exploring typography, rhythm, color roles, material and image treatment. An interaction experiment compares controls/feedback with the same business outcome. Declare comparison_type. A new surface or changed core structure always shows at least two structure variants before any visual work. The visual step shows one reference-aligned version when the user supplied a reference, otherwise at least two style variants. Two style variants are two answers, not two tints: task, structure and content stay identical while at least two visible mechanisms differ enough to survive the exchange check. Local edits and inherited design systems keep their confirmed direction without a new comparison.
 
-Describe the tradeoff in ordinary language and recommend one. Keep the preview switch labels as 方案 A / 方案 B so candidates stay comparable. Shared DOM, reusable components and theme tokens are valid for style alternatives. Two dark/light extremes are not obligatory. The same assets/content must be used so quality differences do not bias the comparison.
+Describe the tradeoff in ordinary language and recommend one. Keep the preview switch labels as 方案 A / 方案 B so candidates stay comparable. Shared DOM, reusable components and theme tokens are valid for style alternatives, but a pair whose only difference is those tokens is one direction, not two: unify the palettes or strip color and the two candidates must still be easy to tell apart. Two dark/light extremes are not obligatory. The same assets/content must be used so quality differences do not bias the comparison.
 
 ## Lightweight construction
 
@@ -16,7 +16,11 @@ Keep readable Chinese system fonts, coherent icon use, keyboard access, meaningf
 
 ## Deliver a visible version
 
-Coordinate with builder to register the artifact/version/audience using project.py preview. Prefer the host's actual embedded surface, then an authorized accessible URL or usable file. Screenshots are a fallback; state that interaction has not been experienced. An OS open command and an agent-local localhost URL do not prove the user can access it. No private-data upload to solve access without authorization.
+Both choice stages — the two structure skeletons first, the style candidates later — are delivered as a page opened in a browser, not as a path the user has to open. Render each candidate yourself first and look at the actual layout and the 方案 A / 方案 B switch before describing it. When the runtime is on the user's own machine, open the page for the user with the host's browser or system open command. If the host has no browser at all, say so and use the visible fallback below.
+
+Before a style handover, run `design.py check-preview --file <preview> --summary` and fix what it blocks: a pair that differs only in colour, or in a single mechanism axis, is one direction with two palettes. When it reports the preview as not scoped, judge the exchange check on the render itself and say what differed; "not applicable" is not a pass.
+
+Coordinate with builder to register the artifact/version/audience using project.py preview. Prefer the host's actual embedded surface, then an authorized accessible URL or usable file. Screenshots are a fallback; state that interaction has not been experienced. Opening a page shows what you saw; it is not evidence that a remote user can reach it, so an OS open command and an agent-local localhost URL do not establish user access. No private-data upload to solve access without authorization.
 
 Stop only when a material decision needs the user's answer. Reuse references already provided. Do not mechanically ask another reference question or regenerate a stage already decided. A user may accept the recommendation. Record the decision object and its version, not a requirement for unique wording.
 

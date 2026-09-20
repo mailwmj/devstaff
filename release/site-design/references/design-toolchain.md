@@ -103,11 +103,14 @@ Contract effect：进入设计主线 / Token / 组件状态 / VA-* 的具体机�
 ```text
 python3 <site-design 安装目录>/scripts/design.py check-contract --root <项目根> --phase <direction|prebuild|precheck> --summary
 python3 <site-design 安装目录>/scripts/design.py lint-ui --root <项目根> --summary
+python3 <site-design 安装目录>/scripts/design.py check-preview --file <体验稿.html> --summary
 ```
 
 完整报告随项目规模增长（`lint-ui` 每扫一个 UI 文件就多一条清单项），直接打印会把清单与哈希灌进上下文。默认先看 `--summary`：它只给 `passed`、`blocker_count` / `warning_count`、前 5 条 finding 和被截断数量，另附 `scanned_file_count` / `tracked_file_count`（用 `--changed-from` 时两者不同）。需要逐条修时用 `--out <路径>` 落盘完整报告，再从文件里按 `code` / `file` 取相关条目；`--max-findings N` 只加宽摘要，不改变落盘内容。不加 `--summary` 时仍是原来的完整报告。
 
-`lint-ui` 是静态扫描，只覆盖图标体系混用、编造社会证明、排除项泄漏和换肤候选那几条确定性规则。**排版度量与渲染效果不在其中**：负字距、裸 `bold`/`700` 伪粗体、中文 webfont 全量加载、字号 / 行高 / 行长 / 字面，仍由 [中文排版规范](chinese-typography.md) 与 [工艺审查](craft-review.md) §3 在实际渲染上人工核对。`passed` 只表示它覆盖的规则通过，不表示排版或设计成立。
+`lint-ui` 是静态扫描，只覆盖图标体系混用、编造社会证明和排除项泄漏那几条确定性规则。**排版度量与渲染效果不在其中**：负字距、裸 `bold`/`700` 伪粗体、中文 webfont 全量加载、字号 / 行高 / 行长 / 字面，仍由 [中文排版规范](chinese-typography.md) 与 [工艺审查](craft-review.md) §3 在实际渲染上人工核对。`passed` 只表示它覆盖的规则通过，不表示排版或设计成立。
+
+`check-preview` 只读体验稿里两版各自的作用域（`#view-a` / `#view-b`，或两版根元素各自的类名与内联样式），按**声明过的非颜色属性**算机制轴差异：只差颜色、或只差一条机制轴都会阻断，并报出相差的属性与取值。它是交换检查的机械底线，不做审美判断；识别不到作用域时报告 `applicable: false` 并提醒人工核对，不以文本猜测判失败。
 
 ## 验证与边界
 

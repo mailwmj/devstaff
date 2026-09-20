@@ -1160,10 +1160,11 @@ def _excluded_capabilities(body):
 
 
 def _candidate_skin_blockers(body):
-    """Free-text judgments and DOM reuse do not deterministically prove quality.
+    """Kept as a no-op: two rendered candidates are judged, not counted.
 
-    Compare rendered alternatives under the same frame. A source lint must
-    not convert the phrase 'not a reskin' into a fabricated failure.
+    The mechanical floor lives in ``check_preview``, which reads the preview
+    artifact the user gets rather than contract prose. A source lint must not
+    convert the phrase 'not a reskin' into a fabricated failure.
     """
     return []
 
@@ -1303,10 +1304,10 @@ def _scan_file(rel, text, excepted_chars, icon_system, caps):
 # both non-blocking and frequently wrong trains agents to ignore warnings.
 #
 # Generated sameness is still caught where it can actually be judged:
-# ``_candidate_skin_blockers`` hard-fails two declared directions that differ
-# only by color and font, and ``check_contract`` requires each derived design
-# judgment to cite a project fact. Aesthetic review stays in craft-review.md,
-# where a reader can weigh context instead of a threshold.
+# ``check_contract`` requires each derived design judgment to cite a project
+# fact, and craft-review.md's exchange check judges two candidates on the
+# render. Aesthetic review stays in craft-review.md, where a reader can weigh
+# context instead of a threshold.
 
 
 def _is_exempt(rel_posix, exemptions):
@@ -1598,6 +1599,258 @@ def lint_ui(root, contract_rel, changed_from=None):
                         file_hashes)
 
 
+# --- preview variant check ------------------------------------------------
+# The style step hands the user two candidates, and the exchange check that
+# judges them is a rendered judgment: no source lint may declare a winner.
+# Declared styling is still a source-text fact. When both candidates are scoped
+# in the preview (the shell's convention), the checker can report whether any
+# non-color mechanism actually differs and name the axes. It never guesses: a
+# preview that does not follow the convention is reported as not applicable,
+# not as a failure, so an unconventional-but-honest pair is not failed by text.
+PREVIEW_MIN_AXES = 2
+
+PREVIEW_VIEW_MARKERS = {
+    'a': ('#view-a', '#view_a', '.view-a', '[data-view="a"]', "[data-view='a']", '[data-view=a]'),
+    'b': ('#view-b', '#view_b', '.view-b', '[data-view="b"]', "[data-view='b']", '[data-view=b]'),
+}
+# Mechanism axes, not colors: the exchange check unifies the palettes and asks
+# what is still different. Prefix matching keeps shorthands covered without
+# enumerating every longhand.
+PREVIEW_AXIS_PROPERTIES = {
+    'typography': ('font', 'line-height', 'letter-spacing', 'text-transform'),
+    'rhythm': ('gap', 'padding', 'margin', 'max-width', 'max-inline-size', 'min-height'),
+    'boundaries': ('border-width', 'border-style', 'border-radius', 'border-top', 'border-right',
+                   'border-bottom', 'border-left', 'box-shadow', 'outline', 'backdrop-filter'),
+    'composition': ('grid-template', 'grid-auto', 'flex', 'order', 'justify-content',
+                    'align-items', 'aspect-ratio', 'text-align', 'position', 'columns',
+                    'column-count', 'width', 'height', 'object-fit', 'clip-path'),
+}
+PREVIEW_AXIS_PREFIXES = {
+    'typography': ('--font', '--fs', '--lh', '--line-height', '--tracking', '--weight', '--leading'),
+    'rhythm': ('--gap', '--pad', '--wrap', '--space', '--density', '--rhythm'),
+    'boundaries': ('--r-', '--radius', '--lift', '--shadow', '--border', '--edge'),
+    'composition': ('--grid', '--cols', '--order', '--layout'),
+}
+PREVIEW_COLOR_PREFIXES = ('--canvas', '--surface', '--text', '--line', '--accent', '--warn',
+                          '--good', '--calm', '--bar', '--ink', '--bg', '--palette',
+                          '--scheme', '--on-', '--neutral', '--primary', '--secondary')
+PREVIEW_COLOR_SUFFIXES = ('color', 'colors', 'tint', 'bg')
+PREVIEW_AXES = ('typography', 'rhythm', 'boundaries', 'composition', 'other')
+PREVIEW_AXIS_LABELS = {
+    'typography': '排版层级', 'rhythm': '韵律与密度', 'boundaries': '边界与材质',
+    'composition': '构图重心', 'other': '其他未归类属性'}
+
+
+def _differing_props(left, right):
+    """Property names whose declared value differs between the two variants.
+
+    Absence counts: a variant that overrides nothing renders the shared base,
+    which is a different value from its sibling's override.
+    """
+    return sorted({prop for prop in set(left) | set(right) if left.get(prop) != right.get(prop)})
+
+
+def _strip_css_comments(text):
+    return re.sub(r'/\*.*?\*/', ' ', text, flags=re.S)
+
+
+def _matching_brace(text, open_index):
+    depth = 0
+    for index in range(open_index, len(text)):
+        if text[index] == '{':
+            depth += 1
+        elif text[index] == '}':
+            depth -= 1
+            if depth == 0:
+                return index
+    return len(text) - 1
+
+
+def _css_rules(text, depth=0):
+    """Every ``(selector, body)`` pair, grouped at-rules included.
+
+    Keyframe steps and ``@font-face`` are skipped: they are not view scopes.
+    """
+    rules = []
+    buffer = ''
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == '{':
+            selector = buffer.strip()
+            end = _matching_brace(text, index)
+            body = text[index + 1:end]
+            if selector.startswith('@'):
+                if depth < 4 and not re.match(r'@\s*[-\w]*keyframes', selector):
+                    rules.extend(_css_rules(body, depth + 1))
+            elif selector:
+                rules.append((selector, body))
+            buffer = ''
+            index = end + 1
+            continue
+        if character == '}':
+            buffer = ''
+            index += 1
+            continue
+        buffer += character
+        index += 1
+    return rules
+
+
+def _declaration_list(body):
+    declarations = []
+    for chunk in body.split(';'):
+        if ':' not in chunk:
+            continue
+        prop, _, value = chunk.partition(':')
+        prop = prop.strip().lower()
+        value = re.sub(r'\s*!important\s*$', '', value.strip())
+        value = re.sub(r'\s+', ' ', value)
+        if prop:
+            declarations.append((prop, value))
+    return declarations
+
+
+def _preview_axis(prop):
+    """Classify one declaration into a mechanism axis, ``color`` or ``other``.
+
+    Mechanism prefixes are read before color so ``--line-height`` stays
+    typography while the shell's ``--line`` stays a color. A property this
+    vocabulary cannot place lands in ``other`` -- counted as a mechanism
+    rather than silently ignored, so an unusual name cannot cause a false
+    failure.
+    """
+    if prop.startswith('--'):
+        for axis, prefixes in PREVIEW_AXIS_PREFIXES.items():
+            if prop.startswith(prefixes):
+                return axis
+        if prop.startswith(PREVIEW_COLOR_PREFIXES) \
+                or prop.rsplit('-', 1)[-1] in PREVIEW_COLOR_SUFFIXES:
+            return 'color'
+        return 'other'
+    if prop == 'color' or prop.endswith('-color') or prop.startswith('background') \
+            or prop in ('fill', 'stroke'):
+        return 'color'
+    for axis, prefixes in PREVIEW_AXIS_PROPERTIES.items():
+        if prop.startswith(prefixes):
+            return axis
+    return 'other'
+
+
+def _view_root_tag(html, view):
+    return re.search(r'<[^>]*\bid\s*=\s*["\']?view-' + re.escape(view) + r'["\']?[^>]*>',
+                     html, re.I)
+
+
+def _view_root_markers(html, view):
+    """Selectors that scope to this view: its id, plus classes only it carries.
+
+    A class shared by both roots adds identical declarations to both, so it
+    cannot manufacture a difference.
+    """
+    markers = list(PREVIEW_VIEW_MARKERS[view])
+    tag = _view_root_tag(html, view)
+    if tag:
+        classes = re.search(r'\bclass\s*=\s*["\']([^"\']*)["\']', tag.group(0), re.I)
+        if classes:
+            for name in classes.group(1).split():
+                marker = '.' + name
+                if marker not in markers:
+                    markers.append(marker)
+    return markers
+
+
+def check_preview(path):
+    """Report whether a style preview carries two mechanically different variants.
+
+    A floor for the exchange check, not a verdict on the design: it compares
+    declared values, so a shorthand that changes only its color still reads as
+    a boundary change. Pass ``applicable: false`` and say so rather than fail
+    a preview whose variants are not scoped the shell's way.
+    """
+    path = Path(path).expanduser()
+    report = {'preview': str(path), 'applicable': False, 'passed': False,
+              'mechanism_axes_required': PREVIEW_MIN_AXES, 'differing_axes': [],
+              'differing_axis_labels': [], 'axis_details': {}, 'color_only': {},
+              'scoped_selectors': {}, 'blockers': [], 'warnings': [],
+              'checked_at': _now()}
+    try:
+        text = path.read_text(encoding='utf-8')
+    except (OSError, ValueError) as error:
+        report['blockers'].append({'code': 'missing_preview', 'detail': str(error)})
+        return report
+
+    html = re.sub(r'<!--.*?-->', ' ', text, flags=re.S)
+    rules = []
+    for block in re.findall(r'<style[^>]*>(.*?)</style>', html, re.S | re.I):
+        rules.extend(_css_rules(_strip_css_comments(block)))
+
+    variants, matched = {}, {}
+    for view in ('a', 'b'):
+        markers = _view_root_markers(html, view)
+        declarations = {}
+        selectors = []
+        for selector, body in rules:
+            if not any(marker in selector for marker in markers):
+                continue
+            selectors.append(selector.strip())
+            for prop, value in _declaration_list(body):
+                declarations[prop] = value
+        tag = _view_root_tag(html, view)
+        if tag:
+            inline = re.search(r'\bstyle\s*=\s*["\']([^"\']*)["\']', tag.group(0), re.I)
+            if inline:
+                for prop, value in _declaration_list(inline.group(1)):
+                    declarations[prop] = value
+        variants[view], matched[view] = declarations, selectors
+
+    report['scoped_selectors'] = matched
+    report['applicable'] = bool(matched['a']) and bool(matched['b'])
+    for axis in PREVIEW_AXES:
+        left = {p: v for p, v in variants['a'].items() if _preview_axis(p) == axis}
+        right = {p: v for p, v in variants['b'].items() if _preview_axis(p) == axis}
+        if left != right:
+            report['differing_axes'].append(axis)
+            report['axis_details'][axis] = {'a': left, 'b': right}
+    report['differing_axis_labels'] = [PREVIEW_AXIS_LABELS[axis]
+                                       for axis in report['differing_axes']]
+    report['color_only'] = {
+        view: {p: v for p, v in variants[view].items() if _preview_axis(p) == 'color'}
+        for view in ('a', 'b')}
+
+    if not report['applicable']:
+        report['warnings'].append({
+            'code': 'preview_variants_not_scoped',
+            'detail': '未识别到两版各自的作用域（#view-a / #view-b，或两版根元素各自的类名）：'
+                      '无法机械核对交换检查。请在真实渲染上人工核对，把结论写进合同的交换检查结论，'
+                      '不要因为本项 Not applicable 就跳过自检。'})
+        report['passed'] = True
+        return report
+
+    differing = report['differing_axes']
+    if len(differing) < PREVIEW_MIN_AXES:
+        if not differing:
+            tinted = _differing_props(report['color_only']['a'], report['color_only']['b'])
+            detail = ('两版只在颜色上不同（' + '、'.join(tinted) +
+                      '）：统一配色或去色后看不出区别，这是同一个方向的两种上色。'
+                      '至少在两条机制轴上给出不同答案：排版层级 / 韵律与密度 / 边界与材质 / 构图重心。')
+            code = 'tint_only_candidates'
+        else:
+            axis = differing[0]
+            left = report['axis_details'][axis]['a']
+            right = report['axis_details'][axis]['b']
+            pairs = '；'.join(
+                f'{prop}: {left.get(prop, "（未覆盖）")} → {right.get(prop, "（未覆盖）")}'
+                for prop in _differing_props(left, right))
+            detail = (f'两版只在 1 条机制轴上不同（{PREVIEW_AXIS_LABELS[axis]}）：{pairs}。'
+                      '只差颜色加圆角不算两个方向；再换一条轴：排版层级 / 韵律与密度 / '
+                      '边界与材质 / 构图重心。')
+            code = 'too_few_mechanism_axes'
+        report['blockers'].append({'code': code, 'detail': detail})
+    report['passed'] = not report['blockers']
+    return report
+
+
 def _lint_report(root, contract_rel, sha, passed, blockers, warnings,
                  changed_from, scanned, ui_sha, files):
     return {
@@ -1623,7 +1876,8 @@ def _lint_report(root, contract_rel, sha, passed, blockers, warnings,
 # plus the first findings; --out still receives the complete report.
 
 SUMMARY_FINDING_LIMIT = 5
-SUMMARY_PASSTHROUGH_KEYS = ('phase', 'ui_source_sha256', 'changed_from')
+SUMMARY_PASSTHROUGH_KEYS = ('phase', 'ui_source_sha256', 'changed_from', 'preview', 'applicable',
+                            'differing_axes', 'differing_axis_labels', 'mechanism_axes_required')
 SUMMARY_COUNT_KEYS = (('scanned_files', 'scanned_file_count'),
                       ('files', 'tracked_file_count'))
 
@@ -1719,7 +1973,15 @@ def main():
                            'reported and conservatively scans everything')
     lint.add_argument('--out', type=Path,
                        help='write the report JSON to this path as well as stdout')
-    for command in (check, lint):
+    preview = commands.add_parser(
+        'check-preview',
+        help='check that a style preview carries two mechanically different variants')
+    preview.add_argument('--file', type=Path, required=True,
+                         help='preview HTML carrying both variants (the shell convention: '
+                              '#view-a / #view-b, their root ids or root classes)')
+    preview.add_argument('--out', type=Path,
+                         help='write the report JSON to this path as well as stdout')
+    for command in (check, lint, preview):
         command.add_argument('--summary', action='store_true',
                              help='print a bounded summary (counts and the first '
                                   'findings) instead of the full report; --out still '
@@ -1769,6 +2031,10 @@ def main():
 
         if args.command == 'lint-ui':
             _emit_report(args, lint_ui(args.root, args.contract, args.changed_from))
+            return
+
+        if args.command == 'check-preview':
+            _emit_report(args, check_preview(args.file))
             return
 
         data = read_catalog()
