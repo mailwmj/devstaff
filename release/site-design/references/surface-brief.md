@@ -6,7 +6,7 @@ For new projects use exactly one site-contract block in the project surface-brie
 {
   "schema_version": 2,
   "work_type": "new-surface",
-  "structure_mode": "single",
+  "structure_mode": "choice",
   "comparison_type": "style",
   "task": "Replace with the confirmed core task",
   "scope_refs": ["BR-01"],
@@ -25,7 +25,7 @@ Existing schema-1 contracts remain readable. project.py migrate-contract backs u
 
 ## Detailed design planning library
 
-The retained sections below are optional planning aids, not a second executable index. Delete inapplicable sections in a project, retain useful design knowledge. Where the historical example says two alternatives or structure-difference evidence, follow comparison_type and the recommendation-first protocol above. Do not copy the historical JSON index into another site-contract fence.
+The retained sections below are optional planning aids, not a second executable index. Delete inapplicable sections in a project, retain useful design knowledge. Where the historical example says two alternatives or structure-difference evidence, follow comparison_type and the two-stage choice protocol above: two structure skeletons before any visual work, then one reference-aligned version or two style candidates. Do not copy the historical JSON index into another site-contract fence.
 
 # 页面设计合同
 
@@ -79,7 +79,7 @@ The retained sections below are optional planning aids, not a second executable 
 ```
 
 - `work_type`：见 [本轮问题](#本轮问题) 的工作类型。
-- `structure_mode`：`single` 无真实结构分歧；`choice` 存在需用户先选的信息拓扑分歧。
+- `structure_mode`：新建或核心结构变化必须 `choice`，先由用户选定信息架构骨架（schema revision 3 拒绝 `single`）；`single` 只保留给旧 schema 2 项目的既有合同。
 - `scope_refs`：首版包含项 `BR-*` 编号，来自 [首版承诺](#首版承诺--原型覆盖)。
 - `required_constraints`：等级为 `required` 的 `IC-*`，来自 [任务交互合同](#任务交互合同)。
 - `pages / sections / responsive / components / assets`：`PG-* / SC-* / RP-* / CP-* / AS-*`，来自对应正文表。

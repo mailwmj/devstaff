@@ -26,6 +26,12 @@ Implemented: schema-3 preflight reports `user_gate: brief_questions`, marks `nee
 
 Verification boundary: unit and packaged-runtime suites only. Real-agent question-first behaviour and the user effect of the brief round still require a recorded `evals/` run (the `catalog-brief` case); the machine gate does not prove agent compliance outside preflight and `decide`.
 
-The current development environment's managed Chromium refused localhost navigation. The runner returned blocked and preserved its trace; no policy bypass was attempted. Real browser integration is therefore performed in the repository's disposable GitHub runner. A successful scripted browser run does not automatically certify visual quality or count as a human usability study.
+## Two-stage structure and visual choice (hard gate)
+
+Implemented: schema revision 3 refuses `discover --structure single` with `STRUCTURE_CHOICE_REQUIRED`, counts any non-`choice` structure as unassessed in preflight so `decide` stays blocked, and requires a recorded `select-structure` candidate; the schema-2 single path is retained for legacy projects, and `revise --change-kind feature` only inherits the single mode for revision 2. `decide`'s recovery text points at the two-candidate command. Docs, `runtime.md`, the contract note and the README carry the same rule.
+
+Verification boundary: the in-process and CLI suites cover the refusal, the unchanged state on refusal, the unassessed preflight and the legacy exception. Whether an agent actually shows both skeletons to the user is behaviour, not a machine assertion; it still needs an `evals/` run.
+
+## Browser note The runner returned blocked and preserved its trace; no policy bypass was attempted. Real browser integration is therefore performed in the repository's disposable GitHub runner. A successful scripted browser run does not automatically certify visual quality or count as a human usability study.
 
 Read PR checks and .verification/summary.json for actual results. Not-run or failed items must stay explicit. dist/skill.zip and dist/devstaff-project.zip are built from Git, not a partial changed-file archive.

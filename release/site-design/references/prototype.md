@@ -4,9 +4,9 @@ Use the retained preview-shell.html for quick, self-contained experiments. It pr
 
 ## Choose only the necessary experiment
 
-A structure experiment compares organization while holding real content and base visual language constant. A style experiment preserves task and information architecture while exploring typography, rhythm, color roles, material and image treatment. An interaction experiment compares controls/feedback with the same business outcome. Declare comparison_type; do not force two variants. One reference-aligned recommendation is enough when there is no meaningful alternative.
+A structure experiment compares organization while holding real content and base visual language constant. A style experiment preserves task and information architecture while exploring typography, rhythm, color roles, material and image treatment. An interaction experiment compares controls/feedback with the same business outcome. Declare comparison_type. A new surface or changed core structure always shows at least two structure variants before any visual work. The visual step shows one reference-aligned version when the user supplied a reference, otherwise at least two style variants. Local edits and inherited design systems keep their confirmed direction without a new comparison.
 
-For real alternatives, describe the tradeoff in ordinary language and recommend one. A/B labels are optional; understandable names are allowed. Shared DOM, reusable components and theme tokens are valid for style alternatives. Two dark/light extremes are not obligatory. The same assets/content must be used so quality differences do not bias the comparison.
+Describe the tradeoff in ordinary language and recommend one. Keep the preview switch labels as 方案 A / 方案 B so candidates stay comparable. Shared DOM, reusable components and theme tokens are valid for style alternatives. Two dark/light extremes are not obligatory. The same assets/content must be used so quality differences do not bias the comparison.
 
 ## Lightweight construction
 

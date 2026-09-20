@@ -22,7 +22,7 @@ Use existing product/brand/content, the approved task and the facts recorded in 
 | Current-page review | [craft](references/craft-review.md) |
 | Additional candidate research | [toolchain](references/design-toolchain.md) |
 
-Default to one clear recommended design. Produce alternatives only for a meaningful unresolved choice. Clear references need no artificial second version. State comparison_type: structure fixes content and visual language; style fixes information architecture/task/content but can vary typography, rhythm, color roles/material; interaction fixes business outcomes and compares control/feedback. Shared DOM is valid for style. No forced dark version, historical style or number of differing axes.
+Stage the design as two visible choices. A new surface or changed core structure always compares at least two information-architecture skeletons (comparison_type: structure) before any visual work; do not present a single finished design for a new site. After the user picks a skeleton, ask for a reference, screenshot or style preference: a supplied reference yields one reference-aligned version, no reference yields at least two style candidates (comparison_type: style). State comparison_type: structure fixes content and visual language; style fixes information architecture/task/content but can vary typography, rhythm, color roles/material; interaction fixes business outcomes and compares control/feedback. Shared DOM is valid for style. No forced dark version, historical style or number of differing axes.
 
 Tools prioritize task clarity, appropriate density and consistency; marketing prioritizes truthful expression, content hierarchy and suitable differentiation. Reusing a sound category convention is not a failure. Preserve all knowledge assets and calibrated tokens; no catalog ranking decides the product.
 
@@ -38,19 +38,19 @@ Return the five-field receipt to builder; don't call brief or check directly, mu
 
 The design paths below load one reference per step. Read the next step only when needed; skip inapplicable stages. A is a product surface; B is a conversion page.
 
-合计约 61KB，单步最大 17KB。
+合计约 62KB，单步最大 17KB。
 
 [Contract](references/surface-brief.md)（18KB） is the shared artifact; read once and update only applicable sections.
 
 | Step | Purpose | Read | Size |
 | --- | --- | --- | --- |
 | A1 | Establish task context | [design-context](references/design-context.md) | 9KB |
-| A2 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 11KB |
+| A2 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 12KB |
 | A3 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
 | A4 | Export approved tokens | [design-tokens](references/design-tokens.md) | 10KB |
 | A5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |
 | B1 | Establish task context | [design-context](references/design-context.md) | 9KB |
 | B2 | Arrange truthful conversion content | [landing-page](references/landing-page.md) | 10KB |
-| B3 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 11KB |
+| B3 | Develop a grounded direction | [visual-direction](references/visual-direction.md) | 12KB |
 | B4 | Render the necessary experiment | [prototype](references/prototype.md) | 3KB |
 | B5 | Review the actual render | [craft-review](references/craft-review.md) | 17KB |

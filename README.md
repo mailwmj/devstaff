@@ -16,13 +16,13 @@ The installer returns a persistent instruction_file under site-builder/reference
 
 ## What changed
 
-New state schema 3 supports recommendation-first decisions, automatic isolated verification, revision-scoped confirmation, local/feature/scope changes, stable action/error payloads and explicit legacy migration. The main states remain compatible. Reports bind round, project mode, source and contract; they are read once. Core-not-run cannot become usable delivery. Changing risks cannot quietly weaken a report.
+New state schema 3 supports brief-gated decisions, two information-architecture candidates before any visual work (a single-structure assessment is refused and a direction confirmation stays blocked until a candidate is selected), reference-first visual choices, automatic isolated verification, revision-scoped confirmation, local/feature/scope changes, stable action/error payloads and explicit legacy migration. The main states remain compatible. Reports bind round, project mode, source and contract; they are read once. Core-not-run cannot become usable delivery. Changing risks cannot quietly weaken a report.
 
 The brief is a gate, not a note. A new website starts with its question round: schema revision 3 records the answers and explicit assumptions in `.site/brief.md` and refuses a direction confirmation without that record, and preflight exposes the stop as `user_gate: brief_questions`. Legacy revision 2 projects keep their old gate until `state.py migrate`, which seeds a marked brief.
 
 Contract schema 2 keeps acceptance targets in one structured block, with Markdown for explanation. Existing contracts remain readable. Source hashing prunes dependencies and supports a fingerprinted include/exclude policy for readonly product data.
 
-Visual alternatives are conditional. Shared DOM is legal for style comparisons; arbitrary dark-mode, reskin wording, star character and aesthetic recipe gates are removed. The existing rich design knowledge and upstream data snapshot remain packaged.
+Visual alternatives follow the reference question. A new surface compares two structure skeletons first; after the user picks one, a supplied reference yields a single aligned version and no reference yields two style candidates. Shared DOM is legal for style comparisons; arbitrary dark-mode, reskin wording, star character and aesthetic recipe gates are removed. The existing rich design knowledge and upstream data snapshot remain packaged.
 
 The starter foundation includes real SQLite persistence, validated money/date values, transactional import preview, reversible export, request idempotency and per-owner shared-backend authorization. It binds loopback, not public Internet. Cloud/production adapters and real external operations require separate configuration, authorization and verification.
 

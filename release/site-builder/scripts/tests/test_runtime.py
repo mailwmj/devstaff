@@ -34,10 +34,22 @@ class InstalledRuntimeTests(unittest.TestCase):
             self.state.decide(self.root,'task','direction','yes',[],[])
         self.assertEqual(caught.exception.code,'STRUCTURE_DECISION_REQUIRED')
     def test_decide_requires_the_recorded_brief(self):
-        self.state.init(self.root,'guided');self.state.discover(self.root,'single','one task',[],[])
+        self.state.init(self.root,'guided');self.state.discover(self.root,'choice','two options',[],['A','B'])
         with self.assertRaises(self.state.RuntimeProblem) as caught:
             self.state.decide(self.root,'task','direction','yes',[],[])
         self.assertEqual(caught.exception.code,'BRIEF_REQUIRED')
+    def test_new_project_cannot_record_a_single_structure(self):
+        self.state.init(self.root,'guided')
+        before=(self.root/'.site/state.json').read_bytes()
+        with self.assertRaises(self.state.RuntimeProblem) as caught:
+            self.state.discover(self.root,'single','no disagreement',[],[])
+        self.assertEqual(caught.exception.code,'STRUCTURE_CHOICE_REQUIRED')
+        self.assertEqual(before,(self.root/'.site/state.json').read_bytes())
+        self.assertEqual(self.state.read_state(self.root)['discovery']['structure']['mode'],'undetermined')
+    def test_legacy_schema_2_keeps_the_single_assessment(self):
+        self.state.init(self.root,'guided',schema_revision=2)
+        result=self.state.discover(self.root,'single','inherited structure',[],[])
+        self.assertEqual(result['discovery']['structure']['mode'],'single')
     def test_same_words_can_confirm_distinct_objects(self):
         self.state.init(self.root,'guided');self.brief()
         self.state.discover(self.root,'choice','real alternatives',[],['A','B']);self.state.select_structure(self.root,'A','yes')

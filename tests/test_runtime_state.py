@@ -35,8 +35,12 @@ class NewStateTests(unittest.TestCase):
            'targets':[{'id':'VA-01','target':'PG-01','standard':'save and reload one item','axis':'core_task','blocking':True,'refs':['PG-01']}]}
         p=state.contract_path(self.root);p.parent.mkdir(parents=True,exist_ok=True);p.write_text('# Task\n```site-contract\n'+json.dumps(d)+'\n```\n')
         (self.root/'index.html').write_text('<h1>Save item</h1>')
+    def assess(self):
+        """Schema 3 confirms a direction only after the user picks a candidate."""
+        state.discover(self.root,'choice','two candidate structures',[],['工作台A','工作台B'])
+        return state.select_structure(self.root,'工作台A','use workspace A')
     def build(self):
-        state.discover(self.root,'single','one simple workspace',[],[])
+        self.assess()
         self.brief()
         state.decide(self.root,'save an item','simple workspace','yes',[],[])
         self.contract();p=self.root/'.site/prebuild.json';p.write_text(json.dumps(design.check_contract(self.root,'prebuild')))
@@ -63,20 +67,34 @@ class NewStateTests(unittest.TestCase):
         self.assertIn('brief_record',p['missing'])
         self.assertIn('implementation_plan',p['action']['forbidden_outputs'])
     def test_decide_refuses_without_the_recorded_brief(self):
-        state.discover(self.root,'single','one simple workspace',[],[])
+        state.discover(self.root,'choice','two candidates',[],['A','B'])
         with self.assertRaises(state.RuntimeProblem) as caught:
             state.decide(self.root,'task','direction','yes',[],[])
         self.assertEqual(caught.exception.code,'BRIEF_REQUIRED')
         self.assertEqual(state.read_state(self.root)['stage'],'discovering')
+    def test_schema_3_refuses_a_single_structure_assessment(self):
+        before=state.state_path(self.root).read_bytes()
+        with self.assertRaises(state.RuntimeProblem) as caught:
+            state.discover(self.root,'single','no disagreement',[],[])
+        self.assertEqual(caught.exception.code,'STRUCTURE_CHOICE_REQUIRED')
+        self.assertEqual(before,state.state_path(self.root).read_bytes())
+    def test_schema_3_single_state_cannot_be_confirmed(self):
+        self.brief()
+        payload=state.read_state(self.root)
+        payload['discovery']['structure'].update(mode='single',reason='hand edited',selected=None)
+        state.write_state(self.root,payload)
+        p=state.preflight_state(state.read_state(self.root),self.root)
+        self.assertIn('structure_assessment',p['missing'])
+        self.assertNotIn('decide',p['allowed_actions'])
     def test_assumed_fact_must_record_that_it_was_asked(self):
         self.brief(facts={'brand':{'value':'placeholder','source':'assumed'}},
                    assumptions=['brand is a placeholder'])
-        state.discover(self.root,'single','one simple workspace',[],[])
+        state.discover(self.root,'choice','two candidates',[],['A','B'])
         with self.assertRaises(state.RuntimeProblem) as caught:
             state.decide(self.root,'task','direction','yes',[],[])
         self.assertEqual(caught.exception.code,'BRIEF_REQUIRED')
     def test_confirmation_binds_the_brief_hash(self):
-        self.brief();state.discover(self.root,'single','one simple workspace',[],[])
+        self.brief();self.assess()
         state.decide(self.root,'task','direction','yes',[],[])
         confirmation=state.read_state(self.root)['decision']['confirmation']
         self.assertEqual(confirmation['brief_sha256'],
@@ -92,7 +110,8 @@ class NewStateTests(unittest.TestCase):
         result=state.migrate_state(legacy)
         self.assertIn('migration_brief',result)
         self.assertEqual(state._brief_block(legacy)['migrated_from'],'schema_revision_2')
-        state.revise(legacy,'scope','new scope');state.discover(legacy,'single','one workspace',[],[])
+        state.revise(legacy,'scope','new scope');state.discover(legacy,'choice','two workspaces',[],['A','B'])
+        state.select_structure(legacy,'A','use A')
         self.assertEqual(state.decide(legacy,'task2','direction2','yes2',[],[])['stage'],'decided')
     def test_cli_reports_brief_required_as_json_error(self):
         p=subprocess.run([sys.executable,str(ROOT/'release/site-builder/scripts/state.py'),'decide',str(self.root),

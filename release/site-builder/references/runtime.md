@@ -8,7 +8,9 @@ All paths below are relative to site-builder. Installed skills are siblings; do 
 python3 scripts/doctor.py PROJECT
 python3 scripts/state.py init PROJECT
 python3 scripts/state.py preflight PROJECT
-python3 scripts/state.py discover PROJECT --structure single --reason "one clear task" 
+python3 scripts/state.py discover PROJECT --structure choice --reason "two information architectures" --candidate 方案A --candidate 方案B
+python3 scripts/state.py select-structure PROJECT --candidate 方案A --quote USER_WORDS
+python3 scripts/state.py discover PROJECT --structure single --reason "inherited structure"  # legacy schema revision 2 only
 python3 scripts/state.py decide PROJECT --task TASK --direction DIRECTION --quote USER_WORDS
 python3 ../site-design/scripts/design.py check-contract --root PROJECT --phase prebuild --out REPORT
 python3 scripts/state.py start PROJECT --contract-report REPORT

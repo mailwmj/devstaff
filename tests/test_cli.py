@@ -81,8 +81,9 @@ VALID_CONTRACT = """# 页面设计合同
 
 class StateCliTests(unittest.TestCase):
     def run_cli(self, *args, expected=0):
-        # Retained compatibility cases explicitly request schema 2.
-        if args and args[0] == "init":
+        # Retained compatibility cases explicitly request schema 2; a test that
+        # needs the current schema passes --schema-revision 3 itself.
+        if args and args[0] == "init" and "--schema-revision" not in args:
             args = (*args, "--schema-revision", "2")
         result = subprocess.run(
             [sys.executable, str(SCRIPT), *map(str, args)],
@@ -322,6 +323,18 @@ class StateCliTests(unittest.TestCase):
             )
             report = self.write_contract_report(root)
             self.run_cli("start", root, "--contract-report", report)
+
+    def test_schema_3_refuses_a_single_structure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.run_cli("init", root, "--schema-revision", "3")
+            refused = self.run_cli(
+                "discover", root, "--structure", "single", "--reason", "无结构分歧",
+                expected=2,
+            )
+            self.assertEqual(refused["code"], "STRUCTURE_CHOICE_REQUIRED")
+            # The gate tells the agent how to recover, not just that it failed.
+            self.assertIn("--structure choice", refused["recovery"])
 
     def test_separate_confirmations_may_repeat_the_same_words(self):
         with tempfile.TemporaryDirectory() as directory:

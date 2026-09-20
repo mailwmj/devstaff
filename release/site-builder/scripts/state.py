@@ -316,7 +316,7 @@ def preflight_state(state: dict, root: Path | None = None) -> dict:
     structure=state.get('discovery',{}).get('structure',{})
     phase=verification_phase(state)
     pending=structure.get('mode')=='choice' and not structure.get('selected')
-    unassessed=modern and structure.get('mode','undetermined')=='undetermined'
+    unassessed=modern and structure.get('mode','undetermined')!='choice'
     # Without a root a modern project cannot prove the brief was recorded, so
     # the question gate stays closed instead of silently disappearing.
     brief_problems=_brief_problems(_brief_block(root) if root is not None else None)
@@ -431,7 +431,7 @@ def decide(root: Path, task: str, direction: str, quote: str, include: list[str]
     if state['stage']!='discovering': raise ValueError('a direction can only be confirmed while discovering')
     brief_sha256=_recorded_brief_sha256(root,state)
     if 'decide' not in preflight_state(state,root)['allowed_actions']:
-        raise RuntimeProblem('STRUCTURE_DECISION_REQUIRED','assess/select the structure before confirming direction','Run discover, then select-structure if alternatives exist.')
+        raise RuntimeProblem('STRUCTURE_DECISION_REQUIRED','assess/select the structure before confirming direction','Run discover --structure choice with at least two distinct candidates, show both, then select-structure.')
     if not all(isinstance(x,str) and x.strip() for x in (task,direction,quote)): raise ValueError('task, direction and quote are required')
     old=state['stage']
     state['decision']={'confirmed':True,'task':task.strip(),'direction':direction.strip(),'quote':quote.strip(),'include':clean_items(include),'exclude':clean_items(exclude)}
@@ -452,19 +452,24 @@ def discover(
 ) -> dict:
     """Record the result of the structure assessment inside ``discovering``.
 
-    ``single`` means no real structural divergence: the agent forms one
-    recommended structure and visual direction and the user confirms once via
-    ``decide``. ``choice`` means the brief surfaced genuinely different
-    information topologies, so the user must pick a structure first. The
-    distinction is a product judgment made by the agent from project facts, not
-    by this tool: colour, font, radius, shadow and other visual-only
-    differences must use ``single``.
+    ``choice`` is the only assessment for schema revision 3: a new website or
+    changed core structure shows two distinct information topologies and the
+    user picks one via ``select-structure`` before any visual work. ``single``
+    remains for legacy schema revision 2 states that inherit a confirmed
+    structure; this tool refuses it for revision 3. Visual-only differences
+    belong to the separate visual step, not to a structure assessment.
     """
     state = read_state(root)
     if state["stage"] != "discovering":
         raise ValueError("structure assessment only happens while discovering")
     if structure not in {"single", "choice"}:
         raise ValueError("structure must be single or choice")
+    if structure == "single" and state.get("schema_revision", 1) >= 3:
+        raise RuntimeProblem(
+            "STRUCTURE_CHOICE_REQUIRED",
+            "a schema 3 project compares two structure candidates before any visual work",
+            "Run discover --structure choice with at least two distinct candidates, show both, then select-structure.",
+        )
     if not reason.strip():
         raise ValueError("a structure reason is required")
     discovery = state.get("discovery") or default_discovery()
@@ -905,7 +910,7 @@ def revise(root: Path, change_kind: str, reason: str, risks=None) -> dict:
     if change_kind=='local': state['stage']='building'
     elif change_kind=='feature':
         state['stage']='discovering'; state['decision']={**state['decision'],'confirmed':False,'quote':''}
-        if state['discovery']['structure']['mode']=='undetermined': state['discovery']['structure'].update(mode='single',reason='inherit confirmed project')
+        if state['discovery']['structure']['mode']=='undetermined' and state.get('schema_revision',1)<3: state['discovery']['structure'].update(mode='single',reason='inherit confirmed project')
     else:
         state['stage']='discovering'; state['decision']={'confirmed':False,'task':'','direction':'','include':[],'exclude':[],'quote':''}; state['discovery']=default_discovery()
     state['delivery']['risks']=sorted(set(state['delivery'].get('risks',[]))|set(risks))

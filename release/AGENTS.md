@@ -24,10 +24,10 @@ Until that record exists, do not produce an implementation plan, page list, stac
 | Small change in a managed project | `revise --change-kind local`; preserve current task and design | No repeated brief/style approval |
 | Add a feature or page | `revise --change-kind feature`; inherit unaffected decisions | Only changed scope |
 | Change main task, data ownership or core structure | `revise --change-kind scope` | Confirm affected product/risk decisions |
-| New website | brief questions -> recommended visible direction -> implementation -> isolated verification | Purpose/scope and meaningful design preference |
+| New website | brief questions -> two structure candidates -> visual step -> implementation -> isolated verification | Purpose/scope, page skeleton and visual preference |
 | Design only, brief only, check only | Call only the requested skill | Stop at requested output |
 
-Default to one recommended direction. Use `discover --structure single` when there is no genuine information-architecture disagreement. Use `choice` with at least two distinct candidates only for a real choice. Reusing the same word, such as two separate replies of "yes", is legal; confirmations are associated with their object and revision, not judged by different wording.
+A new website or changed core structure always runs two visible choice stages. Record `discover --structure choice` with at least two distinct information-architecture candidates, show both, and wait for `select-structure`; schema revision 3 refuses `--structure single` and keeps `decide` blocked until a candidate is selected. Then ask for a reference, screenshot or style preference: a supplied reference yields one reference-aligned version, no reference yields two style candidates. Revisions that keep the confirmed structure reuse the recorded selection; `--structure single` remains only for legacy schema revision 2. Reusing the same word, such as two separate replies of "yes", is legal; confirmations are associated with their object and revision, not judged by different wording.
 
 ## Conditional decision points, not six compulsory stops
 
