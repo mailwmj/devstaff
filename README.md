@@ -76,7 +76,7 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 分发内容与开发内容分开放置：
 
 ```text
-release/          唯一分发根。整个目录可独立打包，不依赖仓库其他部分
+release/          唯一分发根。按 package-files.txt 打包，不依赖仓库其他部分
 ├── metadata.json     平台 Agent 包清单
 ├── package-files.txt 发布文件清单
 ├── agent/            Agent 指令、入口配置与图标
@@ -87,7 +87,7 @@ tests/            开发用测试
 README.md  AGENT-GUIDE.md   开发用文档
 ```
 
-只分发 `release/`。校验与测试命令都从仓库根目录执行，路径以 `release/` 开头。
+只分发 `release/`。校验与测试命令都从仓库根目录执行，路径以 `release/` 开头。`site-design` 下带一个 `agents/openai.yaml`：支持该约定的宿主用它显示技能显示名、短描述和默认提示词，不支持的宿主会忽略它；另外三个技能没有这个文件（1.0 发布时只保留了 site-design 这一份）。
 
 ## 安装
 
