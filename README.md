@@ -76,29 +76,23 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 分发内容与开发内容分开放置：
 
 ```text
-release/          唯一分发根。整个目录可独立打包安装，不依赖仓库其他部分
-├── skills.json   技能清单
-├── install.py    安装器
-├── AGENTS.md     需要加入宿主项目指令的协议文件
-└── site-brief/ site-builder/ site-check/ site-design/
+release/          唯一分发根。整个目录可独立打包，不依赖仓库其他部分
+├── metadata.json     平台 Agent 包清单
+├── package-files.txt 发布文件清单
+├── agent/            Agent 指令、入口配置与图标
+└── skills/           site-brief/ site-builder/ site-check/ site-design/
 tests/            开发用测试
 .github/          开发用 CI
 README.md  AGENT-GUIDE.md   开发用文档
 ```
 
-只分发 `release/`。校验、安装与测试命令都从仓库根目录执行，路径以 `release/` 开头。
+只分发 `release/`。校验与测试命令都从仓库根目录执行，路径以 `release/` 开头。
 
 ## 安装
 
-使用安装器进行安装：
+分发内容按平台 Agent 包组织（`agent/` + `skills/` + `metadata.json`），用宿主平台的 Agent 导入方式安装；旧编排里的 `install.py` 安装器已随这次调整移除。
 
-```text
-python3 release/install.py /path/to/agent-skills
-```
-
-它会安装 `site-builder`、`site-brief`、`site-design`、`site-check`，并返回需要加入宿主项目指令的 `AGENTS.md` 路径。已有安装时，显式使用 `--replace` 整套替换。状态脚本随 `site-builder` 一起安装。
-
-也可以只打包分发根：`git archive --format=tar HEAD:release | tar -xf - -C /tmp/site-skills`，解包后的目录本身就是可安装的完整包。
+也可以只打包分发根：`git archive --format=tar HEAD:release | tar -xf - -C /tmp/site-skills`，解包后的目录自带 `agent/` 与 `skills/`，不依赖仓库其他部分。
 
 ## 状态接口
 
@@ -111,16 +105,16 @@ preflight → 执行 next_action → 写入结果 → 再次 preflight
 示例：
 
 ```text
-python3 release/site-builder/scripts/state.py init PROJECT --mode guided
-python3 release/site-builder/scripts/state.py preflight PROJECT
-python3 release/site-builder/scripts/state.py decide PROJECT \
+python3 release/skills/site-builder/scripts/state.py init PROJECT --mode guided
+python3 release/skills/site-builder/scripts/state.py preflight PROJECT
+python3 release/skills/site-builder/scripts/state.py decide PROJECT \
   --task "登记库存并查看剩余数量" \
   --direction "单工作台展示当前库存和新增入口" \
   --quote "就按这个方向做"
-python3 release/site-builder/scripts/state.py start PROJECT
-python3 release/site-builder/scripts/state.py handoff PROJECT
-python3 release/site-builder/scripts/state.py begin-check PROJECT --quote "看着没问题，测吧"
-python3 release/site-builder/scripts/state.py verify PROJECT --report .site/check/report.json
+python3 release/skills/site-builder/scripts/state.py start PROJECT
+python3 release/skills/site-builder/scripts/state.py handoff PROJECT
+python3 release/skills/site-builder/scripts/state.py begin-check PROJECT --quote "看着没问题，测吧"
+python3 release/skills/site-builder/scripts/state.py verify PROJECT --report .site/check/report.json
 ```
 
 `handoff` 把这一版交到用户手上并停下等他回话；`begin-check` 只能开在他点头之后，要带上他的原话。页面在他看过之后又改过（源码或合同任一变动），这一轮就开不起来，得重新交一次。这一轮关掉之前源码是禁写的，要回去修就先 `cancel-check --reason`，修完重新交给他看。
@@ -130,10 +124,10 @@ python3 release/site-builder/scripts/state.py verify PROJECT --report .site/chec
 新建与整体改版先判断是否存在真实的信息拓扑分歧：没有分歧时用 `discover --structure single`，跳过结构选择进入方向准备；有分歧时才用 `choice` 登记 2 种候选并复制 `site-design/assets/design/preview-shell.html` 写成单文件骨架预览（色板与深色切换条用现成的，正文按项目自己搭，两版只在结构上不同，优先引导客户端自带浏览器打开），用户选定后用 `select-structure --candidate ... --quote ...` 记录。之后提供 2 种视觉风格单页体验稿（同一骨架、同一顶栏，轻量对比，严禁过度测试），用户微调满意后将 CSS 变量提取为 Token、核心 HTML 作为纵向切片模板，再用一句不同的原话 `decide` 锁定完整方向：
 
 ```text
-python3 release/site-builder/scripts/state.py discover PROJECT \
+python3 release/skills/site-builder/scripts/state.py discover PROJECT \
   --structure choice --reason "信息架构差异：看板流 vs 向导流" \
   --candidate "看板全景流" --candidate "任务向导流"
-python3 release/site-builder/scripts/state.py select-structure PROJECT \
+python3 release/skills/site-builder/scripts/state.py select-structure PROJECT \
   --candidate "看板全景流" --quote "选看板流"
 ```
 
@@ -147,18 +141,18 @@ python3 release/site-builder/scripts/state.py select-structure PROJECT \
 
 检查协议修了一处 fail-open：合同文件读不出来时，`validate-report` 原先是跳过指纹比对，结果是删掉合同就能拿旧报告交付；现在直接判报告无效。
 
-源码指纹的排除规则改了。`AGENTS.md`、`CLAUDE.md`、声明了 `skills.json` 时的工具链目录、`skills.json`、`install.py`、`.playwright-cli` 都不进指纹；状态文件后缀（`.db` 之类）改成任意层级都忽略，不再只限根目录。检查器自己所在的 `site-check` 目录仍留在指纹里：能被中途放松的检查说不了算数。
+源码指纹的排除规则改了。根目录 `data/` 不再整体排除：静态站的 `data/products.json` 是产品内容，改了就该作废报告；运行期数据仍按后缀（`.db` 之类、任意层级）排除，`uploads/` 与构建产物目录仍整体排除。`AGENTS.md`、`CLAUDE.md`、声明了 `skills.json` 时的工具链目录、`skills.json`、`install.py`、`.playwright-cli` 都不进指纹。检查器自己所在的 `site-check` 目录仍留在指纹里：能被中途放松的检查说不了算数。
 
-`plan` 去掉了 `--full-manifest`，源码清单始终输出。site-builder 与 site-check 现在随包分发自己的测试。
+`plan` 去掉 `--full-manifest`，新增 `--out` 与 `--summary`：完整 plan（含源码清单）默认打印或用 `--out` 落盘，`--summary` 只给计数、指纹和轴。site-builder 与 site-check 现在随包分发自己的测试。
 
 ## 维护与测试
 
 ```text
 python3 -m unittest discover -s tests -p 'test_*.py'                              # 开发用测试
-python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'  # 随包分发
-python3 -m unittest discover -s release/site-builder/scripts/tests -p 'test_*.py'
-python3 -m unittest discover -s release/site-check/scripts/tests -p 'test_*.py'
-python3 release/site-design/scripts/design.py validate
+python3 -m unittest discover -s release/skills/site-design/scripts/tests -p 'test_*.py'  # 随包分发
+python3 -m unittest discover -s release/skills/site-builder/scripts/tests -p 'test_*.py'
+python3 -m unittest discover -s release/skills/site-check/scripts/tests -p 'test_*.py'
+python3 release/skills/site-design/scripts/design.py validate
 ```
 
-`release/site-*/scripts/tests/` 下的是随包分发的测试，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再装一次，确认分发包自带的东西是完整的。
+`release/skills/site-*/scripts/tests/` 下的是随包分发的测试，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.9、3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试和 `design.py validate`，确认分发包自带的东西是完整的。

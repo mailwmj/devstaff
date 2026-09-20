@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.12']
+        python-version: ['3.9', '3.10', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -27,30 +27,29 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Run design tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-design/scripts/tests -p 'test_*.py'
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-design/scripts/tests -p 'test_*.py'
 
       - name: Run the tests the bundle ships with
         run: |
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-builder/scripts/tests -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/site-check/scripts/tests -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-builder/scripts/tests -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-check/scripts/tests -p 'test_*.py'
 
       - name: Validate design assets
-        run: PYTHONDONTWRITEBYTECODE=1 python3 release/site-design/scripts/design.py validate
+        run: PYTHONDONTWRITEBYTECODE=1 python3 release/skills/site-design/scripts/design.py validate
 
-      - name: Verify installation from a clean release archive
+      - name: Verify the release archive is self-sufficient
         shell: bash
         run: |
           set -euo pipefail
           ARCHIVE_FILE="$(mktemp)"
           RELEASE_DIR="$(mktemp -d)"
-          INSTALL_DIR="$(mktemp -d)"
           git archive --format=tar HEAD:release --output="$ARCHIVE_FILE"
           tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-design/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-builder/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/site-check/scripts/tests" -p 'test_*.py'
-          PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/site-design/scripts/design.py" validate
-          python3 "$RELEASE_DIR/install.py" "$INSTALL_DIR"
-          test -f "$INSTALL_DIR/site-design/references/surface-brief.md"
-          test -f "$INSTALL_DIR/site-builder/scripts/state.py"
-          test -f "$INSTALL_DIR/site-check/scripts/check.py"
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-design/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-builder/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-check/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/skills/site-design/scripts/design.py" validate
+          test -f "$RELEASE_DIR/agent/Agent.md"
+          test -f "$RELEASE_DIR/skills/site-design/references/surface-brief.md"
+          test -f "$RELEASE_DIR/skills/site-builder/scripts/state.py"
+          test -f "$RELEASE_DIR/skills/site-check/scripts/check.py"

@@ -5,17 +5,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 RELEASE = ROOT / "release"
-SPEC = importlib.util.spec_from_file_location("site_install", RELEASE / "install.py")
-installer = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(installer)
+INSTALLER = RELEASE / "install.py"
 
 
+@unittest.skipUnless(
+    INSTALLER.is_file(),
+    "install.py was replaced by the platform package format (agent/ + skills/ + "
+    "metadata.json); restore the installer and this test together if it returns",
+)
 class InstallTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("site_install", INSTALLER)
+        assert spec is not None and spec.loader is not None
+        cls.installer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.installer)
+
     def test_install_uses_official_skill_names_and_includes_design_assets(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            result = installer.install(RELEASE, destination)
+            result = self.installer.install(RELEASE, destination)
             self.assertEqual(
                 result["skills"],
                 ["site-brief", "site-builder", "site-check", "site-design"],
@@ -35,10 +44,10 @@ class InstallTests(unittest.TestCase):
     def test_existing_bundle_requires_replace(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            installer.install(RELEASE, destination)
+            self.installer.install(RELEASE, destination)
             with self.assertRaises(ValueError):
-                installer.install(RELEASE, destination)
-            installer.install(RELEASE, destination, replace=True)
+                self.installer.install(RELEASE, destination)
+            self.installer.install(RELEASE, destination, replace=True)
 
     def test_installed_builder_finds_the_installed_protocol_script(self):
         # verify --report is gated on check.py; if the two skills stop being
@@ -46,7 +55,7 @@ class InstallTests(unittest.TestCase):
         # silently accepting any report.
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            installer.install(RELEASE, destination)
+            self.installer.install(RELEASE, destination)
             state_file = destination / "site-builder" / "scripts" / "state.py"
             spec = importlib.util.spec_from_file_location("installed_state", state_file)
             installed = importlib.util.module_from_spec(spec)

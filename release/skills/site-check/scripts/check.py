@@ -4,7 +4,7 @@
 Generates a verification plan and validates check reports against the check protocol.
 It never starts a browser: it only reads the contract and source,
 computes SHA-256 fingerprints, and checks that a report conforms to the
-gating, dependency, hash-invalidation and mode rules. Python 3.10+, stdlib only.
+gating, dependency, hash-invalidation and mode rules. Python 3.9+, stdlib only.
 
 The protocol is organized in six levels (L0-L5) over eight axes:
 
@@ -98,11 +98,16 @@ SOURCE_INVALIDATES = ('static_build', 'core_task', 'negative_path', 'visual_desk
 # Tooling and VCS bookkeeping: never product source, at any depth.
 SOURCE_IGNORE = {'.site', '.SITE', '.v3', '.git', 'node_modules', '__pycache__', '.DS_Store',
                  '.playwright-cli'}
-# Runtime state and build output. These names are matched only at the project
-# root, so a product directory such as ``src/data/`` stays in the fingerprint
-# while the store's ``data/inventory.db`` does not: the product writing its own
-# data must not invalidate a report about the product's code.
-SOURCE_IGNORE_ROOT = {'data', 'uploads', 'dist', 'build', '.cache', '.next', 'coverage'}
+# Runtime state and build output, matched only at the project root. Runtime
+# files are excluded by what they are -- a state-file suffix (``.db`` and
+# friends) -- never by a name product source also uses. ``uploads`` stays
+# because a product whose core task writes an upload would otherwise
+# invalidate its own report by doing the task; ``data`` was removed because a
+# static site's ``data/products.json`` is product content, and excluding it
+# made a report about the site silently independent of that content.
+# Build-output directories stay: the source that produces them is what the
+# report is about. ``plan`` lists what was excluded either way.
+SOURCE_IGNORE_ROOT = {'uploads', 'dist', 'build', '.cache', '.next', 'coverage'}
 # Files that change while the product is being used, wherever they sit.
 SOURCE_IGNORE_SUFFIXES = ('.db', '.db-wal', '.db-shm', '.db-journal',
                           '.sqlite', '.sqlite3', '.log')
@@ -848,6 +853,59 @@ def validate_report(root, report_path) -> dict:
     }
 
 
+def _plan_summary(result: dict, report_path=None) -> dict:
+    """Bounded stdout view of a plan: counts, fingerprints and axes, no manifest.
+
+    A plan carries one manifest entry per source file, so printing it verbatim
+    scales with the project. ``--summary`` keeps stdout to what the caller acts
+    on and leaves the manifest in ``--out``.
+    """
+    excluded = result.get('source_excluded') or []
+    changed = result.get('changed_from')
+    if isinstance(changed, dict):
+        files = changed.get('changed_files')
+        changed = {key: changed.get(key) for key in
+                   ('ref', 'available', 'source', 'commit',
+                    'contract_changed', 'source_changed', 'error',
+                    'changed_files_note')}
+        if isinstance(files, dict):
+            changed['changed_file_counts'] = {
+                key: len(files.get(key) or [])
+                for key in ('added', 'removed', 'modified')}
+            changed['changed_files_truncated'] = bool(files.get('truncated'))
+    return {
+        'mode': 'summary',
+        'project_root': result.get('project_root'),
+        'project_mode': result.get('mode'),
+        'contract_path': result.get('contract_path'),
+        'contract_sha256': result.get('contract_sha256'),
+        'source_sha256': result.get('source_sha256'),
+        'source_files': result.get('source_files'),
+        'source_excluded_count': len(excluded),
+        'source_excluded_truncated': result.get('source_excluded_truncated', False),
+        'required_axes': result.get('required_axes'),
+        'changed_from': changed,
+        'generated_at': result.get('generated_at'),
+        'note': 'manifest omitted; use --out <path> for the complete plan',
+        'report': str(report_path) if report_path else None,
+    }
+
+
+def _emit_plan(args, result: dict) -> None:
+    """Write the complete plan when --out is given, then print it or its summary."""
+    text = json.dumps(result, ensure_ascii=False, indent=2)
+    report_path = None
+    if args.out:
+        report_path = args.out.expanduser()
+        report_path.write_text(text + '\n', encoding='utf-8')
+        report_path = report_path.resolve()
+    if args.summary:
+        print(json.dumps(_plan_summary(result, report_path),
+                         ensure_ascii=False, indent=2))
+    else:
+        print(text)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -861,6 +919,12 @@ def build_parser() -> argparse.ArgumentParser:
                              '(branch/tag/commit) to diff fingerprints against; '
                              'an REF that is neither is reported and conservatively '
                              'upgrades to guided-core')
+    plan_p.add_argument('--out', type=Path,
+                        help='write the complete plan JSON to this path as well as stdout')
+    plan_p.add_argument('--summary', action='store_true',
+                        help='print a bounded summary (counts, fingerprints and axes; '
+                             'no manifest) instead of the full plan; --out still '
+                             'receives the complete plan')
 
     val_p = sub.add_parser('validate-report', help='validate a check report against the protocol')
     val_p.add_argument('root', type=Path, help='project root')
@@ -872,9 +936,9 @@ def main() -> int:
     args = build_parser().parse_args()
     try:
         if args.command == 'plan':
-            result = plan(args.root, args.contract, args.changed_from)
-        else:
-            result = validate_report(args.root, args.report)
+            _emit_plan(args, plan(args.root, args.contract, args.changed_from))
+            return 0
+        result = validate_report(args.root, args.report)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(json.dumps({'error': str(exc)}, ensure_ascii=False))
         return 2

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "2.0",
+  "id": "website-developer",
+  "version": "1.0.0",
+  "type": "agent",
+  "ownership": "general",
+  "name": "website-developer",
+  "displayName": "网站开发专家",
+  "description": "按需求把页面从骨架、视觉、核心代码一步步做出来，每步在浏览器里测通才交付。",
+  "categoryId": "developer-tools",
+  "icon": "./agent/assets/logo.png",
+  "iconAlt": "网站开发专家",
+  "tags": [
+    "网站开发",
+    "页面设计",
+    "前端实现",
+    "代码检查"
+  ],
+  "agent": {
+    "action": {
+      "type": "conversation"
+    },
+    "quickPrompts": [
+      {
+        "id": "new-system",
+        "text": "我想建一个客户线索管理后台，先帮我梳理功能和页面结构。"
+      },
+      {
+        "id": "style-redesign",
+        "text": "现有页面排版太密、颜色太乱，帮我出两版不同风格的视觉预览。"
+      },
+      {
+        "id": "site-audit",
+        "text": "帮我检查当前网站的移动端排版、按钮点击和表单校验是否正常。"
+      }
+    ],
+    "owner": "fde-dev",
+    "visibility": {
+      "departments": []
+    },
+    "defaultEnabled": true
+  }
+}

@@ -9,7 +9,9 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 ## 协议
 
-`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴和门禁顺序，并输出 `source_files / source_excluded / source_manifest`——哪些文件算产品、哪些被排除，都摆出来。产品源码之外的运行期状态（根目录下的 `data/`、`uploads/`、构建产物、`*.db`、`*.sqlite`、`*.log`）不进指纹：店主卖出第一瓶水不该作废一份关于代码的报告。工具链也一样：项目根目录里有 `skills.json` 时，它声明的 skill 目录（`site-brief`、`site-builder`、`site-design`）连同 `AGENTS.md`、`install.py`、`skills.json` 都不进指纹——那些是干活用的说明书，改一次 skill 不该作废一轮检查。检查脚本自己仍算源码，改了它，它产出过的 PASS 就不再作数：能被中途放松的检查，说不了算数。
+`check.py plan PROJECT --contract .site/design/surface-brief.md [--changed-from REF] [--out PATH] [--summary]` 读合同和源码，算出 SHA-256 指纹，给出本轮要查的轴和门禁顺序，并输出 `source_files / source_excluded / source_manifest`——哪些文件算产品、哪些被排除，都摆出来。默认打印完整 manifest；`--summary` 把 stdout 收敛成计数、指纹和轴，完整 plan 用 `--out` 落盘，两个一起用就不会把逐文件清单灌进上下文。产品源码之外的运行期状态（`uploads/`、构建产物、`*.db`、`*.sqlite`、`*.log`）不进指纹：店主卖出第一瓶水不该作废一份关于代码的报告。根目录 `data/` 不整体排除——静态站的 `data/products.json` 是产品内容，改了就该作废报告；运行期数据仍按后缀排除。工具链也一样：项目根目录里有 `skills.json` 时，它声明的 skill 目录（`site-brief`、`site-builder`、`site-design`）连同 `AGENTS.md`、`install.py`、`skills.json` 都不进指纹——那些是干活用的说明书，改一次 skill 不该作废一轮检查。检查脚本自己仍算源码，改了它，它产出过的 PASS 就不再作数：能被中途放松的检查，说不了算数。
+
+本轮的 plan、report 和临时探针脚本都放 `.site/` 下。`.site` 不进源码指纹，产物写在那里不会影响自己；写进项目根会让产物算进源码，刚写完的报告就对自己失效了。
 
 `source_excluded` 是给你核对的：如果里面出现了真正属于产品的东西（比如一个随产品发布的只读 `.db`），那说明排除规则猜错了，把它当成限制如实写进报告，不要当作已覆盖。
 
@@ -27,7 +29,6 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
   "independent": false,
   "contract_sha256": "plan 的 contract_sha256",
   "source_sha256": "plan 的 source_sha256",
-  "source_manifest": "plan 的 source_manifest，原样带上",
   "axes": {
     "core_task": {"status": "verified", "observed": "登记 → 刷新 → 数量正确，5 条记录"}
   },
@@ -36,7 +37,9 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 }
 ```
 
-`axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。`source_manifest` 原样抄 `plan` 的输出：带上它，下一轮 `--changed-from` 这份报告就能直接列出改过哪些文件；不带也能校验，只是只能告诉你"变了"。代价是体积，每个文件约 100 字节，一万个文件约 1MB——现在无所谓，文件数上到几千再说。
+`axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。报告不强制带 `source_manifest`：把 plan 用 `--out` 存在 `.site/` 下，下一轮 `--changed-from` 直接指向它就能列出逐文件变化；要报告自包含再原样带上（代价是体积，每个文件约 100 字节）。无论带不带，指纹对不上当前源码的报告都不成立。
+
+浏览器从哪来：这份协议自己不启动浏览器，由宿主提供。宿主没有现成浏览器工具时，按当前环境找一条可用路径：宿主内置浏览器、`playwright-cli` 或 `npx @playwright/cli`、Python 的 playwright 包，或本机已缓存的 Chromium 加 CDP 端点。一条都找不到时，浏览器轴记 `not_run`、`overall` 记 `blocked`，并写清缺的是哪种能力；不要用文件存在、构建成功或桩断言顶上。证据落在渲染结果上：元素的实际可见性、文本和布局，不是 DOM 属性、桩数据或截图数量。
 
 六个层级、八条轴：
 

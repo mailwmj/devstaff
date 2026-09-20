@@ -1,4 +1,4 @@
-"""Research directions and compose portable design tokens. Python 3.10+, stdlib only."""
+"""Research directions and compose portable design tokens. Python 3.9+, stdlib only."""
 import argparse
 import difflib
 import fnmatch
@@ -1063,10 +1063,17 @@ _LOGO_CTX_RE = re.compile(
     re.IGNORECASE)
 
 _IMPORT_RE = re.compile(r"""(?:from|require)\s*\(?\s*['"]([^'"]+)['"]""")
-_LINK_SRC_RE = re.compile(r'<(?:link|script)\b[^>]*\bsrc=["\']([^"\']+)["\']',
+_LINK_SRC_RE = re.compile(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\']',
                           re.IGNORECASE)
-_LINK_HREF_RE = re.compile(r'<link\b[^>]*\bhref=["\']([^"\']+)["\']',
-                           re.IGNORECASE)
+# A <link> tag is parsed as a whole so attribute order is not assumed:
+# ``<link href="..." rel="stylesheet">`` is as valid as the reverse.
+_LINK_TAG_RE = re.compile(r'<link\b[^>]*>', re.IGNORECASE)
+_LINK_REL_RE = re.compile(r'\brel=["\']([^"\']*)["\']', re.IGNORECASE)
+_LINK_HREF_RE = re.compile(r'\bhref=["\']([^"\']+)["\']', re.IGNORECASE)
+# Only a stylesheet or preload href can reference an icon package. Scanning
+# every <link href> once matched ``rel=canonical`` page metadata: a product id
+# containing "feather" read as the Feather icon library.
+_ICON_LINK_RELS = frozenset({'stylesheet', 'preload', 'modulepreload'})
 _CLASS_VAL_RE = re.compile(r'(?:class|className)=["\']([^"\']*)["\']',
                            re.IGNORECASE)
 _LABEL_TAG_RE = re.compile(
@@ -1177,9 +1184,11 @@ def _candidate_skin_blockers(body):
 
     Mirrors the 换肤反模式 in visual-direction.md: two or more declared
     candidates must each carry structural-difference evidence (主布局容器 /
-    核心组件形态 / 信息密度 / 首屏重心). Missing evidence, identical
-    motif+composition across candidates, or a swap-check that admits换肤 are
-    all hard failures — color/font-only differences are not a second direction.
+    核心组件形态 / 信息密度 / 首屏重心) and must not share one motif+composition
+    pair. The swap-check conclusion stays prose: deciding it means reading
+    negation in natural language, and "不是换肤" matched a bare 换肤 pattern,
+    which blocked a correct contract. These two structural checks decide what
+    a machine can decide; the prose is for the next reader.
     """
     blockers = []
     header, rows = _table(body, '候选', '设计主线')
@@ -1210,12 +1219,6 @@ def _candidate_skin_blockers(body):
         blockers.append({
             'code': 'skin_only_candidates',
             'detail': '候选设计主线与构图命题相同，仅可能换色/字体'})
-    swap = _bullet_after(body, '交换检查结论')
-    if swap and re.search(r'换肤|差异(?:不|基本.*不)成立|基本消失|只(?:是|能算).*上色',
-                          swap):
-        blockers.append({
-            'code': 'skin_only_candidates',
-            'detail': '交换检查结论表明候选仅换肤：' + swap})
     return blockers
 
 
@@ -1233,11 +1236,33 @@ def _strip_tags(text):
     return re.sub(r'<[^>]+>', '', text).strip()
 
 
+def _link_references(text):
+    """Hrefs of ``<link>`` tags that can reference a package or asset bundle.
+
+    Only stylesheet/preload/modulepreload tags count; metadata links
+    (canonical, icon, alternate, manifest) point at page addresses, not at
+    package specifiers. Attribute order is not assumed.
+    """
+    refs = []
+    for tag in _LINK_TAG_RE.finditer(text):
+        tag_text = tag.group(0)
+        rel = _LINK_REL_RE.search(tag_text)
+        if rel is None:
+            continue
+        roles = {token.lower() for token in rel.group(1).split()}
+        if not roles & _ICON_LINK_RELS:
+            continue
+        href = _LINK_HREF_RE.search(tag_text)
+        if href is not None:
+            refs.append(href.group(1))
+    return refs
+
+
 def _detect_icon_systems(text):
     systems = set()
     refs = [m.group(1) for m in _IMPORT_RE.finditer(text)]
     refs += [m.group(1) for m in _LINK_SRC_RE.finditer(text)]
-    refs += [m.group(1) for m in _LINK_HREF_RE.finditer(text)]
+    refs += _link_references(text)
     for ref in refs:
         for sid, pattern in _ICON_SYSTEM_PACKAGES:
             if pattern.search(ref):

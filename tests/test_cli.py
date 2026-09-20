@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).parents[1] / "release" / "site-builder" / "scripts" / "state.py"
-DESIGN = Path(__file__).parents[1] / "release" / "site-design" / "scripts" / "design.py"
-CHECK = Path(__file__).parents[1] / "release" / "site-check" / "scripts" / "check.py"
+SCRIPT = Path(__file__).parents[1] / "release" / "skills" / "site-builder" / "scripts" / "state.py"
+DESIGN = Path(__file__).parents[1] / "release" / "skills" / "site-design" / "scripts" / "design.py"
+CHECK = Path(__file__).parents[1] / "release" / "skills" / "site-check" / "scripts" / "check.py"
 
 # A contract that passes prebuild: every indexed ID exists in the body, the BR
 # has a handoff target, the required IC has a structural impact, the VA is
@@ -199,6 +199,37 @@ class StateCliTests(unittest.TestCase):
             )
             self.assertEqual(rejected.returncode, 2,
                              "the removed --full-manifest flag must not be accepted")
+
+    def test_plan_out_writes_the_manifest_and_summary_keeps_stdout_bounded(self):
+        """Machine data flows through --out; --summary is what a caller reads.
+
+        The manifest scales with the project, so it belongs in a file. The
+        complete plan is still the default stdout shape for callers that do
+        not opt into --summary.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_contract_report(root)
+            (root / "index.html").write_text("<html></html>", encoding="utf-8")
+            # Round artifacts live under .site/, which the source fingerprint
+            # excludes; the plan file must not describe itself.
+            out = root / ".site" / "plan.json"
+
+            def run_check(*args):
+                result = subprocess.run(
+                    [sys.executable, str(CHECK), *map(str, args)],
+                    check=False, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            summary = run_check("plan", root, "--out", out, "--summary")
+            self.assertEqual(summary["mode"], "summary")
+            self.assertNotIn("source_manifest", summary)
+            written = json.loads(out.read_text(encoding="utf-8"))
+            self.assertIn("source_manifest", written)
+            self.assertEqual(summary["source_sha256"], written["source_sha256"])
 
     def test_verify_rejects_a_stale_report(self):
         with tempfile.TemporaryDirectory() as directory:

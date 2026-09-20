@@ -4,7 +4,7 @@
 
 安装后四个 Skill 位于同一个 `agent-skills/` 目录下。先解析 `site-builder` 的安装目录，再用相对它的路径运行脚本。
 
-本文件里的 Skill 相对路径都相对**分发根**。分发根在本仓库中是 `release/`，安装后是 `agent-skills/`：在仓库里读作 `release/site-builder/scripts/state.py`，安装后读作 `agent-skills/site-builder/scripts/state.py`。仓库根目录只放开发文件（`tests/`、`.github/`、README 等）。
+本文件里的 Skill 相对路径都相对**分发根**。分发根在本仓库中是 `release/`，安装后是 `agent-skills/`：在仓库里读作 `release/skills/site-builder/scripts/state.py`，安装后读作 `agent-skills/site-builder/scripts/state.py`。仓库根目录只放开发文件（`tests/`、`.github/`、README 等）。
 
 ## 一句话
 

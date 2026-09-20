@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "id": "site-brief",
+  "name": "site-brief",
+  "version": "1.1.0",
+  "type": "skill",
+  "source": "embedded",
+  "displayName": "需求发现与收敛",
+  "description": "收敛首版核心任务与边界，不设多余假设，严禁在需求阶段提问设计与排版。"
+}

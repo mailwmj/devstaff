@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-CHECK = ROOT / "release" / "site-check" / "scripts" / "check.py"
+CHECK = ROOT / "release" / "skills" / "site-check" / "scripts" / "check.py"
 SPEC = importlib.util.spec_from_file_location("site_check", CHECK)
 check = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -147,13 +147,19 @@ class PlanTests(_ProjectBase):
     def test_plan_reports_what_it_excluded(self):
         (self.root / "data").mkdir()
         (self.root / "data" / "inventory.db").write_bytes(b"state")
+        (self.root / "data" / "products.json").write_text('{"price": 10}', encoding="utf-8")
         (self.root / "src").mkdir()
         (self.root / "src" / "data.json").write_text("{}", encoding="utf-8")
         (self.root / "notes.log").write_text("x", encoding="utf-8")
         result = check.plan(self.root, ".site/design/surface-brief.md")
         self.assertIn("data/inventory.db", result["source_excluded"])
         self.assertIn("notes.log", result["source_excluded"])
-        # A product directory that merely happens to be called data/ stays in.
+        # A product directory that merely happens to be called data/ stays in:
+        # a static site's data/products.json is content, and excluding the
+        # whole directory made reports independent of it. Only the runtime
+        # suffix rule keeps data/inventory.db out.
+        self.assertIn("data/products.json", result["source_manifest"])
+        self.assertNotIn("data/products.json", result["source_excluded"])
         self.assertIn("src/data.json", result["source_manifest"])
         self.assertNotIn("src/data.json", result["source_excluded"])
         self.assertEqual(result["source_files"], len(result["source_manifest"]))

@@ -998,6 +998,28 @@ class LintUiTests(unittest.TestCase):
         self.assertEqual(self.codes(report), [])
         self.assertTrue(report["passed"], report["blockers"])
 
+    def test_metadata_link_path_is_not_an_icon_system(self):
+        # A product id in rel=canonical once read as the Feather icon library.
+        # Metadata links are page addresses, not package specifiers.
+        self._write(contract_json=self._contract(icon_system="lucide"),
+                    files={"index.html":
+                           '<link rel="canonical" href="products/feather-wand.html">'
+                           '<link rel="icon" href="/assets/feather.png">'})
+        report = self._lint()
+        self.assertTrue(report["passed"], report["blockers"])
+        self.assertNotIn("icon_system_mismatch",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_stylesheet_link_counts_regardless_of_attribute_order(self):
+        self._write(contract_json=self._contract(icon_system="lucide"),
+                    files={"index.html":
+                           '<link href="https://cdn/feather-icons/feather.css" '
+                           'rel="stylesheet">'})
+        report = self._lint()
+        mismatch = next(w for w in report["warnings"]
+                        if w["code"] == "icon_system_mismatch")
+        self.assertEqual(mismatch["found"], ["feather"])
+
     def test_fabricated_lorem_is_blocked(self):
         self._write(files={"index.html": "<p>lorem ipsum dolor sit amet</p>"})
         report = self._lint()
@@ -1067,6 +1089,22 @@ class LintUiTests(unittest.TestCase):
             "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
             "| `方案一` | a | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n")
         self._write(body=body, files={"index.html": "<h1>库存</h1>"})
+        report = self._lint()
+        self.assertNotIn("skin_only_candidates", self.codes(report))
+
+    def test_swap_check_prose_is_not_machine_judged(self):
+        # "不是换肤" matched a bare 换肤 pattern and blocked a correct
+        # contract. Negation is not decidable by regex, so the two structural
+        # checks decide; the prose is left for the next reader.
+        body = self.CLEAN_BODY + (
+            "## 对照方向（仅在真实取舍存在时）\n\n"
+            "| 候选 | 匹配依据 | 设计主线 | 视觉世界 | 构图命题 | 突出 / 牺牲 | 实现 / 无障碍风险 | 结果 |\n"
+            "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+            "| `方案一` | a | 表格矩阵 | 数据 | 表格居中 | x | y | `pending` |\n"
+            "| `方案二` | b | 货架卡片 | 实物 | 网格铺陈 | x | y | `pending` |\n\n"
+            "- **交换检查结论：** 抽掉颜色后两者栅格不同，不是换肤。\n"
+            "- **结构差异证据：** 方案一表格主区，方案二左栏列表\n")
+        self._write(body=body)
         report = self._lint()
         self.assertNotIn("skin_only_candidates", self.codes(report))
 

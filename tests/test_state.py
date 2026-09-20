@@ -5,13 +5,13 @@ import unittest
 from pathlib import Path
 import hashlib
 
-STATE_PATH = Path(__file__).parents[1] / "release" / "site-builder" / "scripts" / "state.py"
+STATE_PATH = Path(__file__).parents[1] / "release" / "skills" / "site-builder" / "scripts" / "state.py"
 SPEC = importlib.util.spec_from_file_location("site_state", STATE_PATH)
 state = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(state)
 
-CHECK_PATH = Path(__file__).parents[1] / "release" / "site-check" / "scripts" / "check.py"
+CHECK_PATH = Path(__file__).parents[1] / "release" / "skills" / "site-check" / "scripts" / "check.py"
 CHECK_SPEC = importlib.util.spec_from_file_location("site_check_for_state", CHECK_PATH)
 check = importlib.util.module_from_spec(CHECK_SPEC)
 assert CHECK_SPEC.loader is not None

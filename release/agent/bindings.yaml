@@ -1,0 +1,14 @@
+version: "1"
+bindings:
+  - id: site-builder
+    source: embedded
+    required: true
+  - id: site-brief
+    source: embedded
+    required: false
+  - id: site-design
+    source: embedded
+    required: false
+  - id: site-check
+    source: embedded
+    required: false

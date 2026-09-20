@@ -1,0 +1,72 @@
+{
+  "scenes": [
+    {
+      "id": "new-site",
+      "name": "新建网站",
+      "items": [
+        {
+          "id": "brief-scope",
+          "itemType": "prompt",
+          "title": "收敛首版功能与页面",
+          "description": "输入建站想法，AI 提炼出首版必须做的核心流程与页面清单，砍掉低频废话。",
+          "prompt": "我想新建一个网站，请问我最关键的几个问题，帮我梳理首版必须做的核心流程和页面清单。",
+          "skillRefs": [
+            "site-brief"
+          ]
+        },
+        {
+          "id": "skeleton-preview",
+          "itemType": "prompt",
+          "title": "生成 2 版骨架交互稿",
+          "description": "根据功能生成 2 种不同排版架构的单文件骨架预览页，供你挑结构（不带颜色干扰）。",
+          "prompt": "建站需求已明确，请根据需求生成 2 种信息架构差别的单文件骨架预览页，供我挑选结构。",
+          "skillRefs": [
+            "site-design"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "redesign-tune",
+      "name": "页面改版与微调",
+      "items": [
+        {
+          "id": "dual-style-preview",
+          "itemType": "prompt",
+          "title": "出两版视觉调性对比",
+          "description": "在定好的骨架上，给出两套不同质感和配色的方案，顶栏带深色切换条供你切换预览。",
+          "prompt": "骨架结构已定，请给我生成两版视觉调性差别明显的预览页，顶部保留深色切换条供我切换对比。",
+          "skillRefs": [
+            "site-design"
+          ]
+        },
+        {
+          "id": "quick-edit-fix",
+          "itemType": "prompt",
+          "title": "局部改动或修一个 Bug",
+          "description": "改文案、调间距、修特定报错；直接小步修改目标代码并跑通自检，绝不大动干戈乱重写。",
+          "prompt": "我对现有页面做一处明确修改，请直接定位代码增量修改，不要重写无关逻辑。",
+          "skillRefs": [
+            "site-builder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "site-audit",
+      "name": "质量巡检",
+      "items": [
+        {
+          "id": "browser-check",
+          "itemType": "prompt",
+          "title": "核心流程与界面检查",
+          "description": "在真实浏览器里帮你跑一遍主流程，查按钮有无误触、移动端有没有横向滚动破皮，给出客观事实清单。",
+          "prompt": "请对当前站点进行一次只读巡检，查清核心任务是否通畅、移动端有无横向拖动，并给出客观事实报告。",
+          "skillRefs": [
+            "site-check"
+          ]
+        }
+      ]
+    }
+  ]
+}
