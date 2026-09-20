@@ -36,6 +36,12 @@ CONTRACT_REL_PATH = ".site/design/surface-brief.md"
 # (never parses the JSON) so the legacy warning stays in step with the
 # authoritative missing/invalid-contract blockers.
 CONTRACT_BLOCK_RE = re.compile(r"```(?:site-contract|v3-contract)\n(.*?)\n```", re.DOTALL)
+# The recorded brief is the evidence that the user was asked. state.py checks
+# its shape only (like the contract block); the questions themselves belong to
+# site-brief. Legacy schema_revision < 3 keeps its old gate until migrate.
+BRIEF_REL_PATH = ".site/brief.md"
+BRIEF_BLOCK_RE = re.compile(r"```brief\n(.*?)\n```", re.DOTALL)
+BRIEF_FACT_SOURCES = ("user", "reused", "assumed")
 
 
 def now() -> str:
@@ -192,6 +198,82 @@ def normalize_quote(quote: str) -> str:
     return "".join(quote.split()).lower()
 
 
+def brief_path(root: Path) -> Path:
+    return runtime_metadata_dir(root) / 'brief.md'
+
+
+def _brief_block(root: Path) -> dict | None:
+    """Parse the fenced brief block; None when file, fence or JSON is unusable."""
+    path = brief_path(root)
+    if not path.is_file():
+        return None
+    match = BRIEF_BLOCK_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        return None
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _brief_problems(data: dict | None) -> list[str]:
+    """Reasons a recorded brief cannot stand in for the user's answers.
+
+    The gate checks shape, not truth: an agent can still write a false file,
+    but it cannot skip the questions without writing the omission down where
+    the confirmed decision and its hash point at it. Facts are user-stated
+    (``user``), inherited from an earlier confirmation (``reused``) or
+    explicitly assumed only after asking (``assumed`` + ``asked``).
+    """
+    if data is None:
+        return [f'no readable brief block in {BRIEF_REL_PATH}']
+    migrated = isinstance(data.get('migrated_from'), str) and bool(data['migrated_from'].strip())
+    facts = data.get('facts')
+    if not isinstance(facts, dict):
+        return ['brief facts must be an object']
+    if not facts and not migrated:
+        return ['brief facts cannot be empty']
+    for name, fact in facts.items():
+        if not isinstance(name, str) or not name.strip() or not isinstance(fact, dict):
+            return ['each brief fact needs a name and an object']
+        if not isinstance(fact.get('value'), str) or not fact['value'].strip():
+            return [f'brief fact {name} needs a nonempty value']
+        if fact.get('source') not in BRIEF_FACT_SOURCES:
+            return [f'brief fact {name} source must be user, reused or assumed']
+        if fact['source'] == 'assumed' and fact.get('asked') is not True:
+            return [f'brief fact {name} is assumed without asked: true']
+    assumptions = data.get('assumptions')
+    if not isinstance(assumptions, list) or any(not isinstance(item, str) or not item.strip() for item in assumptions):
+        return ['brief assumptions must be a list of plain-language lines']
+    if any(fact['source'] == 'assumed' for fact in facts.values()) and not assumptions:
+        return ['assumed brief facts need at least one plain-language assumption line']
+    exclusions = data.get('exclusions')
+    if not isinstance(exclusions, list) or any(not isinstance(item, str) or not item.strip() for item in exclusions):
+        return ['brief exclusions must be a list']
+    return []
+
+
+def _recorded_brief_sha256(root: Path, state: dict) -> str | None:
+    """Require the recorded brief for modern states; return its file hash.
+
+    Schema revision < 3 projects keep their old gate until ``migrate``. For a
+    modern project the brief is the record of what the user was asked; without
+    it, ``decide`` would confirm a direction nobody stated.
+    """
+    if state.get('schema_revision', 1) < 3:
+        return None
+    problems = _brief_problems(_brief_block(root))
+    if problems:
+        raise RuntimeProblem(
+            'BRIEF_REQUIRED',
+            'the brief is not recorded: ' + '; '.join(problems),
+            'Ask the first-version questions, record the answers and assumptions in '
+            f'{BRIEF_REL_PATH} as a fenced brief block, then confirm the direction.',
+        )
+    return hashlib.sha256(brief_path(root).read_bytes()).hexdigest()
+
+
 def discovery_next_action(discovery: dict) -> str:
     """The only discovering sub-state that pauses for the user is a real,
     unresolved structural divergence; everything else proceeds to forming and
@@ -229,12 +311,16 @@ def building_actions(phase: str) -> tuple[str, list[str], list[str]]:
     )
 
 
-def preflight_state(state: dict) -> dict:
+def preflight_state(state: dict, root: Path | None = None) -> dict:
     stage=state['stage']; modern=state.get('schema_revision',1)>=3
     structure=state.get('discovery',{}).get('structure',{})
     phase=verification_phase(state)
     pending=structure.get('mode')=='choice' and not structure.get('selected')
     unassessed=modern and structure.get('mode','undetermined')=='undetermined'
+    # Without a root a modern project cannot prove the brief was recorded, so
+    # the question gate stays closed instead of silently disappearing.
+    brief_problems=_brief_problems(_brief_block(root) if root is not None else None)
+    gate=None
     if stage=='discovering':
         action='present_structure_choice' if pending else 'prepare_and_confirm_direction'
         allowed=['ask_user','site-brief','site-design','discover','block','reopen','policy']
@@ -242,6 +328,14 @@ def preflight_state(state: dict) -> dict:
         if not pending and not unassessed: allowed.append('decide')
         blocked=['write_source','start_build','deliver']
         if 'decide' not in allowed: blocked.append('decide')
+        if modern and brief_problems:
+            gate='brief_questions'; action='prepare_and_confirm_direction'
+            allowed=['ask_user','site-brief','block','reopen','policy']
+            blocked=['discover','select-structure','decide','write_source','start_build','deliver']
+        elif modern:
+            gate='structure_choice' if pending else (None if unassessed else 'direction_confirmation')
+        else:
+            gate='structure_choice' if pending else None
     elif stage=='decided':
         action,allowed,blocked='start_build',['start','reopen','block','policy'],['deliver','change_scope_silently']
     elif stage=='building':
@@ -256,6 +350,7 @@ def preflight_state(state: dict) -> dict:
     else:
         action,allowed,blocked='report_delivery',['report','revise','reopen','policy'],['write_source','start_build']
     missing=[]
+    if modern and brief_problems and stage=='discovering': missing.append('brief_record')
     if not state['decision']['confirmed']: missing.append('confirmed_direction')
     if unassessed: missing.append('structure_assessment')
     if pending: missing.append('structure_selection')
@@ -263,11 +358,30 @@ def preflight_state(state: dict) -> dict:
     if stage=='building' and phase=='checking': missing.append('check_report')
     if state['mode']=='strict' and stage=='building': missing.append('independent_verification')
     owner='site-design' if pending else ('site-check' if phase=='checking' else 'site-builder')
+    if stage=='discovering' and gate=='brief_questions': owner='site-brief'
+    if stage=='discovering':
+        recorded=brief_path(root).is_file() if root is not None else False
+        if gate=='brief_questions':
+            inputs=[]; missing_inputs=[BRIEF_REL_PATH]
+            outputs=[BRIEF_REL_PATH,'user questions']
+            forbidden_outputs=['implementation_plan','source_changes','scaffold']
+        else:
+            inputs=[BRIEF_REL_PATH] if recorded else []
+            missing_inputs=[] if recorded else [BRIEF_REL_PATH]
+            if action=='present_structure_choice': outputs=['user choice']
+            elif modern and unassessed: outputs=['structure assessment']
+            else: outputs=['user confirmation']
+            forbidden_outputs=[]
+    else:
+        inputs=[CONTRACT_REL_PATH,'.site/journal.md']; missing_inputs=[]
+        outputs=['five-field receipt']; forbidden_outputs=[]
     return {'version':3,'schema_revision':state.get('schema_revision',1),'mode':state['mode'],'stage':stage,
             'next_action':action,'allowed_actions':list(dict.fromkeys(allowed)),'blocked_actions':blocked,
-            'action':{'id':action,'owner':owner,'inputs':['.site/brief.md'] if stage=='discovering' else [CONTRACT_REL_PATH,'.site/journal.md'],
-                      'outputs':['five-field receipt'],'preconditions':missing,'recovery':'Resolve the named prerequisite; keep valid decisions, then preflight.',
-                      'needs_user':pending or (stage=='building' and phase=='review' and not modern)},
+            'user_gate':gate,
+            'action':{'id':action,'owner':owner,'inputs':inputs,'missing_inputs':missing_inputs,
+                      'outputs':outputs,'forbidden_outputs':forbidden_outputs,'preconditions':missing,
+                      'recovery':'Resolve the named prerequisite; keep valid decisions, then preflight.',
+                      'needs_user':gate is not None or (stage=='building' and phase=='review' and not modern)},
             'missing':missing,'decision':{k:state['decision'].get(k) for k in ('confirmed','task','direction')},
             'discovery':state.get('discovery',default_discovery()),'verification':state['verification'],
             'delivery':state.get('delivery',{'scope':'preview','risks':[],'authorizations':[]}),
@@ -309,21 +423,24 @@ def init(root: Path, mode: str, schema_revision: int = 3) -> dict:
     # participates in the fingerprint, so writing progress into it would void
     # every verification already run.
     ensure_journal(root)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def decide(root: Path, task: str, direction: str, quote: str, include: list[str], exclude: list[str], message_id=None) -> dict:
     state=read_state(root)
     if state['stage']!='discovering': raise ValueError('a direction can only be confirmed while discovering')
-    if 'decide' not in preflight_state(state)['allowed_actions']:
+    brief_sha256=_recorded_brief_sha256(root,state)
+    if 'decide' not in preflight_state(state,root)['allowed_actions']:
         raise RuntimeProblem('STRUCTURE_DECISION_REQUIRED','assess/select the structure before confirming direction','Run discover, then select-structure if alternatives exist.')
     if not all(isinstance(x,str) and x.strip() for x in (task,direction,quote)): raise ValueError('task, direction and quote are required')
     old=state['stage']
     state['decision']={'confirmed':True,'task':task.strip(),'direction':direction.strip(),'quote':quote.strip(),'include':clean_items(include),'exclude':clean_items(exclude)}
-    state['decision']['confirmation']={'kind':'product_direction','revision':state.get('revision',0),'quote':quote.strip(),'message_id':message_id,
+    confirmation={'kind':'product_direction','revision':state.get('revision',0),'quote':quote.strip(),'message_id':message_id,
         'target_sha256':hashlib.sha256(json.dumps({k:state['decision'][k] for k in ('task','direction','include','exclude')},sort_keys=True).encode()).hexdigest()}
+    if brief_sha256: confirmation['brief_sha256']=brief_sha256
+    state['decision']['confirmation']=confirmation
     state['stage']='decided'; state['verification']=blank_verification()
-    record(state,'decide',old); write_state(root,state); return preflight_state(state)
+    record(state,'decide',old); write_state(root,state); return preflight_state(state,root)
 
 
 def discover(
@@ -369,7 +486,7 @@ def discover(
     state["discovery"] = discovery
     record(state, "discover", state["stage"])
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def select_structure(root: Path, candidate: str, quote: str) -> dict:
@@ -398,7 +515,7 @@ def select_structure(root: Path, candidate: str, quote: str) -> dict:
     state["discovery"] = discovery
     record(state, "select-structure", state["stage"])
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def contract_path(root: Path) -> Path:
@@ -499,7 +616,7 @@ def start(root: Path, contract_report=None) -> dict:
     state["stage"] = "building"
     record(state, "start", old)
     write_state(root, state)
-    result = preflight_state(state)
+    result = preflight_state(state,root)
     result["warnings"] = warnings
     return result
 
@@ -600,7 +717,7 @@ def handoff(root: Path) -> dict:
     state["verification"]["handoff_fingerprint"] = fingerprint
     record(state, "handoff", state["stage"])
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def begin_check(root: Path, quote: str='') -> dict:
@@ -619,7 +736,7 @@ def begin_check(root: Path, quote: str='') -> dict:
     elif quote.strip() and (phase!='review' or state['verification'].get('handoff_fingerprint')!=current):
         raise ValueError('review quote requires a handoff of this current version')
     state['verification'].update(phase='checking',round_fingerprint=current,round_id=runtime_secrets.token_hex(12),review_quote=quote.strip() or None,execution_scope='isolated_checks_only')
-    record(state,'begin-check',state['stage']); write_state(root,state); return preflight_state(state)
+    record(state,'begin-check',state['stage']); write_state(root,state); return preflight_state(state,root)
 
 
 def cancel_check(root: Path, reason: str) -> dict:
@@ -639,7 +756,7 @@ def cancel_check(root: Path, reason: str) -> dict:
     state["verification"]["review_quote"] = None
     record(state, "cancel-check", state["stage"], note=reason.strip())
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def verify(root: Path, report=None) -> dict:
@@ -683,7 +800,7 @@ def verify(root: Path, report=None) -> dict:
         state['stage']='blocked'; state['blocked_reason']=limits[0] if limits else evidence[0]; state['resume_stage']='building'
     else:
         state['stage']='delivered'; state.pop('blocked_reason',None); state.pop('resume_stage',None)
-    record(state,'verify',old); write_state(root,state); return preflight_state(state)
+    record(state,'verify',old); write_state(root,state); return preflight_state(state,root)
 
 
 def block(root: Path, reason: str) -> dict:
@@ -698,7 +815,7 @@ def block(root: Path, reason: str) -> dict:
     state["resume_stage"] = old
     record(state, "block", old)
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def resume(root: Path) -> dict:
@@ -717,7 +834,7 @@ def resume(root: Path) -> dict:
     state["verification"]["review_quote"] = None
     record(state, "resume", old)
     write_state(root, state)
-    return preflight_state(state)
+    return preflight_state(state,root)
 
 
 def reopen(root: Path, reason: str) -> dict:
@@ -751,7 +868,7 @@ def main() -> int:
     try:
         a=build_parser().parse_args();root=a.root.resolve()
         if a.action=='init':result=init(root,a.mode,schema_revision=a.schema_revision)
-        elif a.action=='preflight':result=preflight_state(read_state(root))
+        elif a.action=='preflight':result=preflight_state(read_state(root),root)
         elif a.action=='decide':result=decide(root,a.task,a.direction,a.quote,a.include,a.exclude,a.message_id)
         elif a.action=='discover':result=discover(root,a.structure,a.reason,a.axis,a.candidate)
         elif a.action=='select-structure':result=select_structure(root,a.candidate,a.quote)
@@ -795,7 +912,7 @@ def revise(root: Path, change_kind: str, reason: str, risks=None) -> dict:
     if risks: state['mode']='strict'
     state['delivery']['authorizations']=[]; state['reopen_reason']=reason.strip()
     state.pop('blocked_reason',None); state.pop('resume_stage',None)
-    record(state,'revise',old,reason.strip()); write_state(root,state); return preflight_state(state)
+    record(state,'revise',old,reason.strip()); write_state(root,state); return preflight_state(state,root)
 
 
 def set_policy(root: Path, scope: str, risks: list[str], quote: str='') -> dict:
@@ -809,19 +926,44 @@ def set_policy(root: Path, scope: str, risks: list[str], quote: str='') -> dict:
     if quote.strip(): state['delivery']['authorizations'].append({'scope':scope,'quote':quote.strip(),'revision':state.get('revision',0),'at':now(),'not_a_publish_token':True})
     state['verification']=blank_verification()
     if old=='delivered': state['stage']='building'
-    record(state,'policy',old); write_state(root,state); return preflight_state(state)
+    record(state,'policy',old); write_state(root,state); return preflight_state(state,root)
+
+
+def _seed_migrated_brief(root: Path) -> Path | None:
+    """Give a migrated legacy project a brief so the new gate has an anchor.
+
+    The seed carries no facts because revision 1/2 projects never recorded
+    them in that shape. It is marked so the gate accepts it and a later reader
+    can tell it apart from an agent-written brief.
+    """
+    path = brief_path(root)
+    if path.exists():
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    block = {'facts': {}, 'assumptions': [], 'exclusions': [], 'migrated_from': 'schema_revision_2'}
+    path.write_text(
+        '# 需求记录（由 state.py migrate 从旧状态生成）\n\n'
+        '旧项目不重复提问；后续范围变更时补齐 `facts`，来源只能是 user / reused / assumed。\n\n'
+        '```brief\n' + json.dumps(block, ensure_ascii=False, indent=2) + '\n```\n',
+        encoding='utf-8',
+    )
+    return path
 
 
 def migrate_state(root: Path) -> dict:
     state=read_state(root)
-    if state.get('schema_revision')==3: return preflight_state(state)
+    if state.get('schema_revision')==3: return preflight_state(state,root)
     if verification_phase(state)=='checking': raise ValueError('cancel-check before migrating state')
     path=state_path(root); backup=path.with_name('state.'+hashlib.sha256(path.read_bytes()).hexdigest()[:12]+'.bak.json')
     if not backup.exists(): backup.write_bytes(path.read_bytes())
+    brief=_seed_migrated_brief(root)
     state['schema_revision']=3; state['verification']=blank_verification()
     if state['stage']=='delivered': state['stage']='building'
-    record(state,'migrate',state['stage'],'backup: '+backup.name); write_state(root,state)
-    return {**preflight_state(state),'migration_backup':str(backup)}
+    note='backup: '+backup.name+('; brief seeded' if brief else '')
+    record(state,'migrate',state['stage'],note); write_state(root,state)
+    result={**preflight_state(state,root),'migration_backup':str(backup)}
+    if brief is not None: result['migration_brief']=str(brief)
+    return result
 
 
 if __name__ == "__main__":
