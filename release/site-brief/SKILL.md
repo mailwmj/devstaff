@@ -8,7 +8,34 @@ Read the shared protocol at the sibling site-builder/references/AGENTS.md (insta
 
 Do not write product source. Clarify who uses the site, their one main task, observable completion and first-version exclusions. Use the user's real example before inventing an abstract data model.
 
-For a new website the first user-visible reply is the questions, not a plan or a direction summary. List the unknowns that can change the first version, cross off what the user already stated, and ask the rest as one round of 3-5 questions with plain-language options and a recommendation, so one "use your recommendations" answers them all. "I can infer it" is not "the user stated it": brand name, contact/conversion channel, visual preference and first-version exclusions are asked or explicitly assumed, never silently inferred. Do not ask users to choose frameworks or databases. Details that cannot change the first version stay assumptions.
+For a new website the first user-visible reply is the questions, not a plan or a direction summary. Build a decision tree: each unknown branches into the questions that depend on it. The frontier is every question whose prerequisites are already settled — the ones you can ask now without guessing at answers you have not heard. Ask the whole frontier as one numbered round, each with plain-language options and a recommendation, so one "use your recommendations" settles the round; then wait for the answers, which reshape the tree and push the frontier outward. A question whose answer depends on something still open belongs to a later round, not this one.
+
+Ask a round in this shape, in the user's language, as one message:
+
+```
+❓ Q1 - <问题标题>：<问题正文，可以多段>
+
+选项 A：<选项，写清代价>
+选项 B：<选项>
+选项 C：<选项，如果有>
+
+➡️ 推荐 A。<一句理由>
+
+---
+
+❓ Q2 - <问题标题>：<问题正文>
+
+选项 A：<选项>
+选项 B：<选项>
+
+➡️ 推荐 B。<一句理由>
+```
+
+每题的写法固定为：`❓ Q编号 - 标题：正文`，选项逐行以`选项 A：`开头，推荐行写`➡️ 推荐 X。理由`。选项数量按真实存在的选择给（通常 2-4 个），不为凑数补 D、E；推荐不固定 A，按判断选最合适的一个并点名，再给一句理由。用户可以直接回“按推荐”，或“第 2 题选 B”。`frontier`、轮次、决策树、依赖、前提是你自己的词，不能出现在给用户的消息里：他不该看到第几轮、哪个问题在等哪个问题这类结构信息，最多一句自然开头，其余就是问题本身。❓ 和 ➡️ 是结构标记，不是装饰：没有它们也要保持“一题一推荐”。他只改其中几条也合法，剩下的按推荐落到下一轮重算。
+
+A question earns a place on the frontier when its answer changes what the first version does, contains, touches or risks, only the user can give it, and a wrong default is expensive to undo: who uses it and when, the one main task and what done looks like, what is explicitly excluded, where data comes from and who sees or changes it, external effects and risk, and which real content or materials exist now. This is a test, not a checklist: a shop page needs its public name and contact channel, an internal tool usually needs neither. Do not ask users to choose frameworks or databases, and ask a reversible detail with a recommended default instead of forcing the user to invent one; record a disclosed assumption when the user leaves the answer to you.
+
+Facts are yours to find, never the user's: inspect the project, existing materials, code and public sources, and dispatch exploration instead of blocking. Only questions downstream of a running exploration wait; ask the rest of the frontier now. Decisions are the user's: put each to them and wait. Appearance preferences (colors, style, layout, references, screenshots) depend on the structure skeleton, which the brief does not settle, so they are never on the brief frontier; the design step asks for them after the skeleton is chosen. Record an appearance constraint only when the user states one or existing brand material proves it. "I can infer it" is not "the user stated it": a fact that passes the test is asked or explicitly assumed, never silently inferred. A round is done when its frontier is empty; the brief is done when no branch is left silently assumed and the user confirms the recorded facts before direction confirmation. The brief is bounded: at most 3 rounds and 8 questions in total (up to 5 in the first round, up to 4 after that). When the budget is reached, ask everything still on the frontier in the last round with recommendations instead of opening another; reversible defaults may be listed as assumptions for the user to confirm rather than asked.
 
 Record the result in `.site/brief.md` as a fenced `brief` block before confirming direction:
 

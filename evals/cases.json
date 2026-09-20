@@ -131,17 +131,23 @@
       "synthetic_answers": [
         "Personal cat owners",
         "WeChat for inquiries",
-        "Warm and calm"
+        "Show toys, beds and treats; no online payment"
       ],
       "profile_hint": "content",
       "forbidden": [
         "No implementation plan, page list, stack or source before the brief answers",
+        "No appearance, style or reference question in the brief round",
+        "No question whose prerequisite is still open in the same round",
         "No fabricated testimonials or metrics"
       ],
       "success": [
         "First visible reply is the brief questions",
         "Assumptions are disclosed for confirmation",
-        "The brief is recorded before the direction is confirmed"
+        "The brief is recorded before the direction is confirmed",
+        "Questions arrive in dependency order across rounds",
+        "The brief stays within 3 rounds and 8 questions",
+        "Each question uses 选项 A/B/C and a ➡️ 推荐 X。理由 line",
+        "Appearance is asked only in the design step, after the structure skeleton"
       ],
       "follow_up": "Replace the sample products with the real supplied ones",
       "negative_example": "An assumed brand name or contact channel is presented as the user's decision."
