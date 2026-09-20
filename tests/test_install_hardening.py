@@ -21,7 +21,9 @@ class InstallHardeningTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'release'
-        self.dest = Path(self.temp.name) / 'installed'
+        # Resolve once: the installer returns resolved paths and macOS maps
+        # /var to /private/var, so unresolved comparisons fail there.
+        self.dest = (Path(self.temp.name) / 'installed').resolve()
         self.root.mkdir()
         self.config = {'version': '1.1', 'bundle': 'test-site-skills',
                        'skills': {name: {'directory': name} for name in NAMES}}

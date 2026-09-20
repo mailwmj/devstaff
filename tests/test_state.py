@@ -735,7 +735,7 @@ class CompatibilityDirectoryTests(unittest.TestCase):
                 "history": [],
             }
             (legacy_dir / "state.json").write_text(json.dumps(legacy_state), encoding="utf-8")
-            self.assertEqual(state.state_path(root), legacy_dir / "state.json")
+            self.assertEqual(state.state_path(root), (legacy_dir / "state.json").resolve())
             loaded = state.read_state(root)
             self.assertEqual(loaded["stage"], "discovering")
 
@@ -756,7 +756,7 @@ class CompatibilityDirectoryTests(unittest.TestCase):
                 "history": [],
             }
             (caps_dir / "state.json").write_text(json.dumps(caps_state), encoding="utf-8")
-            self.assertEqual(state.state_path(root), caps_dir / "state.json")
+            self.assertEqual(state.state_path(root), (caps_dir / "state.json").resolve())
             loaded = state.read_state(root)
             self.assertEqual(loaded["stage"], "discovering")
 

@@ -1426,7 +1426,7 @@ class DesignCompatibilityTests(unittest.TestCase):
                 + BASE_BODY
             )
             legacy_file.write_text(text, encoding="utf-8")
-            self.assertEqual(design.contract_path(root), legacy_file)
+            self.assertEqual(design.contract_path(root), legacy_file.resolve())
             report = design.check_contract(root, phase="prebuild")
             self.assertTrue(report["passed"])
 
@@ -1442,7 +1442,7 @@ class DesignCompatibilityTests(unittest.TestCase):
                 + BASE_BODY
             )
             caps_file.write_text(text, encoding="utf-8")
-            self.assertEqual(design.contract_path(root), caps_file)
+            self.assertEqual(design.contract_path(root), caps_file.resolve())
             report = design.check_contract(root, phase="prebuild")
             self.assertTrue(report["passed"])
 
