@@ -6,7 +6,7 @@ description: Design website structure, visual direction and flow experiments, or
 
 Read the shared protocol at the sibling site-builder/references/AGENTS.md (installed), or ../AGENTS.md (source bundle). Apply its user-language guidance. 
 
-Use existing product/brand/content and the approved task. Missing facts return to builder. Do not make external references into unapproved features.
+Use existing product/brand/content, the approved task and the facts recorded in `.site/brief.md`. Missing facts return to builder. Do not make external references into unapproved features.
 
 ## Route and load only the relevant files
 

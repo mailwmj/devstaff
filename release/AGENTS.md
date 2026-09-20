@@ -10,6 +10,12 @@ Run `site-builder/scripts/doctor.py PROJECT` when entering a new installation/en
 
 `preflight -> execute next_action -> record result -> preflight` remains the control loop. Read `action.inputs` and the relevant reference only, not the entire knowledge base. Unknown actions and malformed data return JSON with a stable code and recovery. Do not hand-edit state to bypass a gate.
 
+## Brief before plan
+
+A new website's first user-visible reply is the brief question round: up to 3-5 questions, each with plain-language options and a recommendation, so "use your recommendations" is a complete answer. The answers and the explicit assumptions go into `.site/brief.md` before direction is confirmed; `preflight` names the stop as `user_gate: brief_questions` and schema revision 3 refuses `decide` without a valid recorded brief.
+
+Until that record exists, do not produce an implementation plan, page list, stack choice, file layout or source. If the host client requires a plan before work, that plan's first section is this question round and carries no implementation detail; the implementation plan comes after direction confirmation.
+
 ## Route by actual task
 
 | Request | Route | User decision |
@@ -18,14 +24,14 @@ Run `site-builder/scripts/doctor.py PROJECT` when entering a new installation/en
 | Small change in a managed project | `revise --change-kind local`; preserve current task and design | No repeated brief/style approval |
 | Add a feature or page | `revise --change-kind feature`; inherit unaffected decisions | Only changed scope |
 | Change main task, data ownership or core structure | `revise --change-kind scope` | Confirm affected product/risk decisions |
-| New website | brief -> recommended visible direction -> implementation -> isolated verification | Purpose/scope and meaningful design preference |
+| New website | brief questions -> recommended visible direction -> implementation -> isolated verification | Purpose/scope and meaningful design preference |
 | Design only, brief only, check only | Call only the requested skill | Stop at requested output |
 
 Default to one recommended direction. Use `discover --structure single` when there is no genuine information-architecture disagreement. Use `choice` with at least two distinct candidates only for a real choice. Reusing the same word, such as two separate replies of "yes", is legal; confirmations are associated with their object and revision, not judged by different wording.
 
 ## Conditional decision points, not six compulsory stops
 
-Ask when an answer changes the main task, expensive rework or risk. Use an explicit low-risk assumption for reversible details. Existing references and answers are not asked again. A user saying to use recommendations is not permission to pay, publish, send real messages or write sensitive data.
+Ask when an answer changes the main task, expensive rework or risk. Use an explicit low-risk assumption for reversible details. Brand name, contact/conversion channel and visual style are first-version decisions, not reversible details, so they are asked or recorded as assumptions. Existing references and answers are not asked again. A user saying to use recommendations is not permission to pay, publish, send real messages or write sensitive data.
 
 Show a version the user can actually see. Register its artifact/hash and audience with `project.py preview`. A local path, agent-accessible localhost URL or successful OS open command does not establish user reachability. A screenshot is an honest visual fallback, not an interactive experience. Do not publish a private prototype just to solve access.
 
@@ -84,7 +90,7 @@ Handoff explains: entry, completed task, actually checked and untested behavior,
 
 对用户说话时再加三条：
 
-- 一轮只让用户决定一件事；先给结果和下一步，再给理由。
+- 一轮只让用户决定一件事；先给结果和下一步，再给理由。开头那轮 brief 问题可以一次 3-5 题，每题带推荐，用户一句“按推荐”就能过；之后才是一轮一件事。
 - 只讲他能打开的东西、他要做的决定、做完以后的结果。你自己的核对过程不要讲，状态名、模式名、路径和证据字段也不给他看。
 - 要交底就交他需要知道的限制（数据存在哪、什么还没验证），不交你的自检记录。
 

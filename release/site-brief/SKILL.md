@@ -8,7 +8,23 @@ Read the shared protocol at the sibling site-builder/references/AGENTS.md (insta
 
 Do not write product source. Clarify who uses the site, their one main task, observable completion and first-version exclusions. Use the user's real example before inventing an abstract data model.
 
-Ask only questions whose answers affect the first version, costly rework or risk. Ask up to 3-5 independent questions when needed, fewer when enough is known; give plain-language options and a recommendation. Do not ask users to choose frameworks or databases. Record reversible defaults as assumptions. Stop when remaining questions would not change the task.
+For a new website the first user-visible reply is the questions, not a plan or a direction summary. List the unknowns that can change the first version, cross off what the user already stated, and ask the rest as one round of 3-5 questions with plain-language options and a recommendation, so one "use your recommendations" answers them all. "I can infer it" is not "the user stated it": brand name, contact/conversion channel, visual preference and first-version exclusions are asked or explicitly assumed, never silently inferred. Do not ask users to choose frameworks or databases. Details that cannot change the first version stay assumptions.
+
+Record the result in `.site/brief.md` as a fenced `brief` block before confirming direction:
+
+```brief
+{
+  "facts": {
+    "audience":   {"value": "个人养猫用户", "source": "assumed", "asked": true},
+    "main_task":  {"value": "看猫玩具并咨询下单", "source": "user"},
+    "conversion": {"value": "加微信咨询", "source": "assumed", "asked": true}
+  },
+  "assumptions": ["购买入口按加微信处理"],
+  "exclusions": ["首版不做在线支付"]
+}
+```
+
+`source` is `user` (the user said it), `reused` (an earlier confirmed answer or existing material) or `assumed` (a disclosed default). An assumed fact requires `"asked": true` and at least one plain-language line in `assumptions` that you show the user when confirming direction. Schema revision 3 refuses `decide` without a valid block; `state.py migrate` seeds one for legacy projects.
 
 Keep facts, confirmed decisions, assumptions and unresolved confirmations separate in `.site/brief.md`, with sources and stable BR IDs where helpful. Replay the scenario: actor, input, action, visible result, likely failure and recovery. Include where data comes from, who sees/changes it, whether reload or changing devices must preserve it and whether there are real external effects.
 

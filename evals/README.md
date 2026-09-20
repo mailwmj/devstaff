@@ -1,6 +1,6 @@
 # Agent evaluation protocol
 
-cases.json contains six stable synthetic tasks. A case is not passed merely because a unit test is green. Run the same case against the baseline and candidate using the same host/model/settings; record all user-visible turns, tool calls and artifacts. Never invent a transcript, a token cost, a human participant or an independent reviewer.
+cases.json contains seven stable synthetic tasks. A case is not passed merely because a unit test is green. Run the same case against the baseline and candidate using the same host/model/settings; record all user-visible turns, tool calls and artifacts. Never invent a transcript, a token cost, a human participant or an independent reviewer.
 
 record.py validates record shape and evidence paths, not the truth of a model's self-evaluation. execution_kind is real_agent, scripted_integration or human_study; never merge their success rates. Fixture browser tests from tools/verify_all.py are scripted_integration. A developer agent who actually follows the prompt, builds, inspects browser evidence and revises can submit a real_agent trial with its own trace; this is still not human user research.
 

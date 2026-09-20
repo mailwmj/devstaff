@@ -20,6 +20,12 @@ Base: 78509ce0da8cf2f42d4a7bc1686045445dab8632. Dedicated branch: agent/devstaff
 | T13 | Six fixed tasks, record schema/validator, distinction between agent, scripted and human runs | Baseline/candidate human study and broad external-agent runs not invented |
 | T14 | Committed full release/source archives, independent installed tests, source removal, 3.10/3.12 CI | Linux/generic-local only unless a further platform is actually tested |
 
+## Brief-first gate (post-T14 change)
+
+Implemented: schema-3 preflight reports `user_gate: brief_questions`, marks `needs_user` and blocks discover/decide/source/scaffold until `.site/brief.md` carries a valid fenced `brief` block; `decide` requires that block, refuses `assumed` facts without `asked: true` (stable code `BRIEF_REQUIRED`) and stores the brief file hash in the confirmation; `migrate` seeds a marked brief for legacy revision 2 projects. Regression tests cover the gate, the assumed-without-asked refusal, the CLI error shape, hash binding and legacy compatibility.
+
+Verification boundary: unit and packaged-runtime suites only. Real-agent question-first behaviour and the user effect of the brief round still require a recorded `evals/` run (the `catalog-brief` case); the machine gate does not prove agent compliance outside preflight and `decide`.
+
 The current development environment's managed Chromium refused localhost navigation. The runner returned blocked and preserved its trace; no policy bypass was attempted. Real browser integration is therefore performed in the repository's disposable GitHub runner. A successful scripted browser run does not automatically certify visual quality or count as a human usability study.
 
 Read PR checks and .verification/summary.json for actual results. Not-run or failed items must stay explicit. dist/skill.zip and dist/devstaff-project.zip are built from Git, not a partial changed-file archive.

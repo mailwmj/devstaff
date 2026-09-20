@@ -19,6 +19,8 @@ python3 scripts/state.py verify PROJECT --report PROJECT/.site/check/current/rep
 python3 scripts/state.py revise PROJECT --change-kind local --reason "specific local correction"
 ```
 
+Before `decide`, record the brief in `.site/brief.md` as a fenced `brief` block: `facts` with `source` user/reused/assumed, plain-language `assumptions`, and `exclusions`. An assumed fact needs `"asked": true`. Schema revision 3 refuses a direction confirmation without a valid block, `preflight` reports the stop as `user_gate: brief_questions`, and `state.py migrate` seeds a marked brief for legacy projects.
+
 The run.py example executes only the supported stdlib starter, not arbitrary projects. Browser output is limited until visual review. Reports refer to the current round ID, mode and fingerprints. Legacy projects use explicit state.py migrate; legacy contracts have an explicit backed-up project.py migrate-contract.
 
 ## Preview access

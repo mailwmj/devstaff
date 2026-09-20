@@ -10,6 +10,8 @@ Run scripts relative to this skill directory. Start with `doctor.py PROJECT`, th
 
 ## Decision and build
 
+New website: the next user-visible reply is the brief question round, not a plan. While preflight reports the `brief_questions` gate, do not write an implementation plan, page list, stack, file layout or source; the answers and assumptions go into `.site/brief.md`, and `decide` refuses without a valid block. If the host requires a plan first, its first section is that question round.
+
 Ask site-brief for missing product facts. Ask site-design for the smallest visible experiment that resolves a real decision. Default to one recommendation; register single/choice structure assessment. `select-structure` is needed only for choice. `decide` records the actual user's product decision; don't invent a quote.
 
 Write the contract, run `design.py check-contract --phase prebuild`, and pass its report to `state.py start --contract-report FILE`. Use vertical slices; test each observable result. Keep mutable work progress in the journal, not the frozen contract. Existing code/stack wins; empty projects may use `scaffold.py DEST --profile content|personal|shared --title TITLE`.

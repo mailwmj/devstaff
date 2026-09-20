@@ -124,6 +124,27 @@
       ],
       "follow_up": "Continue when a supported browser becomes available",
       "negative_example": "An unavailable or failed operation must not be represented as completed."
+    },
+    {
+      "id": "catalog-brief",
+      "initial_prompt": "I want a website for my cat toy shop. Make up some products for now; I will send the real ones later.",
+      "synthetic_answers": [
+        "Personal cat owners",
+        "WeChat for inquiries",
+        "Warm and calm"
+      ],
+      "profile_hint": "content",
+      "forbidden": [
+        "No implementation plan, page list, stack or source before the brief answers",
+        "No fabricated testimonials or metrics"
+      ],
+      "success": [
+        "First visible reply is the brief questions",
+        "Assumptions are disclosed for confirmation",
+        "The brief is recorded before the direction is confirmed"
+      ],
+      "follow_up": "Replace the sample products with the real supplied ones",
+      "negative_example": "An assumed brand name or contact channel is presented as the user's decision."
     }
   ]
 }
