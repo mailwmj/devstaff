@@ -57,12 +57,20 @@ def read_state(root: Path) -> dict:
         state = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid state: {exc}") from exc
+    if not isinstance(state, dict):
+        raise ValueError("state must be a JSON object")
     if (
-        state.get("version") != 3
+        type(state.get("version")) is not int
+        or state.get("version") != 3
+        or not isinstance(state.get("mode"), str)
         or state.get("mode") not in MODES
+        or not isinstance(state.get("stage"), str)
         or state.get("stage") not in STAGES
     ):
         raise ValueError("unsupported state")
+    revision = state.get("schema_revision", 1)
+    if type(revision) is not int or revision not in (1, 2):
+        raise ValueError("unsupported state schema_revision")
     # Older revision-1 states never carried a discovery block; normalize it in
     # memory so new structure-choice logic can run without forcing a re-init.
     if "discovery" not in state:
@@ -490,7 +498,7 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
         raise ValueError("contract report project_root does not match this project")
     if report.get("phase") != "prebuild":
         raise ValueError("contract report phase must be prebuild")
-    if not report.get("passed"):
+    if report.get("passed") is not True:
         raise ValueError("contract report did not pass; resolve blockers before start")
     current = _contract_sha256(root)
     if current is None:
@@ -770,6 +778,17 @@ def verify(root: Path, report=None) -> dict:
         )
     if report is None:
         raise ValueError("verification requires --report, a site-check report")
+    # The report must describe the same version that opened this round, not
+    # merely whatever happens to be in the worktree at the end of the round.
+    shown = state["verification"].get("handoff_fingerprint")
+    current = _plan_fingerprint(root)
+    if not isinstance(shown, dict) or any(
+        shown.get(key) != current.get(key) for key in current
+    ):
+        raise ValueError(
+            "the source or contract changed during verification; cancel-check, "
+            "handoff the current version, begin a new round and write a fresh report"
+        )
     verdict = _check_verdict(root, report)
     if not verdict.get("valid"):
         reasons = list(verdict.get("errors") or [])
@@ -782,6 +801,11 @@ def verify(root: Path, report=None) -> dict:
             "check report does not hold for this tree: " + "; ".join(reasons or ["unknown"])
         )
     derived = _load_check_report(report, root)
+    # Detect ordinary concurrent edits that occurred while reading the report.
+    # This is detection, not a filesystem write lock or a security sandbox.
+    final_fingerprint = _plan_fingerprint(root)
+    if final_fingerprint != current:
+        raise ValueError("the source or contract changed during report validation")
     status = derived["status"]
     evidence = clean_items(derived["evidence"])
     limitations = clean_items(derived["limitations"])
