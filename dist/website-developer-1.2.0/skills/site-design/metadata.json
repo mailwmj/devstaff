@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "id": "site-design",
+  "name": "site-design",
+  "version": "1.2.0",
+  "type": "skill",
+  "source": "embedded",
+  "displayName": "网站设计与体验稿",
+  "description": "给出结构骨架预览和视觉方案；用户给了参考网站或截图时量出精确色板并比对还原度；方向定了就产出能实施、能验收的设计合同。"
+}

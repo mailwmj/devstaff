@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "id": "site-brief",
+  "name": "site-brief",
+  "version": "1.2.0",
+  "type": "skill",
+  "source": "embedded",
+  "displayName": "需求梳理",
+  "description": "把一句建站想法梳理成首版要做的核心任务和范围，先问清再动手。"
+}

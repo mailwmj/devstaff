@@ -6,4 +6,3 @@ __pycache__/
 tests/runs/
 .site/
 .pytest_cache/
-dist/

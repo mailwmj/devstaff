@@ -1,0 +1,30 @@
+0.2.0-design-dna@593e39b
+
+移植自 zanwei/design-dna（MIT）的 scripts/measure-colors.mjs 与 scripts/verify.mjs，
+上游提交 593e39bc9e3652734653bd75544a333d7d43615e（2026-08-28）。
+
+本目录里有两类东西：
+
+移植（measure / verify，与上游逐项一致）：确定性分层采样与 mix32 哈希、最远点初始化的 k-means（24 轮）、
+按 CIE76 ΔE 合并邻近聚类（PNG 2.5 / JPEG 5.0）、覆盖率、background/text/accent 角色判定、
+verify 的 ΔE 与覆盖率偏差算法，以及 PASS/FAIL 阈值（平均 ΔE ≤ 5、最大 ΔE ≤ 20、
+覆盖率偏差 ≤ 0.35、显著覆盖率 0.005）。
+
+有意不同的部分：
+- 运行时只用 Python 3.9+ 标准库，不引入 Node 与 sharp。平台包要能离线解包即用，
+  一个需要 npm install 的原生依赖会破坏这一点。
+- PNG 由自带解码器读（zlib + struct，8 位深，含 Adam7 交错）；其它格式依次尝试
+  Pillow、sips、ImageMagick，都不可用时如实报 unsupported 并给出转换命令，不返回估的值。
+- 报告里多出 `decoder` 字段，记录实际用了哪个解码器，便于复现。
+- 上游 schema「每个字段都必须有值」的填空要求未采用，改为按证据强度
+  measured / derived / inferred 标注，理由见 references/reference-dna.md。
+
+本项目自己加的（上游没有）：
+- recon.js 与 dna.py recon：网址这一路的取证。上游的做法是一律截图再量，而网址上
+  的字体名、字号/行高/字距绝对值、动效时长与曲线、脚本依赖只有 CSS 与 DOM 说得准；
+  截图的活是当验收基准。recon 负责收成项目证据格式，并给一个有上限的摘要视图。
+- 角色候选按变量名的语义打分（brand/primary/link 这类加分，sk-/gray-*-500 这类减分），
+  因为实测中纯按饱和度会把语法高亮配色排到品牌色前面。
+
+跨实现一致性：test_dna.py 里钉住的上游输出（mix32 金标向量、sample_index 序列、
+kmeans → mergeSimilar → assignRoles 的逐项结果）由上游代码在 Node 22 上实跑得到。

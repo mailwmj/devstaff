@@ -1,0 +1,79 @@
+{
+  "scenes": [
+    {
+      "id": "site-build",
+      "name": "网站搭建",
+      "description": "从想法到能打开",
+      "icon": "./assets/home/icon-build.png",
+      "items": [
+        {
+          "id": "build-new-site",
+          "itemType": "prompt",
+          "title": "搭建一个新网站",
+          "description": "说清用途和给谁看，先问你几个最关键的问题。",
+          "prompt": "我想做一个网站，用途是……（比如单位介绍、产品展示、活动报名或日常登记）。你先问我几个最关键的问题。",
+          "skillRefs": [
+            "site-brief",
+            "site-design"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "site-reference",
+      "name": "参考建站",
+      "description": "发我网址或截图",
+      "icon": "./assets/home/icon-reference.png",
+      "items": [
+        {
+          "id": "build-from-reference",
+          "itemType": "prompt",
+          "title": "照着参考做一版",
+          "description": "给网址或截图，量出它的颜色和排版再动手。",
+          "prompt": "我很喜欢这个网站：〈粘贴网址或截图〉，想要同样的感觉，内容换成我们自己的。",
+          "skillRefs": [
+            "site-design",
+            "site-builder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "design-inspiration",
+      "name": "设计灵感",
+      "description": "先看两版再定方向",
+      "icon": "./assets/home/icon-inspiration.png",
+      "items": [
+        {
+          "id": "preview-two-directions",
+          "itemType": "prompt",
+          "title": "先出两版设计",
+          "description": "不写代码，先看两版不同气质的样子。",
+          "prompt": "我们网站要做的事是……。先别写代码，给我两版不同气质的样子挑一挑。",
+          "skillRefs": [
+            "site-design"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "experience-upgrade",
+      "name": "体验升级",
+      "description": "更好看，也更好用",
+      "icon": "./assets/home/icon-upgrade.png",
+      "items": [
+        {
+          "id": "upgrade-existing-page",
+          "itemType": "prompt",
+          "title": "把现有页面改好看",
+          "description": "只改样子和手感，不重排结构、不加功能。",
+          "prompt": "我有一个做好的页面，看着太素、点着也别扭，想让它更好看、更好用。",
+          "skillRefs": [
+            "site-design",
+            "site-builder"
+          ]
+        }
+      ]
+    }
+  ]
+}

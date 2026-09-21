@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "id": "site-builder",
+  "name": "site-builder",
+  "version": "1.2.0",
+  "type": "skill",
+  "source": "embedded",
+  "displayName": "网站开发",
+  "description": "建站总入口：理解需求、推动设计、按小步实现并检查，只碰必要的地方。"
+}
