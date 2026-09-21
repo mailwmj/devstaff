@@ -639,9 +639,25 @@ class ReferenceArchitectureTests(unittest.TestCase):
             self.assertIn("motion.md", text)
         self.assertIn("动效主张", brief)
         self.assertIn("prefers-reduced-motion", motion)
-        self.assertIn("不引第三方动效库", motion)
         self.assertIn("不要问", motion)
         self.assertIn("reducedMotion", checker)
+        # 这句曾经写成「硬边界：不引第三方动效库，离线、弱网和低端设备都要打得开」。
+        # 那个理由在包内已经被实测推翻过一次（字体那格：CDN 才是风险，不是外链本身），
+        # 而且按本包自己的规则，不可验收的说法不该用验收线的语气写。理由换成成本，
+        # 结论（默认零依赖）不变。
+        self.assertIn("零依赖更便宜，也更容易在减少动态时整体关掉", motion)
+        self.assertNotIn("外部库先坏", motion)
+        # 默认零依赖不等于一刀切封禁：真遇到本表覆盖不到的拍子，要走单独论证。
+        self.assertIn("单独论证", motion)
+        # 输入驱动的连续响应是零依赖里真正缺的那一格，它必须有一行和一个循环约定。
+        self.assertIn("输入驱动响应", motion)
+        self.assertIn("1 - Math.exp(-k * dt)", motion)
+        # 每一拍要能说出成本落在哪一轴（合成 / 绘制 / 重排）。
+        self.assertIn("| 成本 |", motion)
+        # 假前提一旦以扁平禁令的形式长回任何一份参考里，就会静默地把整包拉回旧口径。
+        for path in sorted((SKILL_ROOT / "references").glob("*.md")):
+            self.assertNotIn("不引第三方动效库",
+                             path.read_text(encoding="utf-8"), path.name)
 
     def test_toolchain_documents_the_lint_boundary_and_retrieval_note(self):
         toolchain = (SKILL_ROOT / "references" / "design-toolchain.md").read_text(encoding="utf-8")
@@ -1300,6 +1316,55 @@ class LintUiTests(unittest.TestCase):
         codes = [w["code"] for w in report["warnings"]]
         self.assertIn("transition_all", codes)
         self.assertIn("gradient_text", codes)
+
+    def test_animating_layout_properties_warns(self):
+        # width/height/top invalidate style and layout every frame; the
+        # compositor never sees them. transform/opacity are the pass case, and
+        # a custom property called --my-height must not be read as ``height``.
+        self._write(files={"index.html": (
+            "<style>.a{transition:height .3s}"
+            ".b{transition:transform .3s, opacity .2s}"
+            ".c{transition:border-color .2s}"
+            ".d{transition:--my-height .3s}"
+            "@keyframes k{0%{width:0}100%{width:100px}}"
+            "@keyframes ok{from{transform:scale(.96);opacity:0}}"
+            "@media (prefers-reduced-motion:reduce){*{transition:none}}"
+            "</style>")})
+        report = self._lint()
+        warnings = report["warnings"]
+        codes = [w["code"] for w in warnings]
+        self.assertIn("layout_property_transition", codes)
+        self.assertIn("layout_property_animation", codes)
+        self.assertEqual(codes.count("layout_property_transition"), 1)
+        self.assertEqual(
+            [w["property"] for w in warnings
+             if w["code"] == "layout_property_transition"], ["height"])
+
+    def test_geometry_read_next_to_a_frame_loop_warns(self):
+        # A synchronous layout read inside a rAF callback is the most common
+        # cause of dropped frames in hand-written motion. The scan cannot prove
+        # the read sits in the callback, so it reports a question, not a
+        # verdict -- and never a blocker.
+        self._write(files={
+            "app.js": ("const el = document.querySelector('.c');\n"
+                       "function f(){ el.style.transform = 'translateX(' + "
+                       "el.offsetWidth + 'px)'; requestAnimationFrame(f); }\n"
+                       "requestAnimationFrame(f);\n")})
+        report = self._lint()
+        self.assertTrue(report["passed"], report["blockers"])
+        self.assertIn("layout_read_in_frame_loop",
+                      [w["code"] for w in report["warnings"]])
+
+    def test_a_frame_loop_that_only_writes_transform_stays_clean(self):
+        self._write(files={
+            "app.js": ("const el = document.querySelector('.c');\n"
+                       "let x = 0;\n"
+                       "function f(){ x += 1; el.style.transform = "
+                       "'translateX(' + x + 'px)'; requestAnimationFrame(f); }\n"
+                       "requestAnimationFrame(f);\n")})
+        report = self._lint()
+        self.assertNotIn("layout_read_in_frame_loop",
+                         [w["code"] for w in report["warnings"]])
 
     def test_color_literals_warn_only_past_the_token_threshold(self):
         few = "<style>:root{--a:#123456}.x{color:#123456}</style>"

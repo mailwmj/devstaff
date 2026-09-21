@@ -1135,6 +1135,12 @@ _ICON_MARKUP_PATTERNS = {
 
 LINT_CSS_SUFFIXES = frozenset({'.css', '.html', '.htm', '.vue', '.svelte',
                                '.astro'})
+# Runtime-motion rules need to see script, not just declarations. The two
+# checks below are text patterns that read the same in an inline <script>, a
+# component and a .js file, so they scan every script-capable suffix.
+LINT_SCRIPT_SUFFIXES = frozenset({'.html', '.htm', '.js', '.mjs', '.cjs',
+                                  '.jsx', '.ts', '.tsx', '.vue', '.svelte',
+                                  '.astro'})
 # A missing reference under a build-output directory may simply mean the build
 # has not run yet; a missing reference anywhere else is a broken page.
 LINT_BUILD_OUTPUT_DIRS = frozenset({'dist', 'build', 'out', '.next', '.nuxt',
@@ -1169,6 +1175,28 @@ _CONTINUOUS_MOTION_RE = re.compile(
 _REDUCED_MOTION_RE = re.compile(r'prefers-reduced-motion', re.IGNORECASE)
 _TRANSITION_ALL_RE = re.compile(r'transition\s*:\s*all\b|\btransition-all\b',
                                 re.IGNORECASE)
+# Animating a layout property invalidates style and layout every frame; the
+# compositor never sees it. ``transition: all`` is caught above; these two
+# patterns catch the explicit forms, in a transition list and in a keyframe.
+_LAYOUT_PROP_RE = re.compile(
+    r'(?<![-\w])(?:width|height|top|left|right|bottom'
+    r'|margin(?:-(?:top|right|bottom|left))?'
+    r'|padding(?:-(?:top|right|bottom|left))?'
+    r'|font-size|line-height|border-width)(?![-\w])', re.IGNORECASE)
+_TRANSITION_DECL_RE = re.compile(
+    r'transition(?:-property)?\s*:\s*([^;}{]+)', re.IGNORECASE)
+_DECL_START_RE = re.compile(r'(?:^|[;{])\s*([a-z-]+)\s*:', re.IGNORECASE)
+# A keyframe step is the only place where these selectors are legal, so a block
+# whose selector looks like one is a step and its body is pure declarations.
+_KEYFRAME_STEP_RE = re.compile(r'^(?:from|to|\d+(?:\.\d+)?%)$', re.IGNORECASE)
+# Reading geometry inside a per-frame loop forces a synchronous layout. The
+# scan cannot prove the read sits in the same callback, so it reports a
+# question (warning) rather than a verdict.
+_FRAME_LOOP_RE = re.compile(r'requestAnimationFrame')
+_LAYOUT_READ_RE = re.compile(
+    r'getBoundingClientRect|getClientRects|offsetWidth|offsetHeight|offsetTop'
+    r'|offsetLeft|clientWidth|clientHeight|scrollTop|scrollLeft'
+    r'|getComputedStyle')
 _GRADIENT_TEXT_RE = re.compile(r'background-clip\s*:\s*text', re.IGNORECASE)
 _GRADIENT_RE = re.compile(r'(?:linear|radial|conic)-gradient', re.IGNORECASE)
 _OPAQUE_COLOR_RE = re.compile(
@@ -1431,11 +1459,58 @@ def _static_rule_findings(root, rel, text):
     for blocks_delivery, finding in _dead_ref_findings(root, rel, text):
         (blockers if blocks_delivery else warnings).append(finding)
 
-    if PurePath(rel).suffix.lower() not in LINT_CSS_SUFFIXES:
+    suffix = PurePath(rel).suffix.lower()
+    scan = _COMMENT_RE.sub(_length_preserving_blank, text)
+
+    # A frame loop that reads geometry forces a synchronous layout on every
+    # frame. The scan cannot prove the read sits inside the callback, so it
+    # reports a question -- and a warning that is often wrong trains agents to
+    # ignore warnings.
+    if suffix in LINT_SCRIPT_SUFFIXES and _FRAME_LOOP_RE.search(scan):
+        read = _LAYOUT_READ_RE.search(scan)
+        if read:
+            warnings.append({
+                'code': 'layout_read_in_frame_loop', 'file': rel,
+                'line': _line_of(scan, read.start()),
+                'detail': '同一文件里既有 requestAnimationFrame 又有读取几何的调用'
+                          '（getBoundingClientRect / offset* / client* / getComputedStyle）；'
+                          '在逐帧循环里读这些值会强制同步重排。确认它们不在同一个'
+                          '循环里，在的话把值缓到循环外读一次'})
+
+    if suffix not in LINT_CSS_SUFFIXES:
         return blockers, warnings
 
-    scan = _COMMENT_RE.sub(_length_preserving_blank, text)
     blocks = _css_rule_blocks(scan)
+
+    # Animating a layout property invalidates style and layout every frame;
+    # the compositor never sees it. ``transition: all`` is caught above.
+    for declaration in _TRANSITION_DECL_RE.finditer(scan):
+        prop = _LAYOUT_PROP_RE.search(declaration.group(1))
+        if prop:
+            warnings.append({
+                'code': 'layout_property_transition', 'file': rel,
+                'line': _line_of(scan, declaration.start()),
+                'property': prop.group(0).lower(),
+                'detail': f'过渡 {prop.group(0)} 每帧都会触发样式重算与布局；'
+                          '改用 transform / opacity（宽度变化用 scaleX）'})
+            break
+
+    for selector, body, offset in blocks:
+        if not _KEYFRAME_STEP_RE.match(selector):
+            continue
+        prop = None
+        for declaration in _DECL_START_RE.finditer(body):
+            if _LAYOUT_PROP_RE.fullmatch(declaration.group(1)):
+                prop = declaration.group(1).lower()
+                break
+        if prop:
+            warnings.append({
+                'code': 'layout_property_animation', 'file': rel,
+                'line': _line_of(scan, offset),
+                'property': prop,
+                'detail': f'动画里改了 {prop}，每帧触发样式重算与布局；'
+                          '改用 transform / opacity'})
+            break
 
     if _CONTINUOUS_MOTION_RE.search(scan) and not _REDUCED_MOTION_RE.search(scan):
         warnings.append({

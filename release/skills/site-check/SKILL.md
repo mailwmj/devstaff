@@ -59,7 +59,8 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 - 把系统或浏览器的“减少动态效果”打开（Playwright 用 `reducedMotion: 'reduce'`），用同一视口重新打开同一页面；
 - 检查首屏标题与主行动按钮仍完整可见可用，正文里没有以透明或位移起始、再也回不来的残留，图片是原图而不是空白；
 - 声明了动效但页面上一处都没有（相关元素扫出来是 0 个）按空样本判失败，写清扫了多少个对象；
-- 结论写进 `visual_desktop` / `visual_mobile` 的 `observed`。动效流畅度与低端设备表现不在本协议能力内，做不到就记 `limited` 并点名缺的是哪项。
+- 动效存在时，在同一个浏览器会话里用一次真实的滚动或指针手势跑一遍，取手势前后 `LayoutCount` 与 `RecalcStyleCount` 的增量（CDP 的 `Performance.getMetrics`，任意 Chromium 端点都取得到），写进 `observed`（只走 `transform` / `opacity` 的动效应当接近 0）。纯 CSS 的动效也要跑一遍：它同样可能在每帧触发重排；
+- 结论写进 `visual_desktop` / `visual_mobile` 的 `observed`。**能测“这一拍有没有造成布局工作”，测不了“在某台低端设备上够不够流畅”**；后者做不到就记 `limited` 并点名缺的是哪项。
 
 ## 失败与复验
 
