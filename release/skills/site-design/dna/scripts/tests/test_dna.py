@@ -370,6 +370,131 @@ class PngDecodeTest(Sandbox):
         with self.assertRaises(dna.Unsupported):
             dna.load_rgb(target)
 
+    def test_ihdr_must_be_first_and_exactly_13_bytes(self):
+        rows = [[(1, 2, 3)]]
+        target = self.path('late-ihdr.png')
+        write_png(target, rows)
+        whole = target.read_bytes()
+        ihdr_start = whole.index(b'IHDR') - 4
+        ihdr_end = ihdr_start + 12 + 13
+        ihdr = whole[ihdr_start:ihdr_end]
+        gama = _chunk(b'gAMA', b'\x00\x00\x00\x01')
+        target.write_bytes(whole[:ihdr_start] + gama + ihdr + whole[ihdr_end:])
+        with self.assertRaises(dna.Unsupported) as caught:
+            dna.load_rgb(target)
+        self.assertIn('IHDR', str(caught.exception))
+
+        target.write_bytes(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', b'\x00' * 12)
+            + _chunk(b'IEND', b'')
+        )
+        with self.assertRaises(dna.Unsupported) as caught:
+            dna.load_rgb(target)
+        self.assertIn('IHDR', str(caught.exception))
+
+    def test_crc_mismatch_on_a_consumed_chunk_is_refused(self):
+        rows = [[(1, 2, 3), (4, 5, 6)]]
+        target = self.path('bad-crc.png')
+        write_png(target, rows)
+        whole = bytearray(target.read_bytes())
+        marker = whole.index(b'IDAT')
+        whole[marker + 4] ^= 0xFF  # flip a payload byte, leave the CRC stale
+        target.write_bytes(bytes(whole))
+        with self.assertRaises(dna.Unsupported) as caught:
+            dna.load_rgb(target)
+        self.assertIn('CRC', str(caught.exception))
+
+    def test_ancillary_crc_is_not_parsed(self):
+        rows = [[(1, 2, 3)]]
+        target = self.path('ancillary-crc.png')
+        write_png(target, rows)
+        whole = target.read_bytes()
+        ihdr_end = 8 + 12 + 13
+        broken = _chunk(b'gAMA', b'\x00\x00\x00\x01')[:-1] + b'\x00'
+        target.write_bytes(whole[:ihdr_end] + broken + whole[ihdr_end:])
+        width, height, rgb, _ = dna.load_rgb(target)
+        self.assertEqual((width, height), (1, 1))
+
+    def test_unfilter_zero_type_truncation_is_refused(self):
+        # Row 0 claims six bytes but only two follow the filter byte.
+        with self.assertRaises(dna.Unsupported):
+            dna._unfilter(b'\x00\x01\x02', 2, 2, 3)
+
+    def test_non_interlaced_length_mismatch_is_refused(self):
+        target = self.path('short-raw.png')
+        target.write_bytes(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', struct.pack('>IIBBBBB', 2, 2, 8, 2, 0, 0, 0))
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 5))
+            + _chunk(b'IEND', b'')
+        )
+        with self.assertRaises(dna.Unsupported):
+            dna.load_rgb(target)
+
+    def test_gray_color_key_transparency_flattens_to_white(self):
+        rows = [[(10,), (200,), (10,)]]
+        _, width, height, rgb, _ = self.decode(
+            'grey-key.png', rows, color_type=0, channels=1, transparency=[0, 10])
+        self.assertEqual(self.pixels_of(rgb, width, height),
+                         [[(255, 255, 255), (200, 200, 200), (255, 255, 255)]])
+
+    def test_rgb_color_key_transparency_flattens_to_white(self):
+        rows = [[(10, 20, 30), (200, 100, 50), (10, 20, 30)]]
+        _, width, height, rgb, _ = self.decode(
+            'rgb-key.png', rows, color_type=2, channels=3,
+            transparency=[0, 10, 0, 20, 0, 30])
+        self.assertEqual(self.pixels_of(rgb, width, height),
+                         [[(255, 255, 255), (200, 100, 50), (255, 255, 255)]])
+
+    def test_wrong_trns_length_is_unsupported(self):
+        target = self.path('bad-trns.png')
+        write_png(target, [[(10,), (200,)]], color_type=0, channels=1,
+                  transparency=[10])
+        with self.assertRaises(dna.Unsupported):
+            dna.load_rgb(target)
+
+    def test_oversized_image_is_refused_before_decompression(self):
+        target = self.path('huge.png')
+        target.write_bytes(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', struct.pack('>IIBBBBB', 100000, 100000, 8, 2, 0, 0, 0))
+            + _chunk(b'IDAT', zlib.compress(b'\x00'))
+            + _chunk(b'IEND', b'')
+        )
+        with self.assertRaises(dna.Unsupported) as caught:
+            dna.load_rgb(target)
+        self.assertIn('100000x100000', str(caught.exception))
+
+    def test_extra_inflated_bytes_are_refused(self):
+        target = self.path('extra-raw.png')
+        target.write_bytes(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+            + _chunk(b'IDAT', zlib.compress(b'\x00\x01\x02\x03' + b'\x00' * 10))
+            + _chunk(b'IEND', b'')
+        )
+        with self.assertRaises(dna.Unsupported):
+            dna.load_rgb(target)
+
+    def test_jpeg_detection_prefers_magic_bytes_and_falls_back_to_suffix(self):
+        magic_png_name = self.path('photo.png')
+        magic_png_name.write_bytes(b'\xff\xd8\xff\xe0' + b'\x00' * 8)
+        self.assertTrue(dna._is_jpeg(magic_png_name))
+        png_jpg_name = self.path('image.jpg')
+        png_jpg_name.write_bytes(b'\x89PNG\r\n\x1a\n')
+        self.assertTrue(dna._is_jpeg(png_jpg_name))
+        plain = self.path('notes.txt')
+        plain.write_bytes(b'hello')
+        self.assertFalse(dna._is_jpeg(plain))
+
+    def test_decoder_remedy_follows_the_platform(self):
+        import unittest.mock as mock
+        with mock.patch.object(dna.sys, 'platform', 'darwin'):
+            self.assertIn('sips', dna._decoder_remedy('/tmp/x.jpg'))
+        with mock.patch.object(dna.sys, 'platform', 'linux'):
+            self.assertIn('pip install pillow', dna._decoder_remedy('/tmp/x.jpg'))
+
 
 class CrossDecoderTest(Sandbox):
     """能装上 Pillow 时，用另一个编码器/解码器对一遍。
@@ -548,6 +673,22 @@ class VerifyTest(Sandbox):
         with self.assertRaises(ValueError):
             dna.verify(self.flat('x.png', [((0, 0, 0), 1.0)]), json.loads('{}'))
 
+    def test_reference_shapes_are_validated(self):
+        bad_specs = (
+            [],
+            {'design_system': []},
+            {'design_system': {'color': []}},
+            {'palette': [1]},
+            {'palette': [{'hex': '#ffffff'}]},
+            {'palette': [{'hex': '#ffffff', 'coverage': 'half'}]},
+            {'palette': [{'hex': 'nope', 'coverage': 0.5}]},
+            {'palette': [{'hex': '#ffffff', 'coverage': 0.5}], 'measurement': []},
+        )
+        for spec in bad_specs:
+            with self.subTest(spec=spec):
+                with self.assertRaises(ValueError):
+                    dna.spec_palette(spec)
+
 
 # --------------------------------------------------------------------------
 # 参考网址侦察
@@ -688,6 +829,19 @@ class ReconValidateTest(unittest.TestCase):
         dna.validate_recon(payload, 'https://example.test/')
         self.assertEqual(payload['page']['url'], 'https://example.test/')
 
+    def test_non_object_collections_are_named(self):
+        for payload in (
+            {'page': [], 'cssVariables': {}, 'roles': [{}]},
+            {'page': {}, 'cssVariables': [], 'roles': [{}]},
+            {'page': {}, 'cssVariables': {}, 'roles': 'nope'},
+            {'page': {}, 'cssVariables': {}, 'roles': ['html']},
+            {'page': {}, 'cssVariables': {}, 'roles': [{}], 'notes': 'x'},
+            {'page': {}, 'cssVariables': {}, 'roles': [{}], 'assets': 'x'},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    dna.validate_recon(payload)
+
     def test_half_loaded_page_is_flagged(self):
         """没加载完的页面与“这个站就这么简单”长得一样，只能靠这两个数分开。"""
         payload = bun_shaped_recon()
@@ -788,6 +942,16 @@ class ReconCandidateTest(unittest.TestCase):
         candidates = dna.recon_candidates(payload)
         self.assertTrue(candidates['notes'], candidates)
 
+    def test_duplicate_embedded_color_is_counted_once(self):
+        payload = bun_shaped_recon()
+        payload['cssVariables'] = {
+            '--focus-shadow': '0 0 0 2px rgb(255 31 143),0 0 0 4px rgb(255 31 143)'
+        }
+        payload['roles'] = [entry for entry in payload['roles'] if entry['role'] == 'body']
+        candidates = dna.recon_candidates(payload)
+        values = [candidate['value'] for candidate in candidates['accent']]
+        self.assertEqual(values.count('rgb(255 31 143)'), 1)
+
 
 class ReconSummaryTest(unittest.TestCase):
     def test_summary_is_bounded_and_carries_the_scales(self):
@@ -886,6 +1050,23 @@ class CliTest(Sandbox):
         done = self.run_dna('measure', str(target))
         self.assertEqual(done.returncode, 1)
         self.assertIn('sips', done.stderr)
+
+    def test_malformed_inputs_report_machine_readable_errors(self):
+        image = self.image('machine.png')
+        bad_spec = self.path('bad-spec.json')
+        bad_spec.write_text(json.dumps({'design_system': [], 'palette': []}), encoding='utf-8')
+        done = self.run_dna('verify', str(image), str(bad_spec))
+        self.assertEqual(done.returncode, 1)
+        self.assertNotIn('Traceback', done.stderr)
+        self.assertTrue(json.loads(done.stderr)['error'])
+
+        bad_recon = self.path('bad-recon.json')
+        bad_recon.write_text(json.dumps({'page': [], 'cssVariables': [], 'roles': 'x'}),
+                             encoding='utf-8')
+        done = self.run_dna('recon', str(bad_recon))
+        self.assertEqual(done.returncode, 1)
+        self.assertNotIn('Traceback', done.stderr)
+        self.assertTrue(json.loads(done.stderr)['error'])
 
 
 if __name__ == '__main__':

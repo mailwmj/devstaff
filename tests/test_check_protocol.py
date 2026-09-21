@@ -1,5 +1,8 @@
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -201,6 +204,18 @@ class PlanTests(_ProjectBase):
         after = check.plan(self.root, ".site/design/surface-brief.md")
         self.assertEqual(after["source_sha256"], baseline["source_sha256"])
         self.assertTrue(self._validate(self._guided_report())["valid"])
+
+    def test_plan_auto_detects_the_contract_when_no_flag_is_given(self):
+        """--contract defaults to None so plan detects the contract path.
+
+        A hardcoded argparse default made the auto-detect branch unreachable
+        through the CLI and quietly pinned the default layout.
+        """
+        parser = check.build_parser()
+        args = parser.parse_args(["plan", str(self.root)])
+        self.assertIsNone(args.contract)
+        result = check.plan(self.root, args.contract)
+        self.assertTrue(result["contract_sha256"])
 
     def test_editing_a_check_script_is_a_source_change(self):
         # Check scripts are evidence, not bookkeeping: changing one invalidates
@@ -426,12 +441,14 @@ class ValidateReportTests(_ProjectBase):
         self.assertTrue(any("contract is missing or unreadable" in e for e in result["errors"]),
                         result["errors"])
 
-    def test_report_mode_comes_from_the_report(self):
-        """1.1 removed the cross-check against the project's own mode.
+    def test_strict_project_rejects_a_guided_report(self):
+        """A strict project's check report must say strict.
 
-        validate-report no longer reads .site/state.json, so a report is judged
-        by the mode it declares; state.py's verify is what enforces the
-        project's mode when a report is recorded.
+        The cross-check is one-way: a guided report cannot deliver a strict
+        project, while a strict report written when the project was guided is
+        not retroactively invalid. 1.1 left this to state.py's verify and the
+        protocol accepted either mode, which made the strict gate bypassable
+        by declaring guided.
         """
         (self.root / ".site" / "state.json").write_text(
             json.dumps({"version": 3, "mode": "strict", "stage": "building"}),
@@ -439,31 +456,167 @@ class ValidateReportTests(_ProjectBase):
         )
         report = self._guided_report(mode="guided")
         result = self._validate(report)
+        self.assertFalse(result["valid"])
+        self.assertTrue(
+            any("project state is strict" in e for e in result["errors"]),
+            result["errors"],
+        )
+
+    def test_guided_project_does_not_reject_a_strict_report(self):
+        report = self._guided_report()
+        report["mode"] = "strict"
+        report["independent"] = True
+        report["axes"]["reopen"] = _measured("刷新后数据保持")
+        report["axes"]["risk"] = _measured("密钥与公开数据面")
+        result = self._validate(report)
         self.assertTrue(result["valid"], result["errors"])
-        self.assertEqual(result["mode"], "guided")
 
-    def test_independent_is_normalised_by_truthiness(self):
-        """1.1 dropped "independent must be a JSON boolean".
+    def test_independent_must_be_a_json_boolean(self):
+        """A JSON boolean, not a truthy stand-in.
 
-        The value is normalised with bool(), so the non-empty string "false"
-        counts as independent. The normalised value is what the guided echo and
-        the strict gate both see; an empty value is still not independent.
+        1.1 normalised with bool(), so the string "false" counted as
+        independent -- exactly the value a hand-written report reaches for
+        when it means "no". The gate must read what the JSON type says.
         """
         guided = self._validate(self._guided_report(independent="false"))
-        self.assertTrue(guided["valid"], guided["errors"])
-        self.assertTrue(guided["independent"], '"false" is a non-empty string, so it normalises to True')
+        self.assertFalse(guided["valid"])
+        self.assertTrue(any("independent must be a JSON boolean" in e
+                            for e in guided["errors"]), guided["errors"])
+        self.assertFalse(guided["independent"])
 
         strict = self._guided_report(mode="strict", independent="false")
         strict["axes"]["reopen"] = _measured("刷新后数据保持")
         strict["axes"]["risk"] = _measured("密钥与公开数据面")
-        result = self._validate(strict, name="strict.json")
-        self.assertTrue(result["independent"])
-        self.assertTrue(result["valid"], result["errors"])
-
-        strict["independent"] = ""
-        rejected = self._validate(strict, name="strict-empty.json")
+        rejected = self._validate(strict, name="strict.json")
         self.assertFalse(rejected["valid"])
-        self.assertTrue(any("independent" in e for e in rejected["errors"]), rejected["errors"])
+        self.assertTrue(any("independent must be a JSON boolean" in e
+                            for e in rejected["errors"]), rejected["errors"])
+
+        strict["independent"] = True
+        accepted = self._validate(strict, name="strict-ok.json")
+        self.assertTrue(accepted["valid"], accepted["errors"])
+        self.assertTrue(accepted["independent"])
+
+
+class ValidateReportShapeTests(_ProjectBase):
+    """Malformed report/state shapes are errors, never silent defaults."""
+
+    def test_project_root_missing_is_invalid_even_from_inside_the_project(self):
+        report = self._guided_report()
+        del report["project_root"]
+        path = self._write_report(report)
+        previous = os.getcwd()
+        try:
+            os.chdir(self.root)
+            result = check.validate_report(self.root, str(path))
+        finally:
+            os.chdir(previous)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("project_root" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_read_mode_guided_without_a_state_file(self):
+        self.assertEqual(check.read_mode(self.root), "guided")
+
+    def test_read_mode_reports_a_broken_state(self):
+        state_path = self.root / ".site" / "state.json"
+        cases = {
+            "invalid utf-8": b"\xff\xfe\x00\x01",
+            "broken json": b"{not json",
+            "not an object": b"[1, 2, 3]",
+            "illegal mode": b'{"mode": "off"}',
+        }
+        for label, payload in cases.items():
+            with self.subTest(label=label):
+                state_path.write_bytes(payload)
+                with self.assertRaises(ValueError):
+                    check.read_mode(self.root)
+        state_path.unlink()
+
+    def test_validate_report_surfaces_a_broken_state(self):
+        (self.root / ".site" / "state.json").write_text("{not json", encoding="utf-8")
+        result = self._validate(self._guided_report())
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("project state" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_toolchain_dirs_tolerates_broken_declarations(self):
+        declaration = self.root / "skills.json"
+        declaration.write_bytes(b"\xff\xfe")
+        self.assertEqual(check.toolchain_dirs(self.root), ())
+        declaration.write_text("[1, 2, 3]", encoding="utf-8")
+        self.assertEqual(check.toolchain_dirs(self.root), ())
+
+    def test_source_manifest_value_error_is_reported_not_raised(self):
+        original = check.source_manifest
+        check.source_manifest = lambda root: (_ for _ in ()).throw(ValueError("boom"))
+        try:
+            result = self._validate(self._guided_report())
+        finally:
+            check.source_manifest = original
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("source tree is unreadable" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_failed_vas_must_be_a_list_of_non_empty_strings(self):
+        report = self._guided_report()
+        report["axes"]["visual_mobile"] = {"status": "blocked", "failed_vas": "VA-03"}
+        result = self._validate(report, name="vas-string.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("failed_vas must be a list" in e for e in result["errors"]),
+                        result["errors"])
+
+        report["axes"]["visual_mobile"] = {"status": "blocked", "failed_vas": [3, ""]}
+        result = self._validate(report, name="vas-int.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("failed_vas entries" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_static_not_run_blocks_the_browser_axes(self):
+        report = self._guided_report()
+        report["axes"]["static_build"] = {"status": "not_run"}
+        result = self._validate(report)
+        self.assertTrue(result["browser_blocked"])
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("not_run" in e for e in result["errors"]), result["errors"])
+
+    def test_evidence_and_limitations_shapes_are_checked(self):
+        report = self._guided_report(evidence="核心任务通过")
+        result = self._validate(report, name="evidence-string.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("evidence must be a list" in e for e in result["errors"]),
+                        result["errors"])
+
+        report = self._guided_report(evidence=["核心任务通过", 7])
+        result = self._validate(report, name="evidence-int.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("evidence entries" in e for e in result["errors"]),
+                        result["errors"])
+
+        report = self._guided_report(limitations=[None])
+        result = self._validate(report, name="limitations-null.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("limitations entries" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_verified_observed_must_be_a_non_empty_string(self):
+        report = self._guided_report()
+        report["axes"]["core_task"] = {"status": "verified", "observed": 7}
+        result = self._validate(report, name="observed-int.json")
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("what was observed" in e for e in result["errors"]),
+                        result["errors"])
+
+    def test_malformed_reports_stay_machine_readable_without_traceback(self):
+        bad = self.root / ".site" / "malformed.json"
+        bad.write_text('{"axes": "nope", "failed_vas": {"x": 1}}', encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(CHECK), "validate-report", str(self.root), str(bad)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertFalse(payload["valid"])
 
 
 class StrictModeTests(_ProjectBase):
@@ -536,6 +689,65 @@ class CheckCompatibilityTests(unittest.TestCase):
             plan = check.plan(root)
             self.assertEqual(plan["contract_path"].lower(), ".site/design/surface-brief.md")
             self.assertTrue(plan["contract_sha256"])
+
+
+class VaParsingGuardTests(unittest.TestCase):
+    """The contract JSON and the parsed VA table must agree.
+
+    A drifted table header parses to zero rows; treating that as "no VAs"
+    silently drops every axis the contract declared.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        (self.root / ".site" / "design").mkdir(parents=True)
+        (self.root / "index.html").write_text("<html></html>", encoding="utf-8")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _contract(self, acceptance, axis="core_task", va_id="VA-01", va_row=True):
+        rows = ("| `%s` | `PG-01` | 登记后可见 | `%s` | `yes` |\n" % (va_id, axis)
+                if va_row else "")
+        text = (
+            "# 合同\n\n```site-contract\n{\n  \"acceptance\": %s\n}\n```\n\n"
+            "## 视觉验收标准\n\n"
+            "| ID | 页面 / 状态 / 视口 | 可观察标准 | 检查轴 | 阻断 |\n"
+            "| --- | --- | --- | --- | --- |\n" % json.dumps(acceptance, ensure_ascii=False)
+        ) + rows
+        path = self.root / ".site" / "design" / "surface-brief.md"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_acceptance_naming_a_missing_va_is_rejected(self):
+        path = self._contract(["VA-01", "VA-99"])
+        with self.assertRaises(ValueError) as caught:
+            check.read_contract_file(path)
+        self.assertIn("VA-99", str(caught.exception))
+
+    def test_acceptance_naming_an_illegal_axis_is_rejected(self):
+        path = self._contract(["VA-01"], axis="visual")
+        with self.assertRaises(ValueError):
+            check.read_contract_file(path)
+
+    def test_empty_acceptance_is_legal(self):
+        path = self._contract([])
+        _sha, _data, vas = check.read_contract_file(path)
+        self.assertEqual([va["id"] for va in vas], ["VA-01"])
+
+    def test_empty_acceptance_without_a_table_is_legal(self):
+        path = self._contract([], va_row=False)
+        _sha, _data, vas = check.read_contract_file(path)
+        self.assertEqual(vas, [])
+
+    def test_backticked_va_without_a_parsable_table_is_rejected(self):
+        text = ("# 合同\n\n```site-contract\n{\"acceptance\": []}\n```\n\n"
+                "正文提到 `VA-01` 但没有验收表。\n")
+        path = self.root / ".site" / "design" / "surface-brief.md"
+        path.write_text(text, encoding="utf-8")
+        with self.assertRaises(ValueError):
+            check.read_contract_file(path)
 
 
 if __name__ == "__main__":

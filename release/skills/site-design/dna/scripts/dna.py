@@ -57,6 +57,23 @@ ADAM7_PASSES = ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
 # PNG 颜色类型 -> 每像素通道数
 PNG_CHANNELS = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
 JPEG_SUFFIXES = ('.jpg', '.jpeg', '.jpe', '.jfif')
+JPEG_MAGIC = b'\xff\xd8\xff'
+# 解压前的像素上限：4K 屏（~830 万像素）不误伤，同时挡住把内存吃光的万像素图。
+MAX_DECODED_PIXELS = 50_000_000
+# 只有被消费的块才做 CRC 校验；ancillary 块跳过不解析。
+CONSUMED_CHUNKS = frozenset({b'IHDR', b'PLTE', b'tRNS', b'IDAT', b'IEND'})
+
+
+def _is_jpeg(path, header=None):
+    """按文件头判定 JPEG，扩展名只作兜底；下载来的参考图常被改名。"""
+    if header is None:
+        try:
+            header = Path(path).read_bytes()[:3]
+        except OSError:
+            header = b''
+    if header.startswith(JPEG_MAGIC):
+        return True
+    return Path(path).suffix.lower() in JPEG_SUFFIXES
 
 
 class Unsupported(Exception):
@@ -152,6 +169,9 @@ def _unfilter(data, width, height, channels):
         position += 1
         if filter_type == 0:
             # 无滤波是最常见的一种，直接搬字节，不用先复制再回写。
+            # 长度不够时切片会静默变短，必须在这里挡住。
+            if position + stride > len(data):
+                raise Unsupported(f'PNG 数据在扫描线 {row} 处截断')
             out[row * stride:(row + 1) * stride] = data[position:position + stride]
             previous = out[row * stride:(row + 1) * stride]
             position += stride
@@ -183,15 +203,17 @@ def _unfilter(data, width, height, channels):
 
 
 def _png_chunks(raw):
+    """依次产出 (kind, body, crc_bytes)；块长度与实际字节对不上时拒绝。"""
     position = len(PNG_SIGNATURE)
     while position + 8 <= len(raw):
         length = struct.unpack('>I', raw[position:position + 4])[0]
         kind = raw[position + 4:position + 8]
-        body = raw[position + 8:position + 8 + length]
-        if len(body) != length:
+        body_start = position + 8
+        body_end = body_start + length
+        if body_end + 4 > len(raw):
             raise Unsupported('PNG 数据在块 %s 处截断' % kind.decode('ascii', 'replace'))
-        position += 12 + length
-        yield kind, body
+        yield kind, raw[body_start:body_end], raw[body_end:body_end + 4]
+        position = body_end + 4
 
 
 def _adam7_geometry(width, height, x_start, y_start, x_step, y_step):
@@ -231,9 +253,26 @@ def _png_samples(path):
     palette = None
     transparency = None
     compressed = bytearray()
-    for kind, body in _png_chunks(raw):
+    seen_iend = False
+    first_chunk = True
+    for kind, body, crc in _png_chunks(raw):
+        if first_chunk and kind != b'IHDR':
+            raise Unsupported(f'{path} 的第一个 PNG 块不是 IHDR')
+        first_chunk = False
+        if kind in CONSUMED_CHUNKS:
+            expected_crc = zlib.crc32(kind + body) & MASK32
+            found_crc = struct.unpack('>I', crc)[0]
+            if found_crc != expected_crc:
+                raise Unsupported(
+                    'PNG 块 %s 的 CRC 校验失败：数据已损坏'
+                    % kind.decode('ascii', 'replace'))
         if kind == b'IHDR':
-            header = struct.unpack('>IIBBBBB', body[:13])
+            if len(body) != 13:
+                raise Unsupported(f'{path} 的 IHDR 长度是 {len(body)}，应为 13 字节')
+            try:
+                header = struct.unpack('>IIBBBBB', body)
+            except struct.error as error:
+                raise Unsupported(f'{path} 的 IHDR 无法解析：{error}')
         elif kind == b'PLTE':
             palette = [tuple(body[i:i + 3]) for i in range(0, len(body) - len(body) % 3, 3)]
         elif kind == b'tRNS':
@@ -241,9 +280,12 @@ def _png_samples(path):
         elif kind == b'IDAT':
             compressed += body
         elif kind == b'IEND':
+            seen_iend = True
             break
     if header is None:
         raise Unsupported(f'{path} 缺少 IHDR，不是完整的 PNG')
+    if not seen_iend:
+        raise Unsupported(f'{path} 缺少 IEND，PNG 数据不完整')
     width, height, depth, color_type, compression, filter_method, interlace = header
     if width == 0 or height == 0:
         raise Unsupported(f'{path} 的尺寸是 {width}x{height}')
@@ -260,12 +302,35 @@ def _png_samples(path):
     if color_type == 3 and not palette:
         raise Unsupported(f'{path} 是索引色 PNG 但没有 PLTE 调色板')
 
+    # 解压前先按声明的尺寸算原始字节数，把像素上限和长度预算一起定下来；
+    # 动辄上亿像素的图不能等解压完才拒绝。
+    if width * height > MAX_DECODED_PIXELS:
+        raise Unsupported(
+            f'{path} 的尺寸是 {width}x{height}（{width * height} 像素），'
+            f'超过 {MAX_DECODED_PIXELS} 像素的解码上限；请先缩小再量')
+    if interlace == 0:
+        expected_raw = height * (width * channels + 1)
+    else:
+        expected_raw = 0
+        for x_start, y_start, x_step, y_step in ADAM7_PASSES:
+            pass_width, pass_height = _adam7_geometry(
+                width, height, x_start, y_start, x_step, y_step)
+            expected_raw += pass_height * (pass_width * channels + 1)
+
     try:
-        inflated = zlib.decompress(bytes(compressed))
+        decompressor = zlib.decompressobj()
+        inflated = decompressor.decompress(bytes(compressed), expected_raw + 1)
     except zlib.error as error:
         raise Unsupported(f'{path} 的 PNG 像素数据解压失败：{error}')
+    if len(inflated) > expected_raw or decompressor.unconsumed_tail:
+        raise Unsupported(f'{path} 的 PNG 像素数据超过了声明的尺寸')
+    if not decompressor.eof or decompressor.unused_data:
+        raise Unsupported(f'{path} 的 PNG 像素数据长度对不上，拒绝按猜的结果出数')
 
     if interlace == 0:
+        if len(inflated) != expected_raw:
+            raise Unsupported(
+                f'{path} 的非交错 PNG 数据长度 {len(inflated)} 与尺寸不符（应为 {expected_raw})')
         samples = _unfilter(inflated, width, height, channels)
     else:
         samples = bytearray(width * height * channels)
@@ -294,12 +359,31 @@ def _samples_to_rgb(samples, channels, color_type, palette, transparency):
     没有 alpha 的格式直接返回样本本身，不白跑一遍逐像素循环。
     """
     if color_type == 2:
-        return samples
+        if transparency is None:
+            return samples
+        if len(transparency) != 6:
+            raise Unsupported('RGB PNG 的 tRNS 色键应为 6 字节')
+        key = struct.unpack('>HHH', transparency)
+        rgb = bytearray(samples)
+        for index in range(len(samples) // 3):
+            base = index * 3
+            if (samples[base], samples[base + 1], samples[base + 2]) == key:
+                # 色键像素即全透明，按白底合成后就是白色。
+                rgb[base:base + 3] = b'\xff\xff\xff'
+        return rgb
     if color_type == 0:
         grey = bytearray(len(samples) * 3)
         grey[0::3] = samples
         grey[1::3] = samples
         grey[2::3] = samples
+        if transparency is not None:
+            if len(transparency) != 2:
+                raise Unsupported('灰度 PNG 的 tRNS 色键应为 2 字节')
+            key = struct.unpack('>H', transparency)[0]
+            for index, sample in enumerate(samples):
+                if sample == key:
+                    offset = index * 3
+                    grey[offset:offset + 3] = b'\xff\xff\xff'
         return grey
     pixels = len(samples) // channels
     originals = palette if color_type == 3 else None
@@ -348,6 +432,13 @@ def _convert_with(tool, path):
         Path(target.name).unlink(missing_ok=True)
         return None
     return target.name
+
+
+def _decoder_remedy(path):
+    """没有可用解码器时按平台给出可执行的下一步。"""
+    if sys.platform == 'darwin':
+        return f'sips -s format png "{path}" --out reference.png'
+    return 'python3 -m pip install pillow（或安装 ImageMagick 后用 magick/convert）'
 
 
 def load_rgb(path):
@@ -407,8 +498,7 @@ def load_rgb(path):
     requested = Path(path).suffix or '(无扩展名)'
     raise Unsupported(
         f'{path}（{requested}）不是 PNG，也没有可用的替代解码器（试过：{", ".join(tried)}）。'
-        '请先转成 8 位 PNG 再量，例如 sips -s format png "'
-        f'{path}" --out reference.png')
+        f'请先转成 8 位 PNG 再量：{_decoder_remedy(path)}')
 
 
 # --------------------------------------------------------------------------
@@ -570,7 +660,7 @@ def measure(path, k=8):
     """量一张图，返回与上游 measure-colors.mjs 同形的结果。"""
     width, height, rgb, decoder = load_rgb(path)
     pixels = sample_pixels(rgb, width, height)
-    is_jpeg = Path(path).suffix.lower() in JPEG_SUFFIXES
+    is_jpeg = _is_jpeg(path)
     clusters = merge_similar(kmeans(pixels, k),
                              MERGE_DELTA_E_JPEG if is_jpeg else MERGE_DELTA_E_PNG)
     palette = assign_roles(clusters)
@@ -596,20 +686,55 @@ def measure(path, k=8):
 # 还原度比对
 # --------------------------------------------------------------------------
 
+def _nested_design_color(spec):
+    """spec.design_system.color 的形状校验；缺失时返回 {}。"""
+    design_system = spec.get('design_system')
+    if design_system is None:
+        return {}
+    if not isinstance(design_system, dict):
+        raise ValueError('design_system 必须是一个 JSON 对象')
+    color = design_system.get('color')
+    if color is None:
+        return {}
+    if not isinstance(color, dict):
+        raise ValueError('design_system.color 必须是一个 JSON 对象')
+    return color
+
+
 def spec_palette(spec):
-    """从测量结果或 DNA JSON 里取出参考色板与它的聚类配置。"""
+    """从测量结果或 DNA JSON 里取出参考色板与它的聚类配置。
+
+    形状不对就报错，不猜：一个填错的 spec 若被当成空色板，验证会
+    在“没有参考”的情况下算出一个看似通过的分数。
+    """
+    if not isinstance(spec, dict):
+        raise ValueError('参考文件必须是一个 JSON 对象')
+    color = _nested_design_color(spec)
     palette = spec.get('palette')
+    if palette is None:
+        palette = color.get('measured_palette')
     if not isinstance(palette, list):
-        palette = ((spec.get('design_system') or {}).get('color') or {}).get('measured_palette')
-    if not isinstance(palette, list) or not palette:
+        raise ValueError('palette 必须是一个数组')
+    if not palette:
         raise ValueError('参考文件里没有 palette / design_system.color.measured_palette 数组')
     for entry in palette:
-        if not isinstance(entry, dict) or 'hex' not in entry or 'coverage' not in entry:
+        if not isinstance(entry, dict):
+            raise ValueError('参考色板每一项都必须是一个 JSON 对象')
+        if 'hex' not in entry or 'coverage' not in entry:
             raise ValueError('参考色板每一项都要有 hex 与 coverage')
         parse_hex(entry['hex'])
-    configured = spec.get('measurement') or ((spec.get('design_system') or {}).get('color') or {}).get('measurement') or {}
+        coverage = entry['coverage']
+        if isinstance(coverage, bool) or not isinstance(coverage, (int, float)):
+            raise ValueError(f'参考色板的 coverage 必须是数字，得到 {coverage!r}')
+    measurement = spec.get('measurement')
+    if measurement is None:
+        measurement = color.get('measurement')
+    if measurement is None:
+        measurement = {}
+    if not isinstance(measurement, dict):
+        raise ValueError('measurement 必须是一个 JSON 对象')
     try:
-        k = int(configured.get('k', 8))
+        k = int(measurement.get('k', 8))
     except (TypeError, ValueError):
         k = 8
     return palette, max(2, min(16, k))
@@ -779,29 +904,48 @@ def validate_recon(payload, url=None):
     if not isinstance(payload, dict):
         raise ValueError('侦察结果必须是一个 JSON 对象')
     missing = [key for key in ('page', 'cssVariables', 'roles')
-               if not isinstance(payload.get(key), (dict, list))]
+               if payload.get(key) is None]
     if missing:
         raise ValueError(
             '侦察结果缺字段：' + '、'.join(missing)
             + '；这份结果不是 recon.js 产出的，不要当成证据用')
+    if not isinstance(payload['page'], dict):
+        raise ValueError('侦察结果的 page 必须是 JSON 对象')
+    if not isinstance(payload['cssVariables'], dict):
+        raise ValueError('侦察结果的 cssVariables 必须是 JSON 对象')
+    if not isinstance(payload['roles'], list):
+        raise ValueError('侦察结果的 roles 必须是数组')
+    for index, entry in enumerate(payload['roles']):
+        if not isinstance(entry, dict):
+            raise ValueError(f'侦察结果的 roles[{index}] 必须是 JSON 对象')
+    for key in ('notes', 'assets'):
+        if payload.get(key) is not None and not isinstance(payload[key], list):
+            raise ValueError(f'侦察结果的 {key} 必须是数组')
+
+    def add_note(message):
+        notes = payload.get('notes')
+        if notes is None:
+            notes = []
+            payload['notes'] = notes
+        notes.append(message)
+
     if not payload['roles']:
         raise ValueError(
             '侦察结果里 roles 是空的：一个关键元素都没读到。'
             '这通常是页面没加载完或跑在了 about:blank 上，不是“这个站没有样式”。')
     if not payload['cssVariables']:
         # CSS 变量可能真的没有（很多站不用），所以只提醒不拦。
-        payload.setdefault('notes', []).append(
-            '这个站没有声明 CSS 变量，颜色只能从 roles 与频次里读')
-    page = payload.get('page') or {}
+        add_note('这个站没有声明 CSS 变量，颜色只能从 roles 与频次里读')
+    page = payload['page']
     ready = page.get('readyState')
     if ready and ready != 'complete':
         # 没加载完的页面与“这个站就这么简单”长得一样，区别只能从这里看出来。
-        payload.setdefault('notes', []).append(
+        add_note(
             f'取数时页面 readyState 是 {ready}，DOM 可能还没长完；'
             '等加载完再跑一次，否则读到的是一份不完整的证据')
     elements = page.get('elementCount')
     if isinstance(elements, int) and elements < 50:
-        payload.setdefault('notes', []).append(
+        add_note(
             f'整页只有 {elements} 个元素，很可能还没渲染完或就是个空壳页；'
             '先确认你打开的是要看的那一页，再拿这份结果下结论')
     if url and not page.get('url'):
@@ -929,9 +1073,9 @@ def recon_candidates(payload):
         embedded = _embedded_colors(value)
         if embedded:
             weight, reasons = _name_affinity(name)
-            for found in embedded[:2]:
-                if found in embedded[:embedded.index(found) + 1][:-1]:
-                    continue  # 同一条里重复的颜色只算一次
+            # dict.fromkeys 按首次出现顺序去重；原来的 index() 对重复颜色
+            # 取的是第一个下标，同一颜色会在池里出现两次。
+            for found in dict.fromkeys(embedded[:2]):
                 pool.append({'value': found, 'source': f'CSS 变量 {name}（内嵌）',
                              'affinity': weight, 'reason': reasons + ['内嵌在形状里']})
             continue
@@ -1040,6 +1184,12 @@ def _dump(payload, out, summary=None):
     return path
 
 
+def _fail(message):
+    """把错误印成机器可读的一行 JSON，不吐 traceback。"""
+    print(json.dumps({'error': str(message)}, ensure_ascii=False), file=sys.stderr)
+    return 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Measure a reference screenshot deterministically, then score an '
@@ -1081,11 +1231,11 @@ def main(argv=None):
                 try:
                     raw = Path(args.source).read_text(encoding='utf-8')
                 except OSError as error:
-                    parser.exit(1, f'读不了侦察结果：{error}\n')
+                    return _fail(f'读不了侦察结果：{error}')
             try:
                 payload = parse_recon(raw)
             except json.JSONDecodeError as error:
-                parser.exit(1, f'侦察结果不是合法 JSON：{error}\n')
+                return _fail(f'侦察结果不是合法 JSON：{error}')
             payload = validate_recon(payload, args.url)
             # 与 design.py 的报告命令同一个约定：--out 落完整结果，
             # --summary 只印有上限的视图，不产生第二份真相。
@@ -1104,11 +1254,11 @@ def main(argv=None):
         try:
             spec = json.loads(Path(args.reference).read_text(encoding='utf-8'))
         except OSError as error:
-            parser.exit(1, f'读不了参考文件：{error}\n')
+            return _fail(f'读不了参考文件：{error}')
         except json.JSONDecodeError as error:
-            parser.exit(1, f'参考文件不是合法 JSON：{error}\n')
+            return _fail(f'参考文件不是合法 JSON：{error}')
         if not isinstance(spec, dict):
-            parser.exit(1, '参考文件必须是 JSON 对象\n')
+            return _fail('参考文件必须是 JSON 对象')
         report = verify(args.image, spec)
         _dump(report, args.out,
               (lambda path: verify_summary(report, path)) if args.summary else None)
@@ -1116,9 +1266,9 @@ def main(argv=None):
             print(verify_summary(report)['verdict'], file=sys.stderr)
         return 0 if report['pass'] else 2
     except Unsupported as error:
-        parser.exit(1, f'{error}\n')
+        return _fail(error)
     except (ValueError, OSError, KeyError) as error:
-        parser.exit(1, f'{error}\n')
+        return _fail(error)
 
 
 if __name__ == '__main__':

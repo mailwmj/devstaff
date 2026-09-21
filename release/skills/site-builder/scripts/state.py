@@ -30,6 +30,7 @@ CONTRACT_REL_PATH = ".site/design/surface-brief.md"
 # (never parses the JSON) so the legacy warning stays in step with the
 # authoritative missing/invalid-contract blockers.
 CONTRACT_BLOCK_RE = re.compile(r"```(?:site-contract|v3-contract)\n(.*?)\n```", re.DOTALL)
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def now() -> str:
@@ -55,18 +56,35 @@ def read_state(root: Path) -> dict:
         raise ValueError("state does not exist; initialize it first")
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"invalid state: {exc}") from exc
+    if not isinstance(state, dict):
+        raise ValueError("invalid state: top level must be a JSON object")
     if (
         state.get("version") != 3
         or state.get("mode") not in MODES
         or state.get("stage") not in STAGES
     ):
         raise ValueError("unsupported state")
+    # Missing schema_revision is the revision-1 default, same convention as
+    # preflight_state; a revision this tool does not know is a state written by
+    # a newer version and must not be interpreted as if it were revision 1 or 2.
+    revision = state.get("schema_revision", 1)
+    if revision not in (1, 2):
+        raise ValueError(f"unsupported state schema_revision: {revision!r}")
     # Older revision-1 states never carried a discovery block; normalize it in
     # memory so new structure-choice logic can run without forcing a re-init.
     if "discovery" not in state:
         state["discovery"] = default_discovery()
+    else:
+        discovery = state["discovery"]
+        if not isinstance(discovery, dict):
+            raise ValueError("invalid state: discovery must be an object")
+        structure = discovery.get("structure")
+        if structure is not None and not isinstance(structure, dict):
+            raise ValueError("invalid state: discovery.structure must be an object")
+    if not isinstance(state.get("history"), list):
+        raise ValueError("invalid state: history must be a list")
     verification = state.get("verification")
     if not isinstance(verification, dict):
         state["verification"] = blank_verification()
@@ -154,8 +172,12 @@ def verification_phase(state: dict) -> str:
     return phase if phase in VERIFICATION_PHASES else "idle"
 
 
-def clean_items(items: list[str]) -> list[str]:
-    return [item.strip() for item in items if item.strip()]
+def clean_items(items) -> list[str]:
+    """Non-empty strings only; a stray number or null in a report is not evidence."""
+    if not isinstance(items, list):
+        return []
+    return [item.strip() for item in items
+            if isinstance(item, str) and item.strip()]
 
 
 STRUCTURE_MODES = {"undetermined", "single", "choice"}
@@ -337,9 +359,18 @@ def decide(
     state = read_state(root)
     if state["stage"] != "discovering":
         raise ValueError("a direction can only be confirmed while discovering")
+    structure = ((state.get("discovery") or {}).get("structure") or {})
+    if structure.get("mode") == "choice":
+        selected = structure.get("selected")
+        if not (isinstance(selected, str) and selected.strip()):
+            raise ValueError(
+                "choice structure needs the user's selected candidate before the "
+                "direction is confirmed; run: state.py select-structure PROJECT "
+                "--candidate NAME --quote \"his words\""
+            )
     if not task.strip() or not direction.strip() or not quote.strip():
         raise ValueError("task, direction and quote are required")
-    prior_quote = state.get("discovery", {}).get("structure", {}).get("quote")
+    prior_quote = ((state.get("discovery") or {}).get("structure") or {}).get("quote")
     if prior_quote and normalize_quote(quote) == normalize_quote(prior_quote):
         raise ValueError(
             "structure selection quote and direction confirmation quote must differ"
@@ -366,6 +397,7 @@ def discover(
     reason: str,
     axes: list[str],
     candidates: list[str],
+    reset_selection: bool = False,
 ) -> dict:
     """Record the result of the structure assessment inside ``discovering``.
 
@@ -376,6 +408,11 @@ def discover(
     distinction is a product judgment made by the agent from project facts, not
     by this tool: colour, font, radius, shadow and other visual-only
     differences must use ``single``.
+
+    Re-running the assessment after the user already picked a candidate would
+    silently throw his choice away, so it is refused unless
+    ``--reset-selection`` says the direction is genuinely being reopened; that
+    flag clears the old candidate and quote with the new assessment.
     """
     state = read_state(root)
     if state["stage"] != "discovering":
@@ -385,6 +422,14 @@ def discover(
     if not reason.strip():
         raise ValueError("a structure reason is required")
     discovery = state.get("discovery") or default_discovery()
+    prior = discovery.get("structure") or {}
+    prior_selected = prior.get("selected")
+    if isinstance(prior_selected, str) and prior_selected.strip() and not reset_selection:
+        raise ValueError(
+            "a structure has already been selected; re-assessing would discard "
+            "the user's choice. Re-run with --reset-selection to clear it on "
+            "purpose, or reopen the direction instead"
+        )
     candidates = clean_items(candidates)
     if structure == "choice" and not candidates:
         raise ValueError("choice structure requires at least one candidate")
@@ -394,6 +439,8 @@ def discover(
         "reason": reason.strip(),
         "axes": clean_items(axes),
         "candidates": candidates,
+        # A fresh assessment starts without a selection. Without
+        # --reset-selection this only ever runs before a candidate exists.
         "selected": None,
         "quote": None,
     }
@@ -478,15 +525,20 @@ def _validate_contract_report(root: Path, state: dict, report_path) -> None:
     if report_path is None:
         raise ValueError(
             "schema_revision 2 guided/strict requires a passing prebuild contract report "
-            "before start; run: design.py check-contract --root . --phase prebuild"
+            "before start; run: design.py check-contract --root PROJECT --phase prebuild "
+            "--out .site/contract-report.json, then: state.py start PROJECT "
+            "--contract-report .site/contract-report.json"
         )
     try:
         report = json.loads(Path(report_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"contract report is unreadable: {exc}") from exc
     if not isinstance(report, dict):
         raise ValueError("contract report must be a JSON object")
-    if Path(str(report.get("project_root", ""))).resolve() != root.resolve():
+    reported_root = report.get("project_root")
+    if not isinstance(reported_root, str) or not reported_root.strip():
+        raise ValueError("contract report project_root is missing")
+    if Path(reported_root).resolve() != root.resolve():
         raise ValueError("contract report project_root does not match this project")
     if report.get("phase") != "prebuild":
         raise ValueError("contract report phase must be prebuild")
@@ -520,7 +572,9 @@ def _legacy_start_warnings(root: Path, state: dict) -> list:
             "code": "legacy_missing_contract_block",
             "message": (
                 "schema_revision 1 surface brief has no site-contract block; "
-                "add one and run design.py check-contract --phase prebuild"
+                "add one and run design.py check-contract --root PROJECT --phase "
+                "prebuild --out .site/contract-report.json, then state.py start "
+                "PROJECT --contract-report .site/contract-report.json"
             ),
         }
     ]
@@ -553,12 +607,46 @@ def _check_script() -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _check_verdict(root: Path, report_path) -> dict:
-    """Ask the site-check protocol whether a report holds for this tree.
+def _run_check_json(script: Path, *args) -> dict:
+    """Run a site-check subcommand and return the JSON object it printed.
 
     The protocol owns the rules; state.py must not re-derive them, or the two
     drift and a report the protocol rejects can still be recorded as
-    delivered. Fail closed: no validator, no verification.
+    delivered. Fail closed: a non-zero exit, unparseable stdout and an error
+    object all mean the protocol did not answer.
+    """
+    try:
+        interpreter = sys.executable or "python3"
+        proc = subprocess.run(
+            [interpreter, str(script), *args],
+            capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot run {script.name}: {exc}") from exc
+    stdout = proc.stdout.decode("utf-8", "replace")
+    stderr = proc.stderr.decode("utf-8", "replace").strip()
+    if proc.returncode != 0:
+        raise ValueError(
+            f"{script.name} failed ({proc.returncode}): {stderr or stdout.strip()}"
+        )
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{script.name} produced no JSON verdict: {exc} {stderr}".strip()
+        ) from exc
+    if not isinstance(data, dict) or "error" in data:
+        raise ValueError(f"{script.name} produced no verdict: {data}")
+    return data
+
+
+def _validated_report(root: Path, report_path) -> tuple[dict, dict]:
+    """Read a report once, then ask the protocol whether it holds for this tree.
+
+    The bytes are read exactly once and both validated and parsed from the
+    same copy: reading the file twice left a window where the protocol could
+    accept one version and the state file record another. Returns
+    ``(verdict, report)``; raises ValueError when no verdict can be obtained.
     """
     script = _check_script()
     if script is None:
@@ -567,57 +655,33 @@ def _check_verdict(root: Path, report_path) -> dict:
             "not found next to site-builder; install the skills as a bundle"
         )
     try:
-        interpreter = sys.executable or "python3"
-        proc = subprocess.run(
-            [interpreter, str(script), "validate-report", str(root), str(report_path)],
-            capture_output=True, timeout=120,
+        raw = Path(report_path).read_bytes()
+    except OSError as exc:
+        raise ValueError(f"check report is unreadable: {exc}") from exc
+
+    fd, temp_name = tempfile.mkstemp(prefix="check-report-", suffix=".json")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(raw)
+        verdict = _run_check_json(
+            script, "validate-report", str(root), temp_name
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"cannot validate the check report: {exc}") from exc
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
     try:
-        verdict = json.loads(proc.stdout.decode("utf-8", "replace"))
-    except json.JSONDecodeError as exc:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise ValueError(
-            f"check report validation produced no verdict: {exc} {detail}".strip()
-        ) from exc
-    if not isinstance(verdict, dict) or "error" in verdict:
-        raise ValueError(f"cannot validate the check report: {verdict}")
-    return verdict
-
-
-def _load_check_report(report_path, root: Path) -> dict:
-    """Read a site-check report's summary fields.
-
-    Rules are not repeated here: ``check.py validate-report`` has already
-    accepted the report for this tree (see :func:`_check_verdict`). This only
-    carries the checker's honest summary into the state file.
-    """
-    try:
-        report = json.loads(Path(report_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        report = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"check report is unreadable: {exc}") from exc
     if not isinstance(report, dict):
         raise ValueError("check report must be a JSON object")
-    if Path(str(report.get("project_root", ""))).resolve() != root.resolve():
+    reported_root = report.get("project_root")
+    if not isinstance(reported_root, str) or not reported_root.strip():
+        raise ValueError("check report project_root is missing")
+    if Path(reported_root).resolve() != root.resolve():
         raise ValueError("check report project_root does not match this project")
-    overall = report.get("overall")
-    if overall not in VERIFY_STATUSES:
-        raise ValueError(
-            "check report overall must be one of: " + ", ".join(sorted(VERIFY_STATUSES))
-        )
-    evidence = report.get("evidence", [])
-    limitations = report.get("limitations", [])
-    if not isinstance(evidence, list):
-        evidence = []
-    if not isinstance(limitations, list):
-        limitations = []
-    return {
-        "status": overall,
-        "evidence": evidence,
-        "limitations": limitations,
-        "independent": bool(report.get("independent", False)),
-    }
+    return verdict, report
 
 
 def _plan_fingerprint(root: Path) -> dict:
@@ -639,25 +703,16 @@ def _plan_fingerprint(root: Path) -> dict:
         rel = contract.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         rel = CONTRACT_REL_PATH
-    try:
-        interpreter = sys.executable or "python3"
-        proc = subprocess.run(
-            [interpreter, str(script), "plan", str(root), "--contract", rel],
-            capture_output=True, timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"cannot fingerprint the tree: {exc}") from exc
-    try:
-        data = json.loads(proc.stdout.decode("utf-8", "replace"))
-    except json.JSONDecodeError as exc:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise ValueError(f"cannot fingerprint the tree: {exc} {detail}".strip()) from exc
-    if not isinstance(data, dict) or "error" in data:
-        raise ValueError(f"cannot fingerprint the tree: {data}")
-    return {
-        "contract_sha256": data.get("contract_sha256"),
-        "source_sha256": data.get("source_sha256"),
-    }
+    data = _run_check_json(script, "plan", str(root), "--contract", rel)
+    contract_sha = data.get("contract_sha256")
+    source_sha = data.get("source_sha256")
+    for name, value in (("contract_sha256", contract_sha),
+                        ("source_sha256", source_sha)):
+        if not isinstance(value, str) or SHA256_HEX_RE.fullmatch(value) is None:
+            raise ValueError(
+                f"cannot fingerprint the tree: {name} is not a 64-hex digest"
+            )
+    return {"contract_sha256": contract_sha, "source_sha256": source_sha}
 
 
 def handoff(root: Path) -> dict:
@@ -770,7 +825,7 @@ def verify(root: Path, report=None) -> dict:
         )
     if report is None:
         raise ValueError("verification requires --report, a site-check report")
-    verdict = _check_verdict(root, report)
+    verdict, parsed = _validated_report(root, report)
     if not verdict.get("valid"):
         reasons = list(verdict.get("errors") or [])
         if verdict.get("invalidated_axes"):
@@ -781,11 +836,24 @@ def verify(root: Path, report=None) -> dict:
         raise ValueError(
             "check report does not hold for this tree: " + "; ".join(reasons or ["unknown"])
         )
-    derived = _load_check_report(report, root)
-    status = derived["status"]
-    evidence = clean_items(derived["evidence"])
-    limitations = clean_items(derived["limitations"])
-    independent = derived["independent"]
+    # The project mode is the contract with the user; a guided report cannot
+    # quietly deliver a strict project. ``.get`` keeps hand-made verdicts in
+    # tests readable and still catches a report that says nothing.
+    if state["mode"] == "strict" and parsed.get("mode") != "strict":
+        raise ValueError(
+            "strict projects require a strict check report; this report declares "
+            f"{parsed.get('mode')!r}"
+        )
+    status = parsed.get("overall")
+    if status not in VERIFY_STATUSES:
+        raise ValueError(
+            "check report overall must be one of: " + ", ".join(sorted(VERIFY_STATUSES))
+        )
+    evidence = clean_items(parsed.get("evidence") or [])
+    limitations = clean_items(parsed.get("limitations") or [])
+    # check.py normalizes ``independent``; echo its verdict rather than
+    # re-deriving the value here and drifting from the gate that just ran.
+    independent = bool(verdict.get("independent"))
     if not evidence:
         raise ValueError("at least one concrete evidence item is required")
     if state["mode"] == "strict" and status == "limited":
@@ -913,6 +981,11 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--reason", required=True)
     command.add_argument("--axis", action="append", default=[])
     command.add_argument("--candidate", action="append", default=[])
+    command.add_argument(
+        "--reset-selection", action="store_true",
+        help="clear an already recorded structure candidate instead of refusing "
+             "the re-assessment",
+    )
 
     command = sub.add_parser("select-structure")
     command.add_argument("root", type=Path)
@@ -973,7 +1046,8 @@ def main() -> int:
         elif args.action == "decide":
             result = decide(root, args.task, args.direction, args.quote, args.include, args.exclude)
         elif args.action == "discover":
-            result = discover(root, args.structure, args.reason, args.axis, args.candidate)
+            result = discover(root, args.structure, args.reason, args.axis,
+                              args.candidate, args.reset_selection)
         elif args.action == "select-structure":
             result = select_structure(root, args.candidate, args.quote)
         elif args.action == "start":
@@ -992,7 +1066,7 @@ def main() -> int:
             result = resume(root)
         else:
             result = reopen(root, args.reason)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -75,6 +75,11 @@ class ReviewGateTest(unittest.TestCase):
         self.root = Path(self._tmp.name)
         building_state(self.root)
 
+    def _fresh_root(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        return Path(temp.name)
+
     def tearDown(self):
         self._tmp.cleanup()
 
@@ -159,23 +164,89 @@ class ReviewGateTest(unittest.TestCase):
     def test_delivery_keeps_the_words_he_said(self):
         state.handoff(self.root)
         state.begin_check(self.root, "看着没问题，测吧")
-        original_verdict = state._check_verdict
-        original_report = state._load_check_report
-        state._check_verdict = lambda root, report: {"valid": True}
-        state._load_check_report = lambda report, root: {
-            "status": "verified",
-            "evidence": ["核心任务走通，1 条记录"],
-            "limitations": [],
-            "independent": True,
-        }
+        original = state._validated_report
+        state._validated_report = lambda root, report: (
+            {"valid": True, "independent": True, "errors": []},
+            {
+                "project_root": str(self.root.resolve()),
+                "mode": "guided",
+                "overall": "verified",
+                "evidence": ["核心任务走通，1 条记录"],
+                "limitations": [],
+            },
+        )
         try:
             result = state.verify(self.root, report="report.json")
         finally:
-            state._check_verdict = original_verdict
-            state._load_check_report = original_report
+            state._validated_report = original
         self.assertEqual(result["stage"], "delivered")
         self.assertEqual(result["verification"]["review_quote"], "看着没问题，测吧")
         self.assertTrue(result["verification"]["handed_at"])
+        self.assertTrue(result["verification"]["independent"])
+
+    def test_choice_structure_cannot_decide_before_selection(self):
+        root = self._fresh_root()
+        state.init(root, "guided")
+        state.discover(root, "choice", "信息拓扑不同", ["信息拓扑"], ["A", "B"])
+        with self.assertRaises(ValueError) as caught:
+            state.decide(root, "任务", "方向", "就这个方向", [], [])
+        self.assertIn("select-structure", str(caught.exception))
+
+    def test_discover_refuses_and_reset_clears_the_selection(self):
+        root = self._fresh_root()
+        state.init(root, "guided")
+        state.discover(root, "choice", "信息拓扑不同", ["信息拓扑"], ["A", "B"])
+        state.select_structure(root, "A", "选 A")
+        with self.assertRaises(ValueError) as caught:
+            state.discover(root, "single", "重判", [], [])
+        self.assertIn("--reset-selection", str(caught.exception))
+        result = state.discover(
+            root, "single", "重判", [], [], reset_selection=True
+        )
+        structure = result["discovery"]["structure"]
+        self.assertEqual(structure["mode"], "single")
+        self.assertIsNone(structure["selected"])
+        self.assertIsNone(structure["quote"])
+
+    def test_unknown_schema_revision_is_rejected(self):
+        path = self.root / STATE_DIR / "state.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["schema_revision"] = 9
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            state.read_state(self.root)
+        self.assertIn("schema_revision", str(caught.exception))
+
+    def test_read_state_rejects_malformed_shapes(self):
+        path = self.root / STATE_DIR / "state.json"
+        base = json.loads(path.read_text(encoding="utf-8"))
+        for label, mutate in (
+            ("discovery", lambda p: p.update({"discovery": []})),
+            ("structure", lambda p: p.update({"discovery": {"structure": []}})),
+            ("history", lambda p: p.update({"history": "nope"})),
+        ):
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(base))
+                mutate(payload)
+                path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    state.read_state(self.root)
+        path.write_text("[1, 2, 3]", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            state.read_state(self.root)
+
+    def test_clean_items_keeps_only_non_empty_strings(self):
+        self.assertEqual(state.clean_items([" a ", 1, None, "  ", "b"]), ["a", "b"])
+
+    def test_report_without_project_root_is_rejected(self):
+        report = self.root / ".site" / "no-root.json"
+        report.write_text(json.dumps({
+            "mode": "guided", "overall": "verified",
+            "evidence": ["核心任务"],
+        }), encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            state._validated_report(self.root, report)
+        self.assertIn("project_root", str(caught.exception))
 
     def test_state_written_before_this_rule_still_reads(self):
         legacy = {

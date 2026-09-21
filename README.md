@@ -113,7 +113,10 @@ python3 release/skills/site-builder/scripts/state.py decide PROJECT \
   --task "登记库存并查看剩余数量" \
   --direction "单工作台展示当前库存和新增入口" \
   --quote "就按这个方向做"
-python3 release/skills/site-builder/scripts/state.py start PROJECT
+python3 release/skills/site-design/scripts/design.py check-contract \
+  --root PROJECT --phase prebuild --out .site/contract-report.json
+python3 release/skills/site-builder/scripts/state.py start PROJECT \
+  --contract-report .site/contract-report.json
 python3 release/skills/site-builder/scripts/state.py handoff PROJECT
 python3 release/skills/site-builder/scripts/state.py begin-check PROJECT --quote "看着没问题，测吧"
 python3 release/skills/site-builder/scripts/state.py verify PROJECT --report .site/check/report.json
@@ -146,6 +149,8 @@ python3 release/skills/site-builder/scripts/state.py select-structure PROJECT \
 参考有两条路，取证方式不一样：**图片**走像素测量，**网址**走 CSS 侦察。网址上字体名、字号/行高/字距绝对值、动效时长与曲线、技术栈只有 CSS 与 DOM 说得准，截图给不了；而且文字色在截图上是笔画芯与抗锯齿边缘的混合值。bun.sh 实测：CSS 里文字是 `#0a0a0a`，像素量出来 `#0c0c0c`；品牌粉两条路都是 `#ff1f8f`/`#ff208f`（ΔE 0.4）。所以网址一路先用 `dna/scripts/recon.js` 在真实浏览器里读 computed style 与 CSS 变量，结果由 `dna.py recon` 收成 `.site/design/reference/recon.json`，截图退到「验收基准」的位置。上游没有这一路，它一律截图再量；`recon` 是本项目自己加的。角色候选按变量名的语义打分，因为实测中纯按饱和度会把语法高亮配色（`--sk-*`）排到品牌色前面，而品牌色还可能只内嵌在形状里（bun.sh 的粉藏在 `--ring` 的两层焦点环中间）。
 
 移植的边界写清了：只依赖 Python 3.9+ 标准库，PNG 自带解码（8 位深，含 Adam7 交错），不引入 Node 与 `sharp`，否则随包分发的快照就不再是解包即用。上游的算法、合并阈值、角色判定与 PASS/FAIL 标准逐项保持一致，跨实现一致性由 `dna/scripts/tests/test_dna.py` 里钉住的上游输出来保证——`mix32` 金标向量、采样点序列、以及 `kmeans → mergeSimilar → assignRoles` 在同一份像素集上的逐项结果，都由上游代码在 Node 上实跑得到。
+
+发布前加固把 1.1 的两处取舍反转成硬校验：`independent` 必须是 JSON 布尔（字符串 `"false"` 不再按非空真值归一），项目 state 为 `strict` 时报告必须是 `strict`、`verified` 必须独立；L0/L1 的 `not_run` 与 `blocked` 一样禁止启动浏览器。理由和 1.1 那处 fail-open 相同：把越界判据交给调用方默认处理，等于给了一条不跑协议也能通过的路。
 
 ## 1.1 变更
 

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -496,6 +497,85 @@ class StateProtocolTests(unittest.TestCase):
             "prepare_and_confirm_direction",
         )
 
+    def test_decide_with_choice_without_selection_is_refused(self):
+        state.init(self.root, "guided")
+        state.discover(
+            self.root, "choice", "信息拓扑不同", ["信息拓扑"], ["落地页", "工作台"]
+        )
+        with self.assertRaises(ValueError) as caught:
+            state.decide(self.root, "登记库存", "工作台", "按这个方向做", [], [])
+        self.assertIn("select-structure", str(caught.exception))
+
+    def test_discover_refuses_to_discard_a_recorded_selection(self):
+        state.init(self.root, "guided")
+        state.discover(
+            self.root, "choice", "信息拓扑不同", ["信息拓扑"], ["落地页", "工作台"]
+        )
+        state.select_structure(self.root, "工作台", "选工作台")
+        with self.assertRaises(ValueError) as caught:
+            state.discover(self.root, "single", "改判了", [], [])
+        self.assertIn("--reset-selection", str(caught.exception))
+        # The user's recorded choice is still there.
+        discovery = state.read_state(self.root)["discovery"]
+        self.assertEqual(discovery["structure"]["selected"], "工作台")
+
+    def test_discover_reset_selection_clears_the_old_choice(self):
+        state.init(self.root, "guided")
+        state.discover(
+            self.root, "choice", "信息拓扑不同", ["信息拓扑"], ["落地页", "工作台"]
+        )
+        state.select_structure(self.root, "工作台", "选工作台")
+        result = state.discover(
+            self.root, "single", "重新判断后没有分歧", [], [], reset_selection=True
+        )
+        structure = result["discovery"]["structure"]
+        self.assertEqual(structure["mode"], "single")
+        self.assertIsNone(structure["selected"])
+        self.assertIsNone(structure["quote"])
+        self.assertEqual(structure["candidates"], [])
+
+    def test_clean_items_drops_non_strings(self):
+        self.assertEqual(
+            state.clean_items([" ok ", 3, None, "  ", "", "two"]),
+            ["ok", "two"],
+        )
+
+    def test_read_state_rejects_malformed_shapes(self):
+        state.init(self.root, "guided")
+        path = self.root / ".site" / "state.json"
+        base = json.loads(path.read_text(encoding="utf-8"))
+        for label, mutate in (
+            ("discovery", lambda p: p.update({"discovery": []})),
+            ("structure", lambda p: p.update({"discovery": {"structure": []}})),
+            ("history", lambda p: p.update({"history": "nope"})),
+        ):
+            with self.subTest(label=label):
+                payload = json.loads(json.dumps(base))
+                mutate(payload)
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    state.read_state(self.root)
+        path.write_text("[1, 2, 3]", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            state.read_state(self.root)
+        # A hand-written state without a decision is deliberately readable:
+        # the compatibility fixtures predate the decision block.
+        path.write_text(json.dumps({
+            "version": 3, "mode": "guided", "stage": "discovering",
+            "discovery": state.default_discovery(), "history": [],
+        }), encoding="utf-8")
+        self.assertEqual(state.read_state(self.root)["stage"], "discovering")
+
+    def test_unknown_schema_revision_is_rejected(self):
+        state.init(self.root, "guided")
+        path = self.root / ".site" / "state.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["schema_revision"] = 3
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            state.read_state(self.root)
+        self.assertIn("schema_revision", str(caught.exception))
+
 
 class ContractReportStartTests(unittest.TestCase):
     """Phase 2: schema_revision 2 guided/strict start requires a valid prebuild report."""
@@ -519,6 +599,29 @@ class ContractReportStartTests(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             state.start(self.root)
         self.assertIn("contract report", str(caught.exception))
+
+    def test_missing_report_project_root_is_rejected_from_inside_the_project(self):
+        report = json.loads(_report_path(self.root).read_text(encoding="utf-8"))
+        del report["project_root"]
+        path = self.root / ".site" / "no-root.json"
+        path.write_text(json.dumps(report), encoding="utf-8")
+        previous = os.getcwd()
+        try:
+            os.chdir(self.root)
+            with self.assertRaises(ValueError) as caught:
+                state.start(self.root, contract_report=path)
+        finally:
+            os.chdir(previous)
+        self.assertIn("project_root", str(caught.exception))
+
+    def test_empty_report_project_root_is_rejected(self):
+        report = json.loads(_report_path(self.root).read_text(encoding="utf-8"))
+        report["project_root"] = "   "
+        path = self.root / ".site" / "blank-root.json"
+        path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            state.start(self.root, contract_report=path)
+        self.assertIn("project_root", str(caught.exception))
 
     def test_wrong_project_path_is_rejected(self):
         other = Path(tempfile.mkdtemp())
@@ -719,6 +822,107 @@ class VerifyReportTests(unittest.TestCase):
             self.assertEqual(state.read_state(self.root)["stage"], "building")
         finally:
             state._check_script = original
+
+    def test_validate_report_reads_the_report_once(self):
+        path = _valid_check_report(self.root)
+        mutated = dict(
+            json.loads(path.read_text(encoding="utf-8")),
+            evidence=["mutated after validation"],
+        )
+        original = state._run_check_json
+
+        def rewrite_then_validate(script, *args):
+            # Simulate the report being rewritten between the protocol call
+            # and the state write; the bytes read for validation are the only
+            # ones that may be recorded.
+            path.write_text(json.dumps(mutated), encoding="utf-8")
+            return {"valid": True, "independent": False, "errors": []}
+
+        state._run_check_json = rewrite_then_validate
+        try:
+            _verdict, report = state._validated_report(self.root, path)
+        finally:
+            state._run_check_json = original
+        self.assertEqual(report["evidence"], ["核心任务通过"])
+
+    def test_verify_report_missing_project_root_is_rejected_from_inside(self):
+        report = _valid_check_report(self.root, write=False)
+        del report["project_root"]
+        path = self.root / ".site" / "no-root-check.json"
+        path.write_text(json.dumps(report), encoding="utf-8")
+        _open_round(self.root)
+        previous = os.getcwd()
+        try:
+            os.chdir(self.root)
+            with self.assertRaises(ValueError) as caught:
+                state.verify(self.root, report=path)
+        finally:
+            os.chdir(previous)
+        self.assertIn("project_root", str(caught.exception))
+
+    def test_run_check_json_fails_closed(self):
+        good = self.root / "probe-ok.py"
+        good.write_text("import json; print(json.dumps({'ok': True}))", encoding="utf-8")
+        self.assertEqual(state._run_check_json(good), {"ok": True})
+
+        bad_json = self.root / "probe-json.py"
+        bad_json.write_text("print('not json')", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            state._run_check_json(bad_json)
+
+        error_object = self.root / "probe-error.py"
+        error_object.write_text(
+            "import json; print(json.dumps({'error': 'nope'}))", encoding="utf-8"
+        )
+        with self.assertRaises(ValueError):
+            state._run_check_json(error_object)
+
+        failing = self.root / "probe-fail.py"
+        failing.write_text("import sys; sys.exit(3)", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            state._run_check_json(failing)
+
+    def test_plan_fingerprint_rejects_malformed_digests(self):
+        original = state._run_check_json
+        state._run_check_json = lambda script, *args: {
+            "contract_sha256": "short", "source_sha256": "0" * 64,
+        }
+        try:
+            with self.assertRaises(ValueError):
+                state._plan_fingerprint(self.root)
+        finally:
+            state._run_check_json = original
+
+    def test_verify_strict_guard_survives_a_lenient_protocol_verdict(self):
+        # The protocol already rejects a guided report on a strict project; this
+        # keeps the state-side guard tested on its own, because that guard is
+        # what still fires if the protocol ever returns a lenient verdict.
+        strict_root = Path(tempfile.mkdtemp())
+        try:
+            state.init(strict_root, "strict")
+            state.decide(strict_root, "登记库存", "单工作台", "就按这个方向做", [], [])
+            state.start(strict_root, contract_report=_report_path(strict_root))
+            _open_round(strict_root)
+            report = strict_root / ".site" / "guided-report.json"
+            report.write_text(json.dumps({
+                "project_root": str(strict_root.resolve()),
+                "mode": "guided",
+                "overall": "verified",
+                "evidence": ["核心任务通过"],
+            }), encoding="utf-8")
+            original = state._run_check_json
+            state._run_check_json = lambda script, *args: {
+                "valid": True, "independent": True,
+            }
+            try:
+                with self.assertRaises(ValueError) as caught:
+                    state.verify(strict_root, report=report)
+            finally:
+                state._run_check_json = original
+            self.assertIn("strict check report", str(caught.exception))
+        finally:
+            import shutil
+            shutil.rmtree(strict_root, ignore_errors=True)
 
     def test_strict_verify_report_requires_independent(self):
         strict_root = Path(tempfile.mkdtemp())

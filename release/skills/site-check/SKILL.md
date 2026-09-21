@@ -1,6 +1,6 @@
 ---
 name: site-check
-version: 1.1.0
+version: 1.2.0
 description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴只读验证核心任务和相称的静态、错误、移动端、再次打开行为，不改源码。
 ---
 # 网站检查与验证
@@ -24,7 +24,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 ```json
 {
   "project_root": "/项目绝对路径",
-  "mode": "guided",
+  "mode": "取 plan 输出的 mode（full plan 的 `mode`，summary 的 `project_mode`）",
   "overall": "verified",
   "independent": false,
   "contract_sha256": "plan 的 contract_sha256",
@@ -36,6 +36,8 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
   "limitations": []
 }
 ```
+
+`mode` 与项目 state 的单向核对是硬规则：项目 state 为 `strict` 时报告必须是 `strict`，且 `verified` 的 `independent` 必须为 `true`；`independent` 必须是 JSON 布尔，写成字符串 `"false"` 会被判非法而不是当成真。
 
 `axes` 的键取 `plan` 的 `required_axes`；没过的视觉轴把受影响的 VA 写进 `failed_vas`。`overall` 取最差的那条轴，不能比轴的结果更好。报告不强制带 `source_manifest`：把 plan 用 `--out` 存在 `.site/` 下，下一轮 `--changed-from` 直接指向它就能列出逐文件变化；要报告自包含再原样带上（代价是体积，每个文件约 100 字节）。无论带不带，指纹对不上当前源码的报告都不成立。
 
@@ -64,7 +66,7 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 ## 失败与复验
 
-- **静态门禁**：L0/L1 没过就不启动浏览器；浏览器轴必须记为 `not_run`，overall 为 `blocked`。
+- **静态门禁**：L0/L1 没过（`blocked` 或 `not_run`）就不启动浏览器；浏览器轴必须记为 `not_run`，overall 为 `blocked`。
 - **视觉复验范围**：视觉轴没过只复验受影响的页面、状态和视口（报告里记 `failed_vas`），不重跑全部视口。
 - **哈希失效**：合同或源码的 SHA-256 对不上，整份报告不成立（合同在 `.site` 下单独指纹，改源码不影响 L0）。指纹管的是"这份报告还算不算数"，不是"哪几条轴要重跑"：对不上之后，重验范围由 `changed_files` 加你的判断决定，别拿后缀当映射。
 - **轴依赖**：一条轴没过，依赖它的轴要复验（L0→全部，L1→L2-L5，L2→L3-L5，L3/L4→L5）。

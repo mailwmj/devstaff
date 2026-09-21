@@ -16,7 +16,8 @@ The protocol is organized in six levels (L0-L5) over eight axes:
     L5  reopen / risk     browser
 
 Rules encoded here:
-  * L0/L1 failure does not start the browser; browser axes must be ``not_run``.
+  * L0/L1 failure does not start the browser -- ``blocked`` or ``not_run``
+    both count as failed; browser axes must be ``not_run``.
   * A visual failure only re-verifies the affected page/state/viewport (VA),
     not every viewport; failed VAs are carried in the report.
   * A contract SHA-256 change invalidates every axis; a source SHA-256 change
@@ -236,6 +237,36 @@ def _acceptance_vas(body: str, exempt: set[str]) -> list[dict]:
     return vas
 
 
+def _va_parse_guard(lists: dict, body: str, vas: list[dict]) -> None:
+    """Cross-check the contract's acceptance list against the parsed VA table.
+
+    A table whose header drifted parses to zero rows while the JSON still names
+    VAs; treating that as "no VAs" would silently weaken every axis rule that
+    follows, so the disagreement is an error rather than an empty list.
+    ``acceptance: []`` is legal: a contract need not declare any VA.
+    """
+    declared: list[str] = []
+    for item in lists['acceptance']:
+        declared.extend(re.findall(r'VA-\d+', item))
+    if lists['acceptance'] and not declared:
+        raise ValueError(
+            'contract acceptance entries name no VA-<n> IDs: '
+            + ', '.join(lists['acceptance'])
+        )
+    parsed = {va['id'] for va in vas}
+    missing = sorted({vid for vid in declared if vid not in parsed})
+    if missing:
+        raise ValueError(
+            'acceptance names VAs that the 视觉验收标准 table does not parse '
+            '(missing or illegal axis): ' + ', '.join(missing)
+        )
+    if not declared and not vas and re.search(r'`VA-\d+`', body):
+        raise ValueError(
+            'the contract body mentions VA IDs but the 视觉验收标准 table parsed '
+            'none; the table header or axis column has drifted'
+        )
+
+
 def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
     """Return (contract_sha256, parsed_block, acceptance_vas) for a contract file."""
     if not path.is_file():
@@ -247,6 +278,7 @@ def read_contract_file(path: Path) -> tuple[str, dict, list[dict]]:
     body = _strip_contract_block(text)
     exempt = set(lists['intentional_exceptions'])
     vas = _acceptance_vas(body, exempt)
+    _va_parse_guard(lists, body, vas)
     return sha, data, vas
 
 
@@ -276,7 +308,9 @@ def toolchain_dirs(root) -> tuple[str, ...]:
         return ()
     try:
         data = json.loads(declaration.read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return ()
+    if not isinstance(data, dict):
         return ()
     skills = data.get('skills')
     if not isinstance(skills, dict):
@@ -388,7 +422,13 @@ def _file_diff(prior: dict[str, str], current: dict[str, str]) -> dict:
 
 
 def read_mode(root) -> str:
-    """Project mode from .site/state.json, or 'guided' when there is no state."""
+    """Project mode from .site/state.json, or 'guided' when there is no state.
+
+    A missing state file is the quick path and stays guided. A state file that
+    exists but cannot be read or does not carry a legal mode is an error: the
+    old silent guided fallback let a strict project's corrupt state weaken the
+    gate that report validation is for.
+    """
     path = None
     for candidate in (Path(root) / STATE_REL_PATH, Path(root) / '.SITE/state.json', Path(root) / '.v3/state.json'):
         if candidate.is_file():
@@ -398,10 +438,14 @@ def read_mode(root) -> str:
         return 'guided'
     try:
         state = json.loads(path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError:
-        return 'guided'
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f'state is unreadable: {exc}') from exc
+    if not isinstance(state, dict):
+        raise ValueError('state must be a JSON object')
     mode = state.get('mode')
-    return mode if mode in ('guided', 'strict') else 'guided'
+    if mode not in ('guided', 'strict'):
+        raise ValueError('state mode must be guided or strict')
+    return mode
 
 
 def required_axes(mode: str, vas: list[dict]) -> list[str]:
@@ -693,6 +737,25 @@ def _axis_status(axes: dict, axis: str) -> str | None:
     return status if status in VERIFY_STATUSES else None
 
 
+def _string_list(value, field: str, errors: list[str]) -> list[str]:
+    """A report list field must be a list of non-empty strings.
+
+    Returning ``[]`` on a malformed value silently turned "no evidence" into a
+    valid-looking empty list; appending an error keeps the malformed shape
+    visible to whoever reads the report.
+    """
+    if not isinstance(value, list):
+        errors.append(f'{field} must be a list')
+        return []
+    cleaned: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            errors.append(f'{field} entries must be non-empty strings')
+            continue
+        cleaned.append(item)
+    return cleaned
+
+
 def validate_report(root, report_path) -> dict:
     """Check a report against the protocol for the tree as it is right now.
 
@@ -714,11 +777,27 @@ def validate_report(root, report_path) -> dict:
                 'errors': ['report must be a JSON object']}
 
     errors: list[str] = []
-    if Path(str(report.get('project_root', ''))).resolve() != root:
+    reported_root = report.get('project_root')
+    # An absent/empty project_root resolves to the CWD; running from inside the
+    # project would then match by accident and validate a report that names no
+    # project at all.
+    if not isinstance(reported_root, str) or not reported_root.strip():
+        errors.append('project_root is missing')
+    elif Path(reported_root).resolve() != root:
         errors.append('project_root does not match')
     mode = report.get('mode')
     if mode not in ('guided', 'strict'):
         errors.append('mode must be guided or strict')
+    # One-way cross-check: a strict project must never accept a guided report.
+    # The reverse is fine -- a report may have been written before the project
+    # switched to strict, and re-running it is the agent's call.
+    try:
+        project_mode = read_mode(root)
+    except (OSError, ValueError) as exc:
+        errors.append(f'project state is unreadable: {exc}')
+    else:
+        if project_mode == 'strict' and mode != 'strict':
+            errors.append('project state is strict but the report mode is not strict')
     overall = report.get('overall')
     if overall not in DELIVERABLE_STATUSES:
         errors.append('overall must be verified, limited or blocked')
@@ -738,7 +817,7 @@ def validate_report(root, report_path) -> dict:
     else:
         try:
             manifest, excluded = source_manifest(root)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f'source tree is unreadable: {exc}')
         else:
             cur_source = _manifest_sha256(manifest)
@@ -752,8 +831,10 @@ def validate_report(root, report_path) -> dict:
         errors.append('axes must be an object')
         axes = {}
 
-    # Gating: an L0/L1 failure must not start the browser.
-    static_failed = any(_axis_status(axes, a) == 'blocked' for a in STATIC_AXES)
+    # Gating: an L0/L1 failure -- blocked or not_run -- must not start the
+    # browser. A static gate that did not run is not a passed gate.
+    static_failed = any(_axis_status(axes, a) in ('blocked', 'not_run')
+                        for a in STATIC_AXES)
     browser_blocked = static_failed
     if static_failed:
         for a in BROWSER_AXES:
@@ -773,8 +854,29 @@ def validate_report(root, report_path) -> dict:
         result = axes.get(a)
         if not isinstance(result, dict) or result.get('status') != 'verified':
             continue
-        if not str(result.get('observed') or '').strip():
+        observed = result.get('observed')
+        if not isinstance(observed, str) or not observed.strip():
             errors.append(f'{a} verified without recording what was observed')
+
+    # failed_vas must be a list of non-empty VA ids on every axis that carries
+    # it: a string would be iterated character by character and a non-string
+    # entry would land in reverify_vas as-is.
+    failed_vas_by_axis: dict[str, list[str]] = {}
+    for axis in AXES:
+        result = axes.get(axis)
+        if not isinstance(result, dict) or 'failed_vas' not in result:
+            continue
+        failed = result.get('failed_vas')
+        if not isinstance(failed, list):
+            errors.append(f'{axis} failed_vas must be a list')
+            continue
+        cleaned: list[str] = []
+        for vid in failed:
+            if not isinstance(vid, str) or not vid.strip():
+                errors.append(f'{axis} failed_vas entries must be non-empty strings')
+                continue
+            cleaned.append(vid)
+        failed_vas_by_axis[axis] = cleaned
 
     # Re-verification scope: failures invalidate their dependents; visual
     # failures scope to the affected VA only. Hash-invalidated axes are added
@@ -800,17 +902,20 @@ def validate_report(root, report_path) -> dict:
             if dep in required_set:
                 reverify.add(dep)
         if axis in ('visual_desktop', 'visual_mobile'):
-            result = axes.get(axis) or {}
-            for vid in result.get('failed_vas', []) or []:
+            for vid in failed_vas_by_axis.get(axis, []):
                 reverify_vas.append({'axis': axis, 'va': vid})
 
-    independent = bool(report.get('independent', False))
-    evidence = report.get('evidence', [])
-    limitations = report.get('limitations', [])
-    if not isinstance(evidence, list):
-        evidence = []
-    if not isinstance(limitations, list):
-        limitations = []
+    raw_independent = report.get('independent', False)
+    if not isinstance(raw_independent, bool):
+        # JSON has a boolean type; a string like "false" is not it. Treating
+        # the non-empty string as True would let a guided report claim the
+        # strict independent gate by accident.
+        errors.append('independent must be a JSON boolean')
+        independent = False
+    else:
+        independent = raw_independent
+    evidence = _string_list(report.get('evidence', []), 'evidence', errors)
+    limitations = _string_list(report.get('limitations', []), 'limitations', errors)
     if overall == 'limited' and not limitations:
         errors.append('limited overall requires limitations')
     if not evidence:
@@ -912,8 +1017,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     plan_p = sub.add_parser('plan', help='generate a verification plan from the project contract')
     plan_p.add_argument('root', type=Path, help='project root')
-    plan_p.add_argument('--contract', default=CONTRACT_REL_PATH,
-                        help='contract path relative to the project root')
+    plan_p.add_argument('--contract', default=None,
+                        help='contract path relative to the project root '
+                             '(default: auto-detect .site/design/surface-brief.md)')
     plan_p.add_argument('--changed-from', default=None,
                         help='a prior plan/report JSON path OR a git revision '
                              '(branch/tag/commit) to diff fingerprints against; '
@@ -939,7 +1045,7 @@ def main() -> int:
             _emit_plan(args, plan(args.root, args.contract, args.changed_from))
             return 0
         result = validate_report(args.root, args.report)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError, AttributeError, TypeError) as exc:
         print(json.dumps({'error': str(exc)}, ensure_ascii=False))
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2))
