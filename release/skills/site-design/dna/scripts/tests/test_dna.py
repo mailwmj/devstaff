@@ -1049,7 +1049,12 @@ class CliTest(Sandbox):
         target.write_bytes(b'not a png')
         done = self.run_dna('measure', str(target))
         self.assertEqual(done.returncode, 1)
-        self.assertIn('sips', done.stderr)
+        # 补救动作按平台不同（macOS 是 sips，其他地方是 Pillow/ImageMagick）。
+        # 平台分支本身由 test_decoder_remedy_follows_the_platform 覆盖，
+        # 这条 CLI 测试只要求确实给出一条在当前平台可执行的补救。
+        self.assertIn('没有可用的替代解码器', done.stderr)
+        self.assertTrue('sips' in done.stderr or 'pip install pillow' in done.stderr,
+                        done.stderr)
 
     def test_malformed_inputs_report_machine_readable_errors(self):
         image = self.image('machine.png')
