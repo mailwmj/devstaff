@@ -1,6 +1,6 @@
 # 渐进式建站 Skills
 
-一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.1.0）。
+一套让 Coding Agent 把自然语言想法变成可使用网站的轻量执行协议（版本 1.2.0）。
 
 ## 定位
 
@@ -65,6 +65,7 @@ site-builder  唯一编排者，决定下一步并停在需要用户决定的地
 
 - 从项目事实形成结构和视觉方向的方法；
 - 页面设计合同、流程体验稿和参考还原模板；
+- 对外营销站、品牌站和活动页的动效主张与节拍表（零依赖手法、静止帧、减少动态复核）；
 - 排版、色彩、素材、构图、响应式、组件状态、无障碍与工艺审查规范；
 - Token、gallery、基础样式和可导出的校准配方；
 - `design-intelligence` `2.13.0` 的内置检索代码、数据与 MIT 许可。
@@ -136,6 +137,16 @@ python3 release/skills/site-builder/scripts/state.py select-structure PROJECT \
 
 状态工具只防止顺序错误、空证据和不满足模式要求的跃迁。它不能判断用户原话的真实语义，也不能证明证据内容属实；strict 的 `--independent` 只能在独立 Checker 上下文实际完成检查后使用。
 
+## 1.2 变更
+
+用户说“参考这个网站”“做成类似那样的”时，色值不再靠看。模型对颜色的感知会向常见调色板默认值漂移——上游实测品牌粉 `#ff90e8` 会被看成 `#ec4899`（ΔE ≈ 29）——而估出来的值和量出来的值长得一模一样，读合同的人分不出哪个是猜的。现在参考是图片文件时，色值由 `dna/scripts/dna.py measure` 量出：确定性分层采样、最远点初始化的 k-means、按 CIE76 ΔE 合并邻近聚类，输出精确 hex、覆盖率和 `background / text / accent` 角色。实现之后用同一个脚本的 `verify` 拿实现截图与量好的色板比 ΔE 与覆盖率偏差，不通过就自己改色再重跑，不把“像不像”推给用户目测。
+
+这一份来自 [zanwei/design-dna](https://github.com/zanwei/design-dna)（MIT）。**没有做成第五个技能**，因为它和 `reference-input.md` 会抢“怎么判读参考”的权威，Design DNA JSON 会和 `surface-brief.md` 变成两份真相。它被拆成两半植入已有接缝：算法移植进 `dna/`（`dna/scripts/dna.py`，随包分发自己的测试），判读与验收程序写进 `site-design/references/reference-dna.md`。上游 schema 那句“每个字段都必须填满、宁推断不留空”没有采用：只有截图的项目要把 `warning` 色填满只能靠猜，猜出来的值进了合同就变成验收标准，所以改为按 `measured / derived / inferred` 标注、填不满就留空并写清缺什么。三维查漏清单补上了此前全库零覆盖的第三维（Canvas / WebGL / 粒子 / 着色器 / 滚动驱动动效）——参考站被记住的地方常常正在这里，而静态截图最容易跳过它。
+
+参考有两条路，取证方式不一样：**图片**走像素测量，**网址**走 CSS 侦察。网址上字体名、字号/行高/字距绝对值、动效时长与曲线、技术栈只有 CSS 与 DOM 说得准，截图给不了；而且文字色在截图上是笔画芯与抗锯齿边缘的混合值。bun.sh 实测：CSS 里文字是 `#0a0a0a`，像素量出来 `#0c0c0c`；品牌粉两条路都是 `#ff1f8f`/`#ff208f`（ΔE 0.4）。所以网址一路先用 `dna/scripts/recon.js` 在真实浏览器里读 computed style 与 CSS 变量，结果由 `dna.py recon` 收成 `.site/design/reference/recon.json`，截图退到「验收基准」的位置。上游没有这一路，它一律截图再量；`recon` 是本项目自己加的。角色候选按变量名的语义打分，因为实测中纯按饱和度会把语法高亮配色（`--sk-*`）排到品牌色前面，而品牌色还可能只内嵌在形状里（bun.sh 的粉藏在 `--ring` 的两层焦点环中间）。
+
+移植的边界写清了：只依赖 Python 3.9+ 标准库，PNG 自带解码（8 位深，含 Adam7 交错），不引入 Node 与 `sharp`，否则随包分发的快照就不再是解包即用。上游的算法、合并阈值、角色判定与 PASS/FAIL 标准逐项保持一致，跨实现一致性由 `dna/scripts/tests/test_dna.py` 里钉住的上游输出来保证——`mix32` 金标向量、采样点序列、以及 `kmeans → mergeSimilar → assignRoles` 在同一份像素集上的逐项结果，都由上游代码在 Node 上实跑得到。
+
 ## 1.1 变更
 
 验证轮之前多了一道停：构建完成后先 `handoff` 把这一版交到用户手上，他看过并点头，才用 `begin-check --quote "他的原话"` 开验证轮。理由是一轮验证比他自己翻一遍贵得多，而报告只对写它的那一版成立，他看完再让你改一次，刚跑完的那轮就白跑了。`handoff` 记下当时的合同与源码指纹，之后动过其中任何一个，开轮会被拒，要求重新交付。`cancel-check` 之后同理：修完要重新交付，并拿到一句新的原话。
@@ -151,12 +162,13 @@ python3 release/skills/site-builder/scripts/state.py select-structure PROJECT \
 ```text
 python3 -m unittest discover -s tests -p 'test_*.py'                              # 开发用测试
 python3 -m unittest discover -s release/skills/site-design/scripts/tests -p 'test_*.py'  # 随包分发
+python3 -m unittest discover -s release/skills/site-design/dna/scripts/tests -p 'test_*.py'
 python3 -m unittest discover -s release/skills/site-builder/scripts/tests -p 'test_*.py'
 python3 -m unittest discover -s release/skills/site-check/scripts/tests -p 'test_*.py'
 python3 release/skills/site-design/scripts/design.py validate
 python3 tools/build_dist.py                        # 从发布清单重建 dist/ 平台包
 ```
 
-`release/skills/site-*/scripts/tests/` 下的是随包分发的测试，`package-files.txt` 里已按此列入，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.9、3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试和 `design.py validate`，确认分发包自带的东西是完整的。
+`release/skills/site-*/scripts/tests/` 与 `release/skills/site-design/dna/scripts/tests/` 下的是随包分发的测试，`package-files.txt` 里已按此列入，装到宿主项目后也能跑；仓库根 `tests/` 是开发用测试，跟着仓库走。`.github/workflows/verify.yml` 在 Python 3.9、3.10 与 3.12 上跑这几条，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试和 `design.py validate`，确认分发包自带的东西是完整的。
 
 `dist/` 不是源码，由 `tools/build_dist.py` 按 `release/package-files.txt` 重建；改了 `release/` 里被清单覆盖的任何文件都要重跑一次。`tests/test_bundle.py` 在 `dist/` 存在时会逐字节校验它和 `release/` 一致，忘重建会直接报错；CI 会先执行一次构建，再跑这组一致性测试。

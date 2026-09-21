@@ -1,4 +1,10 @@
 agent/Agent.md
+agent/assets/icons/icon-bio.png
+agent/assets/icons/icon-guide.png
+agent/assets/icons/icon-landing.png
+agent/assets/icons/icon-portal.png
+agent/assets/icons/icon-showcase.png
+agent/assets/icons/icon-workbench.png
 agent/assets/logo.png
 agent/bindings.yaml
 agent/home.json
@@ -23,6 +29,11 @@ skills/site-design/assets/design/gallery.html
 skills/site-design/assets/design/preview-shell.html
 skills/site-design/assets/design/primitives.css
 skills/site-design/assets/design/tokens.json
+skills/site-design/dna/LICENSE
+skills/site-design/dna/VERSION
+skills/site-design/dna/scripts/dna.py
+skills/site-design/dna/scripts/recon.js
+skills/site-design/dna/scripts/tests/test_dna.py
 skills/site-design/intelligence/LICENSE
 skills/site-design/intelligence/VERSION
 skills/site-design/intelligence/data/app-interface.csv
@@ -76,8 +87,10 @@ skills/site-design/references/design-context.md
 skills/site-design/references/design-tokens.md
 skills/site-design/references/design-toolchain.md
 skills/site-design/references/landing-page.md
+skills/site-design/references/motion.md
 skills/site-design/references/prototype.md
 skills/site-design/references/reference-input.md
+skills/site-design/references/reference-dna.md
 skills/site-design/references/surface-brief.md
 skills/site-design/references/visual-direction.md
 skills/site-design/scripts/design.py

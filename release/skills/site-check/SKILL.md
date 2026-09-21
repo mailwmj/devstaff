@@ -54,6 +54,13 @@ description: 只读验证。生成和校验检查计划与报告，按 L0-L5 轴
 
 `guided` 的下限是 `guided-core`（contract + static_build + core_task）再加一条最可能失败的路径；`strict` 还要查 `reopen` 和 `risk`，并且独立验证。范围边界说不清时按 `guided-core` 查，不要悄悄缩小覆盖。
 
+合同里的 `动效主张` 存在且不是 `none` 时，视觉轴要额外在“减少动态”下复核一次，不新开轴：
+
+- 把系统或浏览器的“减少动态效果”打开（Playwright 用 `reducedMotion: 'reduce'`），用同一视口重新打开同一页面；
+- 检查首屏标题与主行动按钮仍完整可见可用，正文里没有以透明或位移起始、再也回不来的残留，图片是原图而不是空白；
+- 声明了动效但页面上一处都没有（相关元素扫出来是 0 个）按空样本判失败，写清扫了多少个对象；
+- 结论写进 `visual_desktop` / `visual_mobile` 的 `observed`。动效流畅度与低端设备表现不在本协议能力内，做不到就记 `limited` 并点名缺的是哪项。
+
 ## 失败与复验
 
 - **静态门禁**：L0/L1 没过就不启动浏览器；浏览器轴必须记为 `not_run`，overall 为 `blocked`。

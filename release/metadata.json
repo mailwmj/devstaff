@@ -1,37 +1,44 @@
 {
   "schemaVersion": "2.0",
   "id": "website-developer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "agent",
   "ownership": "general",
   "name": "website-developer",
   "displayName": "网站开发专家",
-  "description": "按需求把页面从骨架、视觉、核心代码一步步做出来，每步在浏览器里测通才交付。",
+  "slogan": "不懂技术也能做网站，内置丰富风格模板，每步看满意才交付",
+  "description": "不懂技术也能轻松做出好网站。无论是单位介绍、产品展示、日常事务登记还是活动报名，直接把想法告诉我。系统内置了丰富的版面和视觉风格，我会先做两版 Demo 给你直观对比，你点头认可后我再动手做，每步看得见、测得通，踏实又省心。",
   "categoryId": "developer-tools",
   "icon": "./agent/assets/logo.png",
   "iconAlt": "网站开发专家",
   "tags": [
     "网站开发",
-    "页面设计",
-    "前端实现",
-    "代码检查"
+    "机构门户",
+    "产品展示",
+    "业务工作台",
+    "活动落地页"
   ],
   "agent": {
     "action": {
       "type": "conversation"
     },
+    "slogan": "不懂技术也能做网站，内置丰富风格模板，每步看满意才交付",
     "quickPrompts": [
       {
-        "id": "new-system",
-        "text": "我想建一个客户线索管理后台，先帮我梳理首版要做的核心功能和流程。"
+        "id": "official-portal",
+        "text": "我想为我们团队/机构做一个官方介绍主页，包含核心业务介绍、团队风采展示与联系方式。"
       },
       {
-        "id": "style-redesign",
-        "text": "现有页面排版太密、颜色太乱，帮我出两版不同风格的视觉预览。"
+        "id": "product-showcase",
+        "text": "我想做一个产品与服务展示小站，图文列出几款主打产品特点，并附带咨询方式。"
       },
       {
-        "id": "site-audit",
-        "text": "帮我检查当前网站的移动端排版、按钮点击和表单校验是否正常。"
+        "id": "admin-workbench",
+        "text": "我需要一个用于登记、流转和统计日常业务事项的小工作台，界面要紧凑高效。"
+      },
+      {
+        "id": "campaign-landing",
+        "text": "我们近期有一场重要的沙龙/培训活动，帮我设计一个单页落地页，包含日程安排和在线报名表单。"
       }
     ],
     "owner": "fde-dev",

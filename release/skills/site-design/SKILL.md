@@ -1,7 +1,7 @@
 ---
 name: site-design
-version: 1.1.0
-description: 网站与 Web 产品设计。用项目事实和这套规范、模板、Token、素材规则做出看得见的方向、流程体验稿或只读视觉审查；不改正式业务源码。
+version: 1.2.0
+description: 网站与 Web 产品设计。用项目事实和这套规范、模板、Token、素材规则做出看得见的方向、流程体验稿或只读视觉审查；用户说“参考/复制某个网站”时用确定性取色量出参考色板并做还原度比对；不改正式业务源码。
 ---
 # 网站设计
 
@@ -14,29 +14,31 @@ description: 网站与 Web 产品设计。用项目事实和这套规范、模�
 | 任务 | 产出 | 怎么读 |
 | --- | --- | --- |
 | 新建、整体改版、核心流程或信息结构变化 | 结构判断（有真实拓扑分歧才出 2 种带骨架预览）➔ 视觉：先问参照物，给得出就贴参考一版，给不出才 2 种风格（只比调性）➔ 继承为正式资产 | [序列 A](#序列-a新建或整体改版) |
-| 落地页、营销官网或单目标转化页 | 选转化结构（四类版式）➔ 骨架与转化文案 ➔ 视觉同上（贴参考或 2 种风格）➔ 继承为正式资产 | [序列 B](#序列-b落地页或营销页) |
+| 对外营销站、品牌官网、落地页或单目标转化页 | 选转化结构（四类版式）➔ 骨架与转化文案 ➔ 视觉同上（贴参考或 2 种风格）➔ 首屏与节拍表 ➔ 继承为正式资产 | [序列 B](#序列-b落地页或营销页) |
 | 成熟系统中的局部页面或样式修复 | 继承基线和最小修正，不重做设计系统 | [设计上下文](references/design-context.md) ➔ [工艺审查](references/craft-review.md) |
 | 流程、状态或操作顺序实验 | 可点击状态演示和保留/改变规则 | [体验稿](references/prototype.md) ➔ [页面设计合同](references/surface-brief.md) |
-| 截图、图片或网址参考 | `replicate | adapt | behavior-only` 结论和可见依据 | [参考输入](references/reference-input.md) |
+| 截图、图片或网址参考 | 图片：`measure` 量出精确色板；网址：`recon.js` 读 CSS 拿字体名、字号绝对值、动效时长与技术栈，不目测 | [参考输入](references/reference-input.md) ➔ [参考还原](references/reference-dna.md) |
 | 涉及中文界面或中西文混排 | 系统字体栈、行高 1.5~1.75、字重 500/600 避坑、盘古之白与暗色 AAA 防线 | [中文排版规范](references/chinese-typography.md) |
 | 需要方向候选或实现注意项 | 候选 ID 或 `no_verified_match`，及高排名未采用项的理由 | [内置工具链](references/design-toolchain.md) |
 | 只读视觉审查 | 带页面、状态、视口和证据的发现 | [工艺审查](references/craft-review.md) |
 
 ## 按步骤读，不要一次读完
 
-前两个分支涉及的文件合计约 75KB（两个序列的并集，没有分歧时只走其中一部分）。**不要预读整组。** 按下面的序列推进：每步只读该步列出的文件，做完这一步再读下一步。一次全读完不会让判断更准，只会把注意力从眼前这一步分散掉（下面每步的体量是实测值，单步最大 18KB）。
+前两个分支涉及的文件合计约 81KB（两个序列的并集，没有分歧时只走其中一部分）。**不要预读整组。** 按下面的序列推进：每步只读该步列出的文件，做完这一步再读下一步。一次全读完不会让判断更准，只会把注意力从眼前这一步分散掉（下面每步的体量是实测值，单步最大 19KB）。
 
-[页面设计合同](references/surface-brief.md)（16KB）是全程要填的那份文件：A1 开始时打开一次，之后每步只填对应小节，不要重读全文。它是填空骨架，字段值一律写本项目的事实，不要照抄骨架里的说明句。
+[页面设计合同](references/surface-brief.md)（18KB）是全程要填的那份文件：A1 开始时打开一次，之后每步只填对应小节，不要重读全文。它是填空骨架，字段值一律写本项目的事实，不要照抄骨架里的说明句。
 
 ### 序列 A（新建或整体改版）
 
 | 步骤 | 这一步做什么 | 只读 | 体量 |
 | --- | --- | --- | --- |
-| A1 | 判断要做到多深，盘点项目事实、任务交互和范围 | [设计上下文](references/design-context.md) | 9KB |
-| A2 | 推出设计判断、设计主线、视觉世界与构图命题 | [视觉方向](references/visual-direction.md) | 14KB |
+| A1 | 判断要做到多深，盘点项目事实、任务交互和范围 | [设计上下文](references/design-context.md) | 10KB |
+| A2 | 推出设计判断、设计主线、视觉世界与构图命题 | [视觉方向](references/visual-direction.md) | 16KB |
+| A2.5 | 对外营销站、品牌站和活动页：定动效主张与节拍表（一行一拍 + 静止帧）；其余页面只查预算 | [动效](references/motion.md) | 7KB |
 | A3 | 定结构（有真实分歧才双选）与视觉风格双选 | [体验稿](references/prototype.md) | 14KB |
+| A3.5 | 只有本轮带参考时才走：图片先量色，网址先跑侦察；过三维查漏清单；实现后跑还原度比对 | [参考还原](references/reference-dna.md) | 13KB |
 | A4 | 方向确认后补正式实现规格与 Token | [设计 token](references/design-tokens.md) | 10KB |
-| A5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 18KB |
+| A5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 19KB |
 
 A2 起，[页面设计合同](references/surface-brief.md) 的 `反默认原因 / 设计主线 / 构图命题 / 细节签名` 四项都要各引用至少一条正文里已经定义的 `BR-* / IC-* / PG-* / SC-* / RP-* / CP-* / AS-* / TX-*`。引不到项目事实，说明方向还没成形。
 
@@ -44,11 +46,13 @@ A2 起，[页面设计合同](references/surface-brief.md) 的 `反默认原因 
 
 | 步骤 | 这一步做什么 | 只读 | 体量 |
 | --- | --- | --- | --- |
-| B1 | 收敛转化目标和需求 | [设计上下文](references/design-context.md) | 9KB |
-| B2 | 选版式、排转化结构、写转化文案 | [落地页指南](references/landing-page.md) | 10KB |
-| B3 | 推出视觉方向与设计主线 | [视觉方向](references/visual-direction.md) | 14KB |
+| B1 | 收敛转化目标和需求 | [设计上下文](references/design-context.md) | 10KB |
+| B2 | 选版式、排转化结构、写转化文案 | [落地页指南](references/landing-page.md) | 11KB |
+| B3 | 推出视觉方向与设计主线 | [视觉方向](references/visual-direction.md) | 16KB |
+| B3.5 | 定动效主张与节拍表（一行一拍 + 静止帧），跟着方向一次给出，不单独开一轮选择 | [动效](references/motion.md) | 7KB |
 | B4 | 定骨架与视觉风格双选（结构有真实分歧才双选） | [体验稿](references/prototype.md) | 14KB |
-| B5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 18KB |
+| B4.5 | 只有本轮带参考时才走：图片先量色，网址先跑侦察；过三维查漏清单；实现后跑还原度比对 | [参考还原](references/reference-dna.md) | 13KB |
+| B5 | 交付前逐项核对工艺 | [工艺审查](references/craft-review.md) | 19KB |
 
 ## 默认工作法
 
@@ -63,9 +67,10 @@ A2 起，[页面设计合同](references/surface-brief.md) 的 `反默认原因 
 ## 设计资产
 
 - `assets/design/`：Token、gallery、基础样式，以及体验稿起手壳 `preview-shell.html`（定色板与顶栏，正文自己搭）。
-- `scripts/design.py`：设计系统检索、Token 构建和资产校验。
+- `scripts/design.py`：设计系统检索、Token 构建、资产校验和 UI 静态纪律检查（`lint-ui`）。
+- `dna/`：参考取证。图片一路 `dna/scripts/dna.py measure | verify`（像素测量与还原度比对，上游 [zanwei/design-dna](https://github.com/zanwei/design-dna) 的 Python 移植，MIT）；网址一路 `dna/scripts/recon.js` + `dna.py recon`（读 CSS 与 DOM，本项目自己加的）。许可与移植差异见 `dna/LICENSE` 与 `dna/VERSION`。
 - `intelligence/`：内置检索数据与 MIT 许可代码。
-- `references/`：上下文、方向、落地页指南、体验稿、参考输入、Token、工具链、中文排版规范、页面设计合同和工艺审查。
+- `references/`：上下文、方向、落地页指南、动效、体验稿、参考输入、参考还原、Token、工具链、中文排版规范、页面设计合同和工艺审查。
 
 ## 硬约束
 
@@ -74,6 +79,7 @@ A2 起，[页面设计合同](references/surface-brief.md) 的 `反默认原因 
 - 真的看过才算验证过；文件在、构建成功、截图存在，都不能单独说明设计成立。
 - 素材要记来源、许可、裁剪和 alt；缺了就如实说缺。
 - 方向确认前不改正式业务源码；流程体验稿不接正式数据库。
+- 参考是图片或网址时，色值以实际取证为准，估出来的值不入合同：图片走 `dna/scripts/dna.py measure`，网址走 `dna/scripts/recon.js` + `dna.py recon`。量不出来的字段按证据强度标注或留空，不为填满而猜。
 - 体验稿和视觉预览阶段守住轻量：不堆业务逻辑，不跑重度测试，不承诺“秒级生成”这类速度。
 
 做完一次，用五字段回执 `status / summary / artifacts / evidence / limitations` 返回，然后停下。

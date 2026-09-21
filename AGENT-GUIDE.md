@@ -75,10 +75,13 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 | 设计 Token 与基础样式 | `site-design` | 方向确认后 | `assets/design/`；合同"Design Token"节 |
 | 检索候选与实现注意项 | `site-design` | 需要候选或栈注意项 | 合同"设计方法来源"决策记录 |
 | 截图 / 网址参考的判读 | `site-design` | 用户提供参考 | `replicate / adapt / behavior-only` 结论 + 可见依据 |
+| 参考色板的确定性测量与还原度比对 | `site-design`（`dna/scripts/dna.py`） | 参考是图片文件；实现后有截图可比 | `.site/design/reference/measured.json` 与 `verify.json`；合同记录的 hex 与覆盖率 |
+| 参考网址的 CSS / DOM 侦察 | `site-design`（`dna/scripts/recon.js` + `dna.py recon`） | 参考是打得开的网址 | `.site/design/reference/recon.json`；合同记录的值与它来自哪个元素或变量 |
+| 营销页动效主张与节拍表 | `site-design` | 对外营销站、品牌站、活动页 | 合同 `动效主张`；减少动态下的定格由 `site-check` 在视觉轴复核 |
 | 页面设计合同（方向、实现、验收共用接口） | `site-design` → 全链路 | 进入实现前 | `.site/design/surface-brief.md` |
 | 静态 UI 纪律检查 | `site-design`（`lint-ui`） | 有源码与合同 | 检查报告 |
 | 纵向切片实现与闭环打勾 | `site-builder` | 进入 `building` | `.site/journal.md` 内的单行事实证据 |
-| 只读验证：核心任务、失败路径、视口、再次打开、风险 | `site-check` | 有可运行版本 | 检查计划与检查报告 |
+| 只读验证：核心任务、失败路径、视口、再次打开、风险；合同声明动效时加减少动态复核 | `site-check` | 有可运行版本 | 检查计划与检查报告 |
 
 **一件能力只有一个权威来源。** 需要"怎么写"时读对应的 reference，不要凭字段名猜标准：
 
@@ -89,7 +92,9 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 | 视觉推导五步、风格候选、反默认 | `site-design/references/visual-direction.md` |
 | 体验稿、双选、微调与资产继承 | `site-design/references/prototype.md` |
 | 落地页与转化 | `site-design/references/landing-page.md` |
+| 动效主张、节拍表、零依赖手法与静止帧 | `site-design/references/motion.md` |
 | 截图或网址输入 | `site-design/references/reference-input.md` |
+| 参考怎么取证：图片走测量、网址走 CSS 侦察，两者的分界与还原度闭环 | `site-design/references/reference-dna.md` |
 | Token 选择顺序与配方 | `site-design/references/design-tokens.md` |
 | 检索领域路由与授权分层 | `site-design/references/design-toolchain.md` |
 | 中文排版与配色 | `site-design/references/chinese-typography.md` |
@@ -102,6 +107,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 # 相对分发根；在源码仓库中为 release/ 下的同路径
 python3 site-builder/scripts/state.py <action> PROJECT
 python3 site-design/scripts/design.py <command> --root PROJECT
+python3 site-design/dna/scripts/dna.py <measure|verify|recon> ...
 python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 ```
 
@@ -116,6 +122,9 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 | `design.py check-contract --phase direction|prebuild|precheck` | 合同门禁；默认加 `--summary` 先看摘要，完整报告落盘 |
 | `design.py lint-ui` | 按合同静态扫描 UI 源码 |
 | `check.py plan / validate-report` | 生成验证计划（含指纹、排除路径与变更文件）；校验检查报告，`state.py verify` 以此为准入门禁 |
+| `dna.py measure` | 从参考截图量出精确色板（hex + 覆盖率 + 角色）。参考是图片文件时用它 |
+| `dna.py recon` | 把 `dna/scripts/recon.js` 在浏览器里跑出的结果收成 `recon.json`，并在 `--summary` 下给出角色候选、刻度与第三维取证。参考是网址时用它 |
+| `dna.py verify` | 拿实现截图与量好的色板比 ΔE 与覆盖率偏差，退出码 0 过、2 不过 |
 
 参数与返回以 `--help` 与实际输出为准。状态工具只防止顺序错误、空证据和不满足模式要求的跃迁，它不判断用户原话的真实语义，也不能证明证据内容属实。
 
@@ -129,6 +138,7 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 6. 素材记录来源、许可与 alt；缺失时诚实呈现，不编造社会证明。
 7. 行业做法、竞品、模板和检索结果不能创造首版功能。
 8. 检索只召回候选，不制定标准；项目标准只在 `craft-review.md`、`chinese-typography.md`、`design-tokens.md` 与 `.site/design/surface-brief.md`。图标体系默认 Lucide，用户或现有工程明确指定时以指定为准。
+9. 参考的色值以实际取证为准，不目测估色：图片走 `dna.py measure`，网址走 `recon.js` + `dna.py recon`（有网址时“可直接读取”指 CSS 与 DOM，不是截图上的像素）。量不出来的字段按证据强度标注或留空，不为填满而猜。
 
 费用、系统变更、密钥、真实敏感数据和公开发布始终单独停下，等待用户明确决定。
 

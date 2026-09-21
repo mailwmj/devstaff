@@ -1,69 +1,115 @@
 {
   "scenes": [
     {
-      "id": "new-site",
-      "name": "新建网站",
+      "id": "official-portal",
+      "name": "机构与团队主页",
+      "description": "展示业务特色与团队风采",
+      "icon": "./assets/icons/icon-portal.png",
       "items": [
         {
-          "id": "brief-scope",
+          "id": "portal-intro",
           "itemType": "prompt",
-          "title": "梳理首版功能与范围",
-          "description": "输入建站想法，AI 提炼出首版必须做的核心流程和范围，砍掉低频功能。",
-          "prompt": "我想新建一个网站，请问我最关键的几个问题，帮我梳理首版必须做的核心流程和范围边界。",
+          "title": "搭建机构与团队主页",
+          "description": "展示核心业务、成员风采与联系入口，先出双风格 Demo 对比。",
+          "prompt": "我想为我们团队/机构做一个官方介绍主页，包含核心业务介绍、团队风采展示与联系方式。请问我最关键的几个问题，帮我把版面结构先定下来。",
           "skillRefs": [
-            "site-brief"
-          ]
-        },
-        {
-          "id": "skeleton-preview",
-          "itemType": "prompt",
-          "title": "生成骨架结构预览",
-          "description": "根据需求给出单文件结构预览；信息架构存在真实分歧时给 2 种方案对比。",
-          "prompt": "建站需求已明确，请先判断信息架构是否存在真实分歧：有就生成 2 种差别明显的单文件骨架预览页供我挑选，没有就直接进入视觉方向。",
-          "skillRefs": [
+            "site-brief",
             "site-design"
           ]
         }
       ]
     },
     {
-      "id": "redesign-tune",
-      "name": "页面改版与微调",
+      "id": "product-showcase",
+      "name": "产品与服务展示",
+      "description": "图文并茂陈列核心成果",
+      "icon": "./assets/icons/icon-showcase.png",
       "items": [
         {
-          "id": "dual-style-preview",
+          "id": "showcase-catalog",
           "itemType": "prompt",
-          "title": "确定视觉调性",
-          "description": "骨架定了，先问有无参照物；有就贴着做一版，没有就给两版不同调性的预览，顶栏切换对比。",
-          "prompt": "骨架结构已定，先问我要不要提供参照的网站或截图；有参照就贴着做一版，没有就生成两版视觉调性差别明显的预览页，顶栏保留深色切换条供我对比。",
+          "title": "制作产品与服务展示页",
+          "description": "图文陈列主打特色与价格，带扫码或电话咨询入口。",
+          "prompt": "我想做一个产品与服务展示小站，图文列出几款主打产品（或特色案例）的特点与价格，并附带微信/电话咨询方式，请帮我设计版面布局。",
           "skillRefs": [
-            "site-design"
-          ]
-        },
-        {
-          "id": "quick-edit-fix",
-          "itemType": "prompt",
-          "title": "局部改动或修一个 Bug",
-          "description": "改文案、调间距、修特定报错；直接小步修改目标代码并跑通自检，绝不大动干戈乱重写。",
-          "prompt": "我对现有页面做一处明确修改，请直接定位代码增量修改，不要重写无关逻辑。",
-          "skillRefs": [
+            "site-design",
             "site-builder"
           ]
         }
       ]
     },
     {
-      "id": "site-audit",
-      "name": "质量巡检",
+      "id": "admin-workbench",
+      "name": "轻量业务工作台",
+      "description": "事项登记与看板流转",
+      "icon": "./assets/icons/icon-workbench.png",
       "items": [
         {
-          "id": "browser-check",
+          "id": "workbench-manage",
           "itemType": "prompt",
-          "title": "核心流程与界面检查",
-          "description": "在真实浏览器里帮你跑一遍主流程，查按钮有无误触、移动端有没有横向滚动破皮，给出客观事实清单。",
-          "prompt": "请对当前站点进行一次只读巡检，查清核心任务是否通畅、移动端有无横向拖动，并给出客观事实报告。",
+          "title": "创建日常事项工作台",
+          "description": "表单录入、状态过滤与看板流转，本地运行数据安全。",
+          "prompt": "我需要一个用于登记、流转和统计日常业务事项的小工作台，界面要紧凑高效，请帮我规划必要的数据字段和看板流程。",
           "skillRefs": [
+            "site-brief",
+            "site-builder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "campaign-landing",
+      "name": "活动与报名单页",
+      "description": "动态日程与留资预约",
+      "icon": "./assets/icons/icon-landing.png",
+      "items": [
+        {
+          "id": "landing-event",
+          "itemType": "prompt",
+          "title": "设计活动落地页",
+          "description": "包含活动倒计时、时间轴议程与在线报名留资表单。",
+          "prompt": "我们近期有一场重要的沙龙/培训活动，帮我设计一个单页落地页，包含活动亮点介绍、倒计时、详细日程安排以及在线报名表单。",
+          "skillRefs": [
+            "site-design",
             "site-check"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "personal-bio",
+      "name": "个人专业主页",
+      "description": "展示资历经验与成果名片",
+      "icon": "./assets/icons/icon-bio.png",
+      "items": [
+        {
+          "id": "bio-resume",
+          "itemType": "prompt",
+          "title": "打造个人专业名片",
+          "description": "展现讲师资质、专业履历与学术成果，体面得体。",
+          "prompt": "我想做一个体面的个人专业名片主页，展示我的个人简介、研究方向/擅长领域、主讲课题或代表成果，并附带联系方式。",
+          "skillRefs": [
+            "site-design",
+            "site-builder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "process-guide",
+      "name": "办事指南与问答",
+      "description": "步骤指引与折叠问答速查",
+      "icon": "./assets/icons/icon-guide.png",
+      "items": [
+        {
+          "id": "faq-steps",
+          "itemType": "prompt",
+          "title": "生成办事指南与 FAQ",
+          "description": "步骤条清晰拆解流程，折叠卡片整理高频解答。",
+          "prompt": "我想做一个办事指南与常见问题解答页，用清晰的步骤条说明办理流程，并用折叠卡片整理高频问题，免去反复人工解答。",
+          "skillRefs": [
+            "site-brief",
+            "site-design"
           ]
         }
       ]

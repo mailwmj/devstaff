@@ -32,6 +32,9 @@ jobs:
       - name: Run design tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-design/scripts/tests -p 'test_*.py'
 
+      - name: Run design-dna tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-design/dna/scripts/tests -p 'test_*.py'
+
       - name: Run the tests the bundle ships with
         run: |
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s release/skills/site-builder/scripts/tests -p 'test_*.py'
@@ -49,10 +52,13 @@ jobs:
           git archive --format=tar HEAD:release --output="$ARCHIVE_FILE"
           tar -xf "$ARCHIVE_FILE" -C "$RELEASE_DIR"
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-design/scripts/tests" -p 'test_*.py'
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-design/dna/scripts/tests" -p 'test_*.py'
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-builder/scripts/tests" -p 'test_*.py'
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$RELEASE_DIR/skills/site-check/scripts/tests" -p 'test_*.py'
           PYTHONDONTWRITEBYTECODE=1 python3 "$RELEASE_DIR/skills/site-design/scripts/design.py" validate
           test -f "$RELEASE_DIR/agent/Agent.md"
           test -f "$RELEASE_DIR/skills/site-design/references/surface-brief.md"
+          test -f "$RELEASE_DIR/skills/site-design/references/reference-dna.md"
+          test -f "$RELEASE_DIR/skills/site-design/dna/scripts/dna.py"
           test -f "$RELEASE_DIR/skills/site-builder/scripts/state.py"
           test -f "$RELEASE_DIR/skills/site-check/scripts/check.py"

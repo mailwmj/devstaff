@@ -624,6 +624,25 @@ class DesignIntelligenceContractTests(unittest.TestCase):
 
 
 class ReferenceArchitectureTests(unittest.TestCase):
+    def test_marketing_pages_declare_motion_and_the_checker_rechecks_it(self):
+        # 「炫酷」selects nothing, so the design path asserts a beat sheet the
+        # user can veto instead of asking him to describe motion. That claim is
+        # only honest if the verifier re-runs the visual axis under reduced
+        # motion whenever the contract declares one.
+        motion = (SKILL_ROOT / "references" / "motion.md").read_text(encoding="utf-8")
+        landing = (SKILL_ROOT / "references" / "landing-page.md").read_text(encoding="utf-8")
+        brief = (SKILL_ROOT / "references" / "surface-brief.md").read_text(encoding="utf-8")
+        visual = (SKILL_ROOT / "references" / "visual-direction.md").read_text(encoding="utf-8")
+        checker = (SKILL_ROOT.parent / "site-check" / "SKILL.md").read_text(encoding="utf-8")
+
+        for text in (landing, brief, visual):
+            self.assertIn("motion.md", text)
+        self.assertIn("动效主张", brief)
+        self.assertIn("prefers-reduced-motion", motion)
+        self.assertIn("不引第三方动效库", motion)
+        self.assertIn("不要问", motion)
+        self.assertIn("reducedMotion", checker)
+
     def test_toolchain_documents_the_lint_boundary_and_retrieval_note(self):
         toolchain = (SKILL_ROOT / "references" / "design-toolchain.md").read_text(encoding="utf-8")
 
@@ -696,7 +715,7 @@ class ReferenceArchitectureTests(unittest.TestCase):
         references = SKILL_ROOT / "references"
         markdown = list(references.rglob("*.md"))
 
-        self.assertLessEqual(len(markdown), 10)
+        self.assertLessEqual(len(markdown), 12)
         self.assertFalse((references / "upstream").exists())
         self.assertFalse((references / "design-intent.md").exists())
 
@@ -1004,7 +1023,8 @@ class LintUiTests(unittest.TestCase):
         self._write(contract_json=self._contract(icon_system="lucide"),
                     files={"index.html":
                            '<link rel="canonical" href="products/feather-wand.html">'
-                           '<link rel="icon" href="/assets/feather.png">'})
+                           '<link rel="icon" href="/assets/feather.png">',
+                           "products/feather-wand.html": "<h1>产品页</h1>"})
         report = self._lint()
         self.assertTrue(report["passed"], report["blockers"])
         self.assertNotIn("icon_system_mismatch",
@@ -1135,6 +1155,190 @@ class LintUiTests(unittest.TestCase):
         report = self._lint()
         self.assertTrue(report["passed"], report["blockers"])
         self.assertIn("undeclared_icon_system", [w["code"] for w in report["warnings"]])
+
+    # --- page-integrity rules (contract-independent) ---
+
+    def test_missing_local_stylesheet_is_blocked_and_present_file_passes(self):
+        # A page whose stylesheet 404s renders unstyled and still passes the
+        # icon/proof/capability scans; this is the one static blocker.
+        self._write(files={"index.html": '<link rel="stylesheet" href="styles.css">',
+                           "styles.css": ".a{color:#102030}"})
+        report = self._lint()
+        self.assertTrue(report["passed"], report["blockers"])
+        (self.root / "styles.css").unlink()
+        report = self._lint()
+        self.assertIn("dead_local_ref", self.codes(report))
+
+    def test_non_local_references_are_not_file_checks(self):
+        # Scheme'd, protocol-relative, fragment-only, root-relative and
+        # templated refs are not files this scan can resolve.
+        self._write(files={"index.html": (
+            '<script src="https://cdn.example.com/x.js"></script>'
+            '<img src="data:image/gif;base64,R0lGOD" alt="点">'
+            '<a href="#top">顶部</a>'
+            '<a href="mailto:a@b.c">邮件</a>'
+            '<img src="//cdn.example.com/y.png" alt="图">'
+            '<img src="/assets/root-relative.png" alt="根路径">'
+            '<img src="{{ asset_url }}" alt="模板">'
+            '<style>.a{background:url(var(--shape))}</style>')})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertTrue(report["passed"], report["blockers"])
+
+    def test_script_and_framework_bindings_are_not_file_references(self):
+        # ``location.href = "signin.html"`` and ``:src="path"`` are code, not
+        # references; matching them made every router line a blocker.
+        self._write(files={
+            "index.html": '<script>if (!user) { location.href = "signin.html"; }</script>',
+            "src/App.tsx": '<img :src="dynamicPath" /><A href={to} />'})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertTrue(report["passed"], report["blockers"])
+
+    def test_jsx_static_source_is_still_checked(self):
+        # Without the binding prefix it is a real reference and must not be
+        # skipped just because the file is a component.
+        self._write(files={"src/App.tsx": '<img src="img/missing.png" alt="图" />'})
+        report = self._lint()
+        self.assertIn("dead_local_ref", self.codes(report))
+
+    def test_missing_build_output_reference_is_a_warning(self):
+        # The build may simply not have run yet; a file missing anywhere else
+        # is a broken page, a missing dist/ artifact is a question.
+        self._write(files={"index.html": '<script src="dist/app.js"></script>'})
+        report = self._lint()
+        self.assertEqual(self.codes(report), [])
+        self.assertIn("build_output_missing",
+                      [w["code"] for w in report["warnings"]])
+
+    def test_overflow_hidden_with_sticky_warns_and_hidden_alone_does_not(self):
+        page = ('<style>html,body{overflow-x:hidden}'
+                '.nav{position:sticky;top:0}</style><nav class="nav">x</nav>')
+        self._write(files={"index.html": page})
+        report = self._lint()
+        self.assertIn("overflow_hidden_with_sticky",
+                      [w["code"] for w in report["warnings"]])
+
+        self._write(files={"index.html":
+                           '<style>body{overflow-x:hidden}</style>'})
+        report = self._lint()
+        self.assertNotIn("overflow_hidden_with_sticky",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_two_sticky_elements_at_top_zero_warn(self):
+        page = ('<style>.nav{position:sticky;top:0}'
+                '.head{position:sticky;top:0px}</style>')
+        self._write(files={"index.html": page})
+        report = self._lint()
+        self.assertIn("dual_sticky_top0", [w["code"] for w in report["warnings"]])
+
+    def test_bare_fr_track_warns_only_when_the_page_has_images(self):
+        grid = '<style>.grid{grid-template-columns:1fr 1fr}</style>'
+        self._write(files={"index.html": grid + '<div class="grid"></div>'})
+        report = self._lint()
+        self.assertNotIn("bare_fr_track", [w["code"] for w in report["warnings"]])
+
+        self._write(files={"index.html": grid + '<img src="a.png" alt="图">',
+                           "a.png": "png"})
+        report = self._lint()
+        self.assertIn("bare_fr_track", [w["code"] for w in report["warnings"]])
+
+    def test_bare_fr_track_exemptions(self):
+        minmax = ('<style>.grid{grid-template-columns:minmax(0,1fr) 320px}</style>'
+                  '<img src="a.png" alt="图">')
+        self._write(files={"index.html": minmax, "a.png": "png"})
+        report = self._lint()
+        self.assertNotIn("bare_fr_track", [w["code"] for w in report["warnings"]])
+
+        floored = ('<style>img{max-width:100%}'
+                   '.grid{grid-template-columns:1fr 1fr}</style>'
+                   '<img src="a.png" alt="图">')
+        self._write(files={"index.html": floored, "a.png": "png"})
+        report = self._lint()
+        self.assertNotIn("bare_fr_track", [w["code"] for w in report["warnings"]])
+
+    def test_uppercase_tight_leading_warns_and_normal_leading_passes(self):
+        self._write(files={"index.html":
+                           '<style>.t{text-transform:uppercase;line-height:.9}</style>'})
+        report = self._lint()
+        self.assertIn("uppercase_tight_leading",
+                      [w["code"] for w in report["warnings"]])
+
+        self._write(files={"index.html":
+                           '<style>.t{text-transform:uppercase;line-height:1.05}</style>'})
+        report = self._lint()
+        self.assertNotIn("uppercase_tight_leading",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_continuous_motion_without_a_fallback_warns(self):
+        self._write(files={"index.html":
+                           "<script>requestAnimationFrame(tick)</script>"})
+        report = self._lint()
+        self.assertIn("motion_without_reduced_motion",
+                      [w["code"] for w in report["warnings"]])
+
+    def test_reduced_motion_fallback_and_plain_hover_pass(self):
+        self._write(files={"index.html": (
+            "<style>@keyframes pulse{from{opacity:0}}"
+            "@media (prefers-reduced-motion: reduce){.a{animation:none}}</style>")})
+        report = self._lint()
+        self.assertNotIn("motion_without_reduced_motion",
+                         [w["code"] for w in report["warnings"]])
+
+        self._write(files={"index.html":
+                           "<style>.b{transition:background .2s}</style>"})
+        report = self._lint()
+        self.assertNotIn("motion_without_reduced_motion",
+                         [w["code"] for w in report["warnings"]])
+
+    def test_transition_all_and_gradient_text_warn(self):
+        self._write(files={"index.html": (
+            "<style>.a{transition:all .2s}"
+            ".b{background:linear-gradient(90deg,#123456,#654321);"
+            "-webkit-background-clip:text;background-clip:text}</style>")})
+        report = self._lint()
+        codes = [w["code"] for w in report["warnings"]]
+        self.assertIn("transition_all", codes)
+        self.assertIn("gradient_text", codes)
+
+    def test_color_literals_warn_only_past_the_token_threshold(self):
+        few = "<style>:root{--a:#123456}.x{color:#123456}</style>"
+        self._write(files={"index.html": few})
+        report = self._lint()
+        self.assertNotIn("inline_color_literal",
+                         [w["code"] for w in report["warnings"]])
+
+        many = "<style>:root{--a:#123456}" + "".join(
+            f".c{i}{{color:#123456}}" for i in range(design.COLOR_LITERAL_LIMIT + 1)
+        ) + "</style>"
+        self._write(files={"index.html": many})
+        report = self._lint()
+        self.assertIn("inline_color_literal",
+                      [w["code"] for w in report["warnings"]])
+
+    def test_css_rules_do_not_read_scripts_as_declaration_blocks(self):
+        # A TSX object literal is not a CSS declaration block; reading it as
+        # one would invent findings, and a warning that is often wrong trains
+        # agents to ignore warnings.
+        source = ("const Box = () => <div style={{transition: 'all'}}>"
+                  "<img src='https://cdn.example.com/a.png' />1fr</div>;")
+        self._write(files={"src/App.tsx": source})
+        report = self._lint()
+        codes = [w["code"] for w in report["warnings"]]
+        for code in ("bare_fr_track", "transition_all", "uppercase_tight_leading"):
+            self.assertNotIn(code, codes)
+
+    def test_not_covered_is_published_with_report_and_summary(self):
+        # ``passed`` must never read as "the design holds": the report says
+        # what the scan cannot see, in full and in the bounded summary.
+        self._write(files={"index.html": "<h1>库存</h1>"})
+        report = self._lint()
+        self.assertTrue(report["not_covered"])
+        self.assertTrue(any("渲染" in item for item in report["not_covered"]))
+
+        completed = self._lint_cli("--summary")
+        summary = json.loads(completed.stdout)
+        self.assertEqual(summary["not_covered"], report["not_covered"])
 
     # --- false-positive boundaries ---
 

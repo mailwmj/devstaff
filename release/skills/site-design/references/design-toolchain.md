@@ -105,9 +105,9 @@ python3 <site-design 安装目录>/scripts/design.py check-contract --root <项�
 python3 <site-design 安装目录>/scripts/design.py lint-ui --root <项目根> --summary
 ```
 
-完整报告随项目规模增长（`lint-ui` 每扫一个 UI 文件就多一条清单项），直接打印会把清单与哈希灌进上下文。默认先看 `--summary`：它只给 `passed`、`blocker_count` / `warning_count`、前 5 条 finding 和被截断数量，另附 `scanned_file_count` / `tracked_file_count`（用 `--changed-from` 时两者不同）。需要逐条修时用 `--out <路径>` 落盘完整报告，再从文件里按 `code` / `file` 取相关条目；`--max-findings N` 只加宽摘要，不改变落盘内容。不加 `--summary` 时仍是原来的完整报告。
+完整报告随项目规模增长（`lint-ui` 每扫一个 UI 文件就多一条清单项），直接打印会把清单与哈希灌进上下文。默认先看 `--summary`：它只给 `passed`、`blocker_count` / `warning_count`、前 5 条 finding 和被截断数量，另附 `scanned_file_count` / `tracked_file_count`（用 `--changed-from` 时两者不同），以及 `not_covered`（静态扫描看不到、必须靠渲染或人工核对的项）。需要逐条修时用 `--out <路径>` 落盘完整报告，再从文件里按 `code` / `file` 取相关条目；`--max-findings N` 只加宽摘要，不改变落盘内容。不加 `--summary` 时仍是原来的完整报告。
 
-`lint-ui` 是静态扫描，只覆盖图标体系混用、编造社会证明、排除项泄漏和换肤候选那几条确定性规则。**排版度量与渲染效果不在其中**：负字距、裸 `bold`/`700` 伪粗体、中文 webfont 全量加载、字号 / 行高 / 行长 / 字面，仍由 [中文排版规范](chinese-typography.md) 与 [工艺审查](craft-review.md) §3 在实际渲染上人工核对。`passed` 只表示它覆盖的规则通过，不表示排版或设计成立。
+`lint-ui` 是静态扫描，覆盖两类规则。合同相关：图标体系混用、编造社会证明、排除项泄漏、换肤候选。页面完整性：本地引用断链（样式表、图片、`@import` 指向不存在的文件）、根选择器上的 `overflow-x:hidden` 切断 sticky、带图网格轨道用裸 `1fr`、多个 `sticky; top:0` 互相遮挡、全大写标题行高小于 1、有连续动效但没有 `prefers-reduced-motion` 降级、`transition: all`、文字填充渐变、token 外的不透明颜色字面量堆积。**排版度量与渲染效果不在其中**：负字距、裸 `bold`/`700` 伪粗体、中文 webfont 全量加载、字号 / 行高 / 行长 / 字面，仍由 [中文排版规范](chinese-typography.md) 与 [工艺审查](craft-review.md) §3 在实际渲染上人工核对。报告里的 `not_covered` 列出它看不到的项；`passed` 只表示它覆盖的规则通过，不表示排版或设计成立。
 
 ## 验证与边界
 

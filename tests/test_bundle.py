@@ -74,7 +74,9 @@ class BundleTests(unittest.TestCase):
             "design-tokens.md",
             "design-toolchain.md",
             "landing-page.md",
+            "motion.md",
             "prototype.md",
+            "reference-dna.md",
             "reference-input.md",
             "surface-brief.md",
             "visual-direction.md",
@@ -88,6 +90,12 @@ class BundleTests(unittest.TestCase):
         self.assertTrue((design / "assets" / "design" / "preview-shell.html").is_file())
         self.assertTrue((design / "scripts" / "design.py").is_file())
         self.assertTrue((design / "intelligence" / "LICENSE").is_file())
+        # 取色与还原度比对的移植件带自己的许可与移植记录，一起随包分发
+        self.assertTrue((design / "dna" / "LICENSE").is_file())
+        self.assertTrue((design / "dna" / "VERSION").is_file())
+        self.assertTrue((design / "dna" / "scripts" / "dna.py").is_file())
+        self.assertTrue((design / "dna" / "scripts" / "recon.js").is_file())
+        self.assertTrue((design / "dna" / "scripts" / "tests" / "test_dna.py").is_file())
 
     def test_builder_owns_state_interface(self):
         self.assertTrue((RELEASE / "skills" / "site-builder" / "scripts" / "state.py").is_file())

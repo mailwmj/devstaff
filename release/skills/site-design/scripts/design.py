@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+from urllib.parse import unquote
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -1120,6 +1121,74 @@ _ICON_MARKUP_PATTERNS = {
     'eva-icons': re.compile(r'<eva-icon\b', re.IGNORECASE),
 }
 
+# --- page-integrity rules (contract-independent) ---------------------------
+# These decide facts from the source text: a referenced file that is not on
+# disk, two elements pinned to the same strip, all-caps leading that cannot
+# clear the caps. Aesthetic judgment is not here -- see the note after
+# ``_scan_file``. Only a dead local reference blocks: it is the failure that
+# makes every other check vacuous, because a page whose stylesheet is missing
+# renders unstyled and still passes the icon, proof and capability scans.
+#
+# CSS rules run only on files that carry CSS. Reading a JS/TSX file as if its
+# object literals were declaration blocks would invent findings, and a warning
+# that is often wrong trains agents to ignore warnings.
+
+LINT_CSS_SUFFIXES = frozenset({'.css', '.html', '.htm', '.vue', '.svelte',
+                               '.astro'})
+# A missing reference under a build-output directory may simply mean the build
+# has not run yet; a missing reference anywhere else is a broken page.
+LINT_BUILD_OUTPUT_DIRS = frozenset({'dist', 'build', 'out', '.next', '.nuxt',
+                                    '.output', 'node_modules'})
+# Opaque colour literals a file may carry outside its token block before the
+# palette has stopped being a system somewhere. Translucent rgba()/hsla() are
+# not counted: the craft rules require them inline for borders and shadows.
+COLOR_LITERAL_LIMIT = 30
+
+_ATTR_REF_RE = re.compile(
+    r'\b(?:href|src|poster)\s*=\s*(?:["\']([^"\']+)["\']|([^\s>"\'`]+))',
+    re.IGNORECASE)
+# A reference only counts inside a tag or a CSS function. ``location.href =
+# "signin.html"`` in a script and ``:src="path"`` in a JSX/Vue binding are
+# not file references -- matching them made every router line a blocker.
+_TAG_RE = re.compile(r'<[^<>]*>')
+_BOUND_ATTR_RE = re.compile(r'(?<![:@.\w])\b(?:href|src|poster)\s*=')
+_CSS_URL_RE = re.compile(r'(?<![-\w])url\(\s*["\']?([^"\')]+)["\']?\s*\)')
+_CSS_IMPORT_RE = re.compile(
+    r'@import\s+(?:url\(\s*)?["\']([^"\')]+)["\']', re.IGNORECASE)
+# Scheme'd, protocol-relative and fragment-only refs are not local files, and
+# a root-relative one has no serving root to resolve against.
+_SKIP_REF_RE = re.compile(r'^(?:[a-z][a-z0-9+.\-]*:|//|#)', re.IGNORECASE)
+_DYNAMIC_REF_RE = re.compile(r'[{}$<>()]')
+_COMMENT_RE = re.compile(r'<!--.*?-->|/\*.*?\*/', re.DOTALL)
+_CSS_BLOCK_RE = re.compile(r'([^{}]*)\{([^{}]*)\}')
+_ROOT_SELECTOR_RE = re.compile(
+    r'\s*(?:html|body)(?:\s*,\s*(?:html|body))*\s*$', re.IGNORECASE)
+_CONTINUOUS_MOTION_RE = re.compile(
+    r'requestAnimationFrame|\bgsap\b|ScrollTrigger|@keyframes'
+    r'|animation-timeline\s*:', re.IGNORECASE)
+_REDUCED_MOTION_RE = re.compile(r'prefers-reduced-motion', re.IGNORECASE)
+_TRANSITION_ALL_RE = re.compile(r'transition\s*:\s*all\b|\btransition-all\b',
+                                re.IGNORECASE)
+_GRADIENT_TEXT_RE = re.compile(r'background-clip\s*:\s*text', re.IGNORECASE)
+_GRADIENT_RE = re.compile(r'(?:linear|radial|conic)-gradient', re.IGNORECASE)
+_OPAQUE_COLOR_RE = re.compile(
+    r'#[0-9a-fA-F]{6,8}\b|#[0-9a-fA-F]{3}\b|oklch\([^)]*\)')
+_TOKEN_BLOCK_RE = re.compile(
+    r'(?::root|\[data-theme[^\]]*\]|@theme)[^{]*\{[^{}]*\}', re.IGNORECASE)
+
+# What the static scan cannot see. Published with every report so ``passed``
+# never reads as "the design holds": the failures below need a rendered page,
+# an eye or a browser.
+LINT_NOT_COVERED = (
+    '换行与触控：按钮在窄屏是否折行、点击热区够不够大，要渲染页面量',
+    '对比度与真实色对：token 表通过不等于渲染后的相邻色对达标',
+    '图表是否由数据驱动：柱高是否来自数值、轴标签是否齐全，要看渲染结果',
+    '动效质量：静态扫描只查有没有降级开关，流畅与是否有意义看不出来',
+    '素材内容：图片画的是什么、裁剪与 alt 是否恰当，文本判断不了',
+    '生成式默认骨架：Hero+等权卡片这类形态由 craft-review.md 人工判',
+    '根路径引用（/assets/x.png）：没有服务根，静态检查判断不了',
+)
+
 
 def _sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
@@ -1280,6 +1349,189 @@ def _detect_icon_systems(text):
 
 def _line_of(text, offset):
     return text.count('\n', 0, offset) + 1
+
+
+def _length_preserving_blank(match):
+    """Blank a comment without moving any reported line number."""
+    return ''.join('\n' if char == '\n' else ' ' for char in match.group(0))
+
+
+def _css_rule_blocks(text):
+    """``(selector, body, offset)`` for each innermost declaration block.
+
+    The selector is the text between the previous block, statement or tag and
+    ``{`` -- enough to tell ``html`` / ``body`` from a component class. This is
+    a scanner, not a CSS parser, and is only asked questions it can answer.
+    """
+    blocks = []
+    for match in _CSS_BLOCK_RE.finditer(text):
+        head = text[:match.end(1)]
+        cut = max(head.rfind('}'), head.rfind('{'), head.rfind(';'),
+                  head.rfind('>'))
+        selector = re.sub(r'<[^>]*>', '', head[cut + 1:]).strip()
+        blocks.append((selector, match.group(2), match.start(1)))
+    return blocks
+
+
+def _dead_ref_findings(root, rel, text):
+    """Local references that point at nothing on disk.
+
+    Returns ``(blocks_delivery, finding)`` pairs. A missing reference under a
+    build-output directory is reported but not blocking: the file may be
+    produced by a build step that has not run. Everywhere else it is the
+    truncated-build tell -- the HTML exists, the stylesheet never got written,
+    and the page renders as unstyled Times New Roman while every other check
+    in this scan passes vacuously.
+    """
+    findings = []
+    base = (root / rel).parent
+    seen = set()
+    scan = _COMMENT_RE.sub(_length_preserving_blank, text)
+    refs = []
+    for tag in _TAG_RE.finditer(scan):
+        for attr in _ATTR_REF_RE.finditer(tag.group(0)):
+            if not _BOUND_ATTR_RE.match(tag.group(0), attr.start()):
+                continue
+            refs.append((tag.start() + attr.start(),
+                         attr.group(1) or attr.group(2) or ''))
+    for css in _CSS_URL_RE.finditer(scan):
+        refs.append((css.start(), css.group(1)))
+    for css in _CSS_IMPORT_RE.finditer(scan):
+        refs.append((css.start(), css.group(1)))
+    for offset, raw in refs:
+        raw = raw.strip()
+        if not raw:
+            continue
+        ref = unquote(raw)
+        if _SKIP_REF_RE.match(ref) or ref.startswith('/'):
+            continue
+        if _DYNAMIC_REF_RE.search(ref):
+            continue
+        path = ref.split('#')[0].split('?')[0]
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        if (base / path).exists():
+            continue
+        parts = PurePath(path).parts
+        build_output = bool(parts) and parts[0] in LINT_BUILD_OUTPUT_DIRS
+        findings.append((not build_output, {
+            'code': 'build_output_missing' if build_output else 'dead_local_ref',
+            'file': rel, 'line': _line_of(scan, offset), 'ref': path,
+            'detail': ('引用指向构建产物且当前不存在；确认是否还没构建，'
+                       '或改掉这个引用' if build_output else
+                       '引用的本地文件不存在；样式表缺失时整页会退化成无样式渲染'),
+        }))
+    return findings
+
+
+def _static_rule_findings(root, rel, text):
+    """``(blockers, warnings)`` from the contract-independent page rules."""
+    blockers, warnings = [], []
+    for blocks_delivery, finding in _dead_ref_findings(root, rel, text):
+        (blockers if blocks_delivery else warnings).append(finding)
+
+    if PurePath(rel).suffix.lower() not in LINT_CSS_SUFFIXES:
+        return blockers, warnings
+
+    scan = _COMMENT_RE.sub(_length_preserving_blank, text)
+    blocks = _css_rule_blocks(scan)
+
+    if _CONTINUOUS_MOTION_RE.search(scan) and not _REDUCED_MOTION_RE.search(scan):
+        warnings.append({
+            'code': 'motion_without_reduced_motion', 'file': rel,
+            'detail': '页面有连续动效（rAF/gsap/@keyframes 等）但没有 '
+                      'prefers-reduced-motion 降级；补一个定格状态'})
+
+    if _TRANSITION_ALL_RE.search(scan):
+        warnings.append({
+            'code': 'transition_all', 'file': rel,
+            'detail': 'transition: all 会连布局属性一起动画；改成要过渡的属性名'})
+
+    for match in _GRADIENT_TEXT_RE.finditer(scan):
+        window = scan[max(0, match.start() - 240):match.start() + 240]
+        if _GRADIENT_RE.search(window):
+            warnings.append({
+                'code': 'gradient_text', 'file': rel,
+                'line': _line_of(scan, match.start()),
+                'detail': '标题字填充渐变是最容易识破的模板特征；改回单色'})
+            break
+
+    if re.search(r'position\s*:\s*sticky', scan, re.IGNORECASE):
+        # overflow-x:hidden on html/body makes the element a scroll container,
+        # which severs position:sticky for every descendant: the sideways
+        # scroll stops and the nav stops sticking with it. Root selectors
+        # only -- a card with hidden overflow is legitimate -- and gated on
+        # the page using sticky at all, because without one nothing breaks.
+        for selector, body, _offset in blocks:
+            if _ROOT_SELECTOR_RE.match(selector) and re.search(
+                    r'overflow(?:-x)?\s*:\s*hidden', body, re.IGNORECASE):
+                warnings.append({
+                    'code': 'overflow_hidden_with_sticky', 'file': rel,
+                    'detail': 'html/body 上的 overflow-x:hidden 会切断 sticky；'
+                              '改用 overflow-x: clip'})
+                break
+
+        sticky_at_zero = [
+            offset for _selector, body, offset in blocks
+            if re.search(r'position\s*:\s*sticky', body, re.IGNORECASE)
+            and re.search(r'(?:^|[;\s])top\s*:\s*0(?:px|rem|em|%)?\s*(?:;|$)',
+                          body, re.IGNORECASE)]
+        if len(sticky_at_zero) >= 2:
+            warnings.append({
+                'code': 'dual_sticky_top0', 'file': rel,
+                'line': _line_of(scan, sticky_at_zero[1]),
+                'count': len(sticky_at_zero),
+                'detail': '多个元素同时 sticky 在 top:0，滚动时会互相遮挡；'
+                          '除导航外按 --nav-h 之类的偏移量错开'})
+
+    for _selector, body, offset in blocks:
+        if not re.search(r'text-transform\s*:\s*uppercase', body, re.IGNORECASE):
+            continue
+        leading = re.search(r'line-height\s*:\s*(0?\.\d+|\d(?:\.\d+)?)\s*(?:;|$)',
+                            body, re.IGNORECASE)
+        if leading and float(leading.group(1)) < 1:
+            warnings.append({
+                'code': 'uppercase_tight_leading', 'file': rel,
+                'line': _line_of(scan, offset),
+                'detail': '全大写没有下伸部，行高小于 1 时换行会让上排字母顶到上一行；'
+                          '这类标题行高不低于 1.0'})
+
+    # A bare ``1fr`` is ``minmax(auto, 1fr)``; a track holding an image floors
+    # at the image's intrinsic width and the page scrolls sideways. Fires only
+    # when the file really carries replaced content, and reports a question --
+    # the scan cannot know the image sits in that track.
+    has_image = re.search(r'<img\b|<picture\b|<video\b', scan, re.IGNORECASE)
+    has_image_floor = re.search(
+        r'(?:^|[\s,}>])(?:img|picture|video)[^{]*\{[^}]*max-width\s*:\s*100%',
+        scan, re.IGNORECASE)
+    if has_image and not has_image_floor:
+        hits = []
+        for _selector, body, offset in blocks:
+            for decl in re.finditer(
+                    r'grid-template-(?:columns|rows)\s*:\s*([^;}]+)', body,
+                    re.IGNORECASE):
+                stripped = re.sub(r'minmax\s*\([^)]*\)', 'MM', decl.group(1))
+                if re.search(r'(?:^|[\s(,:])1fr\b', stripped):
+                    hits.append(offset)
+        if hits:
+            warnings.append({
+                'code': 'bare_fr_track', 'file': rel,
+                'line': _line_of(scan, hits[0]), 'count': len(hits),
+                'detail': '带图内容用了裸 1fr 的网格轨道；确认图片是否在这条轨道里，'
+                          '是就改成 minmax(0, 1fr)'})
+
+    # Token discipline: a scatter of opaque literals outside the token block
+    # means the palette stopped being a system somewhere in the middle.
+    without_tokens = _TOKEN_BLOCK_RE.sub(_length_preserving_blank, scan)
+    literals = _OPAQUE_COLOR_RE.findall(without_tokens)
+    if len(literals) > COLOR_LITERAL_LIMIT:
+        warnings.append({
+            'code': 'inline_color_literal', 'file': rel, 'count': len(literals),
+            'detail': f'token 外有 {len(literals)} 个不透明颜色字面量；'
+                      '提成语义 token 再引用'})
+
+    return blockers, warnings
 
 
 def _scan_file(rel, text, excepted_chars, icon_system, caps):
@@ -1652,6 +1904,9 @@ def lint_ui(root, contract_rel, changed_from=None):
             rel, text, excepted_chars, icon_system, caps)
         blockers.extend(file_blockers)
         warnings.extend(file_warnings)
+        static_blockers, static_warnings = _static_rule_findings(root, rel, text)
+        blockers.extend(static_blockers)
+        warnings.extend(static_warnings)
         if icons:
             had_icons = True
 
@@ -1677,6 +1932,7 @@ def _lint_report(root, contract_rel, sha, passed, blockers, warnings,
         'changed_from': changed_from,
         'blockers': blockers,
         'warnings': warnings,
+        'not_covered': list(LINT_NOT_COVERED),
         'passed': passed,
         'checked_at': _now(),
     }
@@ -1716,6 +1972,8 @@ def _report_summary(report, report_path=None, max_findings=SUMMARY_FINDING_LIMIT
     for key in SUMMARY_PASSTHROUGH_KEYS:
         if key in report:
             summary[key] = report[key]
+    if report.get('not_covered'):
+        summary['not_covered'] = report['not_covered']
     for key, target in SUMMARY_COUNT_KEYS:
         if key in report:
             summary[target] = len(report.get(key) or [])
