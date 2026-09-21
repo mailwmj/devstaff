@@ -94,7 +94,7 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 | 落地页与转化 | `site-design/references/landing-page.md` |
 | 动效主张、节拍表、零依赖手法与静止帧 | `site-design/references/motion.md` |
 | 截图或网址输入 | `site-design/references/reference-input.md` |
-| 参考怎么取证：图片走测量、网址走 CSS 侦察，两者的分界与还原度闭环 | `site-design/references/reference-dna.md` |
+| 参考怎么取证、怎么用：图片走测量、网址走 CSS 侦察，提取设计 DNA 装进自有内容，含验收基准 | `site-design/references/reference-dna.md` |
 | Token 选择顺序与配方 | `site-design/references/design-tokens.md` |
 | 检索领域路由与授权分层 | `site-design/references/design-toolchain.md` |
 | 中文排版与配色 | `site-design/references/chinese-typography.md` |
@@ -119,7 +119,7 @@ python3 site-check/scripts/check.py <plan|validate-report> PROJECT
 | `state.py handoff / begin-check / cancel-check` | 先把这一版交给用户看并在 `review` 停下；开一轮验证要带他的原话（`--quote`），并在这一轮内禁写源码；要回去修就带 `--reason` 取消这一轮 |
 | `state.py verify / block / resume / reopen` | 记录验证结论、阻断、恢复与重开；`verify` 只收检查报告，报告先过协议校验 |
 | `design.py catalog / research` | 看能力目录；按一个问题检索领域或技术栈 |
-| `design.py check-contract --phase direction|prebuild|precheck` | 合同门禁；默认加 `--summary` 先看摘要，完整报告落盘 |
+| `design.py check-contract --root PROJECT --phase direction|prebuild|precheck` | 合同门禁；默认加 `--summary` 先看摘要，完整报告落盘 |
 | `design.py lint-ui` | 按合同静态扫描 UI 源码 |
 | `check.py plan / validate-report` | 生成验证计划（含指纹、排除路径与变更文件）；校验检查报告，`state.py verify` 以此为准入门禁 |
 | `dna.py measure` | 从参考截图量出精确色板（hex + 覆盖率 + 角色）。参考是图片文件时用它 |

@@ -5,10 +5,10 @@ bindings:
     required: true
   - id: site-brief
     source: embedded
-    required: false
+    required: true
   - id: site-design
     source: embedded
-    required: false
+    required: true
   - id: site-check
     source: embedded
-    required: false
+    required: true

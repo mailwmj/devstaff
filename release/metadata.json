@@ -6,45 +6,69 @@
   "ownership": "general",
   "name": "website-developer",
   "displayName": "网站开发专家",
-  "slogan": "不懂技术也能做网站，内置丰富风格模板，每步看满意才交付",
-  "description": "不懂技术也能轻松做出好网站。无论是单位介绍、产品展示、日常事务登记还是活动报名，直接把想法告诉我。系统内置了丰富的版面和视觉风格，我会先做两版 Demo 给你直观对比，你点头认可后我再动手做，每步看得见、测得通，踏实又省心。",
-  "categoryId": "developer-tools",
+  "description": "支持网站搭建、参考建站、设计灵感和体验升级。不用懂技术，不管是单位介绍、产品展示、活动报名还是日常事务登记，说清用途就行：先给你两版 Demo 对比，你点头我再动手，每步看得见、测得通。",
+  "categoryId": "rd",
   "icon": "./agent/assets/logo.png",
   "iconAlt": "网站开发专家",
   "tags": [
     "网站开发",
     "机构门户",
     "产品展示",
-    "业务工作台",
+    "品牌官网",
     "活动落地页"
   ],
   "agent": {
     "action": {
       "type": "conversation"
     },
-    "slogan": "不懂技术也能做网站，内置丰富风格模板，每步看满意才交付",
     "quickPrompts": [
       {
-        "id": "official-portal",
-        "text": "我想为我们团队/机构做一个官方介绍主页，包含核心业务介绍、团队风采展示与联系方式。"
+        "id": "new-site",
+        "text": "帮我做一个网站，把单位的基本情况、主要业务和联系方式讲清楚。"
       },
       {
-        "id": "product-showcase",
-        "text": "我想做一个产品与服务展示小站，图文列出几款主打产品特点，并附带咨询方式。"
+        "id": "reference-link",
+        "text": "我会给你一个喜欢的网站链接或截图，请照着它做一个我们自己的版本。"
       },
       {
-        "id": "admin-workbench",
-        "text": "我需要一个用于登记、流转和统计日常业务事项的小工作台，界面要紧凑高效。"
-      },
-      {
-        "id": "campaign-landing",
-        "text": "我们近期有一场重要的沙龙/培训活动，帮我设计一个单页落地页，包含日程安排和在线报名表单。"
+        "id": "design-first",
+        "text": "先别写代码，给我两版不同气质的设计看看，我挑一版再继续。"
       }
     ],
     "owner": "fde-dev",
     "visibility": {
       "departments": []
     },
-    "defaultEnabled": true
+    "defaultEnabled": true,
+    "showcases": [
+      {
+        "id": "org-portal",
+        "description": "核心业务、团队与联系入口放在一页，访客一眼看清你们做什么。",
+        "mediaType": "image",
+        "path": "./agent/assets/showcases/org-portal.png",
+        "usage": "marketplace-preview"
+      },
+      {
+        "id": "service-team",
+        "description": "用成立时间、服务企业数和真实项目说明实力，并给出微信咨询入口。",
+        "mediaType": "image",
+        "path": "./agent/assets/showcases/service-team.png",
+        "usage": "marketplace-preview"
+      },
+      {
+        "id": "product-showcase",
+        "description": "按品类陈列产品、价格和适用场景，没标价的引导访客到微信问。",
+        "mediaType": "image",
+        "path": "./agent/assets/showcases/product-showcase.png",
+        "usage": "marketplace-preview"
+      },
+      {
+        "id": "brand-page",
+        "description": "一个长页讲完品牌故事、产品系列与到店信息，排版跟着品牌调性走。",
+        "mediaType": "image",
+        "path": "./agent/assets/showcases/brand-page.png",
+        "usage": "marketplace-preview"
+      }
+    ]
   }
 }
