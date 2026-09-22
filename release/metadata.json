@@ -1,12 +1,12 @@
 {
   "schemaVersion": "2.0",
   "id": "website-developer",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "type": "agent",
   "ownership": "general",
   "name": "website-developer",
   "displayName": "网站开发专家",
-  "description": "支持网站搭建、参考建站、设计灵感和体验升级。不用懂技术，不管是单位介绍、产品展示、活动报名还是日常事务登记，说清用途就行：先给你两版 Demo 对比，你点头我再动手，每步看得见、测得通。",
+  "description": "支持网站搭建、参考建站、设计灵感与体验升级。无需懂技术，说清想法先出两版设计挑方向，你确认后再动手开发，每一步都看得见",
   "categoryId": "rd",
   "icon": "./agent/assets/logo.png",
   "iconAlt": "网站开发专家",
@@ -43,28 +43,28 @@
     "showcases": [
       {
         "id": "org-portal",
-        "description": "核心业务、团队与联系入口放在一页，访客一眼看清你们做什么。",
+        "description": "机构门户首页",
         "mediaType": "image",
         "path": "./agent/assets/showcases/org-portal.png",
         "usage": "marketplace-preview"
       },
       {
         "id": "service-team",
-        "description": "用成立时间、服务企业数和真实项目说明实力，并给出微信咨询入口。",
+        "description": "企业服务与团队介绍页",
         "mediaType": "image",
         "path": "./agent/assets/showcases/service-team.png",
         "usage": "marketplace-preview"
       },
       {
         "id": "product-showcase",
-        "description": "按品类陈列产品、价格和适用场景，没标价的引导访客到微信问。",
+        "description": "多品类产品展示页",
         "mediaType": "image",
         "path": "./agent/assets/showcases/product-showcase.png",
         "usage": "marketplace-preview"
       },
       {
         "id": "brand-page",
-        "description": "一个长页讲完品牌故事、产品系列与到店信息，排版跟着品牌调性走。",
+        "description": "品牌形象与故事单页",
         "mediaType": "image",
         "path": "./agent/assets/showcases/brand-page.png",
         "usage": "marketplace-preview"

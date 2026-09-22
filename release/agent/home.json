@@ -3,7 +3,7 @@
     {
       "id": "site-build",
       "name": "网站搭建",
-      "description": "从想法到能打开",
+      "description": "从想法到首版上线",
       "icon": "./assets/home/icon-build.png",
       "items": [
         {
@@ -22,7 +22,7 @@
     {
       "id": "site-reference",
       "name": "参考建站",
-      "description": "发我网址或截图",
+      "description": "对标心仪网站定制",
       "icon": "./assets/home/icon-reference.png",
       "items": [
         {
@@ -59,7 +59,7 @@
     {
       "id": "experience-upgrade",
       "name": "体验升级",
-      "description": "更好看，也更好用",
+      "description": "界面优化与细节打磨",
       "icon": "./assets/home/icon-upgrade.png",
       "items": [
         {

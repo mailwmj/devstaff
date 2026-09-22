@@ -400,18 +400,18 @@ def typography_checks(tokens):
     rows = []
     for key, floor in TYPOGRAPHY_FLOORS.items():
         size = px(str(tokens[key]))
-        rows.append({'token': key, 'value': tokens[key], 'minimum': floor,
+        rows.append({'property': key, 'value': tokens[key], 'minimum': floor,
                      'passed': size is not None and size >= floor})
     leading = float(str(tokens['leading-reading']).strip())
-    rows.append({'token': 'leading-reading', 'value': tokens['leading-reading'],
+    rows.append({'property': 'leading-reading', 'value': tokens['leading-reading'],
                  'minimum': TYPOGRAPHY_LEADING_FLOOR, 'passed': leading >= TYPOGRAPHY_LEADING_FLOOR})
     tracking = str(tokens['tracking-heading']).strip()
     negative = tracking.startswith('-') and not re.fullmatch(r'-0(\.0+)?(em|px|%)?', tracking)
-    rows.append({'token': 'tracking-heading', 'value': tracking, 'minimum': '0 (CJK headings)',
+    rows.append({'property': 'tracking-heading', 'value': tracking, 'minimum': '0 (CJK headings)',
                  'passed': not negative})
     fonts = ' '.join(str(tokens[key]) for key in ('font-ui', 'font-heading', 'font-reading'))
     licensed = [name for name in FORBIDDEN_FONT_HINTS if name in fonts]
-    rows.append({'token': 'font-*', 'value': 'licensed font names', 'minimum': 'system or open fonts only',
+    rows.append({'property': 'font-*', 'value': 'licensed font names', 'minimum': 'system or open fonts only',
                  'passed': not licensed})
     return rows
 
@@ -450,7 +450,7 @@ def compose(data, recipe, **overrides):
     if failed:
         raise ValueError('Color pairs below catalog thresholds: ' + ', '.join(failed))
     typo = typography_checks(tokens)
-    typo_failed = [f"{r['token']}={r['value']}" for r in typo if not r['passed']]
+    typo_failed = [f"{r['property']}={r['value']}" for r in typo if not r['passed']]
     if typo_failed:
         raise ValueError('Typography floors violated: ' + ', '.join(typo_failed))
     return {'catalog_version': data['version'], 'recipe': recipe, 'selection': selection,

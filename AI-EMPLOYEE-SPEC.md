@@ -1,6 +1,6 @@
 # AI员工「网站开发专家」配置与能力档案
 
-> **对应包版本：1.2.0** ｜ 最后同步：2026-09-21 ｜ 维护：`fde-dev`
+> **对应包版本：1.2.2** ｜ 最后同步：2026-09-22 ｜ 维护：`fde-dev`
 > 用途：平台上架评审、运营配置核对、市场素材交接。字段值的唯一真相在配置文件
 > （[`release/metadata.json`](release/metadata.json)、[`release/agent/home.json`](release/agent/home.json)、[`release/agent/bindings.yaml`](release/agent/bindings.yaml)、[`release/package-files.txt`](release/package-files.txt)）；
 > 本档把它们翻译成业务语言，并标出还没交付的部分。
@@ -12,7 +12,7 @@
 
 **平台契约**：包结构遵循 ClawHive AI 员工规范 `schemaVersion 2.0`。三个面向用户的配置位是
 「工作台能力卡」（`home.json`）、市场页「推荐场景」（`metadata.agent.showcases`）和
-市场页「推荐 Prompt 模板」（`metadata.agent.quickPrompts`）。
+「推荐 Prompt 模板」（`metadata.agent.quickPrompts`）。
 
 **状态标记**：`已交付` 随包发布、客户端可见 ｜ `待补` 方案已定、素材或配置未做 ｜ `待确认` 需要产品或平台侧拍板（汇总见 §十）。
 
@@ -38,7 +38,7 @@
 | :--- | :--- | :--- | :--- |
 | `schemaVersion` | `"2.0"` | — | 平台元数据契约版本 |
 | `id` / `name` | `"website-developer"` | 安装目录、包文件名 | 两者必须完全一致，kebab-case |
-| `version` | `"1.2.0"` | 市场版本号、`dist/website-developer-1.2.0.zip` | SemVer；四个随包技能的 VERSION 同值 |
+| `version` | `"1.2.2"` | 市场版本号、`dist/website-developer-1.2.2.zip` | SemVer；四个随包技能的 VERSION 同值 |
 | `type` | `"agent"` | 平台实体类型 | 固定值 |
 | `ownership` | `"general"` | 内容归属 | 平台枚举为 `general` / `enterprise` / `personal` 三选一 |
 | `displayName` | `"网站开发专家"` | 市场列表、详情页标题、技能区 | 对外唯一名称 |
@@ -55,7 +55,7 @@
 
 `description` 全文：
 
-> 支持网站搭建、参考建站、设计灵感和体验升级。不用懂技术，不管是单位介绍、产品展示、活动报名还是日常事务登记，说清用途就行：先给你两版 Demo 对比，你点头我再动手，每步看得见、测得通。
+> 支持网站搭建、参考建站、设计灵感与体验升级。无需懂技术，说清想法先出两版设计挑方向，你确认后再动手开发，每一步都看得见
 
 **第一句就是能力枚举**，与 §五 的四张能力卡逐项对应；招募前的人在详情页第一眼看到的就是它。
 
@@ -81,10 +81,10 @@
 
 | 序号 | 标识 (`id`) | 卡片文案 | 字数 | 素材（1600 × 900） |
 | :---: | :--- | :--- | :---: | :--- |
-| 1 | `org-portal` | 核心业务、团队与联系入口放在一页，访客一眼看清你们做什么。 | 29 | `agent/assets/showcases/org-portal.png` |
-| 2 | `service-team` | 用成立时间、服务企业数和真实项目说明实力，并给出微信咨询入口。 | 31 | `agent/assets/showcases/service-team.png` |
-| 3 | `product-showcase` | 按品类陈列产品、价格和适用场景，没标价的引导访客到微信问。 | 29 | `agent/assets/showcases/product-showcase.png` |
-| 4 | `brand-page` | 一个长页讲完品牌故事、产品系列与到店信息，排版跟着品牌调性走。 | 31 | `agent/assets/showcases/brand-page.png` |
+| 1 | `org-portal` | 机构门户首页 | 6 | `agent/assets/showcases/org-portal.png` |
+| 2 | `service-team` | 企业服务与团队介绍页 | 10 | `agent/assets/showcases/service-team.png` |
+| 3 | `product-showcase` | 多品类产品展示页 | 8 | `agent/assets/showcases/product-showcase.png` |
+| 4 | `brand-page` | 品牌形象与故事单页 | 9 | `agent/assets/showcases/brand-page.png` |
 
 每个条目另有固定字段：`mediaType: "image"`、`usage: "marketplace-preview"`。
 
@@ -116,10 +116,10 @@
 
 | 序号 | 标识 (`id`) | 卡片名 | 副标题 | 图标（564 × 576） | 点击后发出的提示词 | 驱动技能 |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | `site-build` | 网站搭建 | 从想法到能打开 | `agent/assets/home/icon-build.png` | 我想做一个网站，用途是……（比如单位介绍、产品展示、活动报名或日常登记）。你先问我几个最关键的问题。 | `site-brief` `site-design` |
-| 2 | `site-reference` | 参考建站 | 发我网址或截图 | `agent/assets/home/icon-reference.png` | 我很喜欢这个网站：〈粘贴网址或截图〉，想要同样的感觉，内容换成我们自己的。 | `site-design` `site-builder` |
+| 1 | `site-build` | 网站搭建 | 从想法到首版上线 | `agent/assets/home/icon-build.png` | 我想做一个网站，用途是……（比如单位介绍、产品展示、活动报名或日常登记）。你先问我几个最关键的问题。 | `site-brief` `site-design` |
+| 2 | `site-reference` | 参考建站 | 对标心仪网站定制 | `agent/assets/home/icon-reference.png` | 我很喜欢这个网站：〈粘贴网址或截图〉，想要同样的感觉，内容换成我们自己的。 | `site-design` `site-builder` |
 | 3 | `design-inspiration` | 设计灵感 | 先看两版再定方向 | `agent/assets/home/icon-inspiration.png` | 我们网站要做的事是……。先别写代码，给我两版不同气质的样子挑一挑。 | `site-design` |
-| 4 | `experience-upgrade` | 体验升级 | 更好看，也更好用 | `agent/assets/home/icon-upgrade.png` | 我有一个做好的页面，看着太素、点着也别扭，想让它更好看、更好用。 | `site-design` `site-builder` |
+| 4 | `experience-upgrade` | 体验升级 | 界面优化与细节打磨 | `agent/assets/home/icon-upgrade.png` | 我有一个做好的页面，看着太素、点着也别扭，想让它更好看、更好用。 | `site-design` `site-builder` |
 
 三张卡的行为边界写在 [`release/agent/Agent.md`](release/agent/Agent.md)：
 
@@ -196,10 +196,10 @@ preflight → 执行 next_action → 产出结果 → 写入结果 → 再次 pr
 
 | 技能标识 (`id`) | 技能显示名 | 引用来源 | 强依赖 | 核心分工 | 版本 |
 | :--- | :--- | :---: | :---: | :--- | :--- |
-| `site-builder` | 网站开发 | `embedded` | true | 唯一业务编排者：推进状态机、按纵向切片小步增量改代码、守住不重写防线、交付时说明验过与没验什么 | 1.2.0 |
-| `site-brief` | 需求梳理 | `embedded` | false | 需求前置收敛：问清核心诉求与关键边界，用通俗选项锁定首版范围；严禁向用户提问设计与信息架构 | 1.2.0 |
-| `site-design` | 网站设计与体验稿 | `embedded` | false | 骨架双选（存在真实结构分歧时）、双风格高保真体验稿、参考取证与还原度比对、中文排版与设计 Token、页面设计合同 | 1.2.0 |
-| `site-check` | 网站检查与验证 | `embedded` | false | 交付前客观巡检：真实浏览器端到端只读演练、移动端横向滚动排查、出具带指纹的客观事实报告 | 1.2.0 |
+| `site-builder` | 网站开发 | `embedded` | true | 唯一业务编排者：推进状态机、按纵向切片小步增量改代码、守住不重写防线、交付时说明验过与没验什么 | 1.2.2 |
+| `site-brief` | 需求梳理 | `embedded` | false | 需求前置收敛：问清核心诉求与关键边界，用通俗选项锁定首版范围；严禁向用户提问设计与信息架构 | 1.2.2 |
+| `site-design` | 网站设计与体验稿 | `embedded` | false | 骨架双选（存在真实结构分歧时）、双风格高保真体验稿、参考取证与还原度比对、中文排版与设计 Token、页面设计合同 | 1.2.2 |
+| `site-check` | 网站检查与验证 | `embedded` | false | 交付前客观巡检：真实浏览器端到端只读演练、移动端横向滚动排查、出具带指纹的客观事实报告 | 1.2.2 |
 
 平台规定 `required` 表示「是否为员工激活的硬依赖」，`required=false` 只影响发布后的运行期策略、
 不豁免上传校验。四个技能**全部标 `true`**：`guided` 流程缺任何一个都跑不通（需求收敛、设计、验证），
@@ -243,7 +243,7 @@ python3 -c "import glob,os,struct;[print(f'{p} {struct.unpack(\">II\",open(p,\"r
 对应文件：[`release/package-files.txt`](release/package-files.txt)、[`tools/build_dist.py`](tools/build_dist.py)、[`tests/test_bundle.py`](tests/test_bundle.py)、[`tests/test_spec.py`](tests/test_spec.py)、[`.github/workflows/verify.yml`](.github/workflows/verify.yml) ｜ 状态：`已交付`
 
 - **清单是唯一真相**：`package-files.txt` 决定什么随包分发；`release/` 内任何被清单覆盖的文件改动后，必须重跑构建重建 `dist/`，否则开发测试会直接报错。
-- **构建产物**：`dist/website-developer-1.2.0/` 与 `dist/website-developer-1.2.0.zip`。zip 确定性生成（条目排序、固定时间戳与权限），无改动的重建不产生新产物。
+- **构建产物**：`dist/website-developer-1.2.2/` 与 `dist/website-developer-1.2.2.zip`。zip 确定性生成（条目排序、固定时间戳与权限），无改动的重建不产生新产物。
 - **一致性保证**：`test_bundle.py` 逐字节比对 dist 与 release；`test_spec.py` 钉住本档与配置源之间可机验的事实（包版本、素材路径与尺寸、卡片与案例覆盖）。
 - **自足性保证**：CI 在 Python 3.9 / 3.10 / 3.12 上跑全部测试，并从 `git archive HEAD:release` 解出的干净归档里再跑一遍随包测试与设计资产校验，确认解包即用。
 

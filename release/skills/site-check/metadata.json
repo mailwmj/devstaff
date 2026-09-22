@@ -2,7 +2,7 @@
   "schemaVersion": "2.0",
   "id": "site-check",
   "name": "site-check",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "type": "skill",
   "source": "embedded",
   "displayName": "网站检查与验证",
