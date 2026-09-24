@@ -27,6 +27,10 @@
 .ds-feedback { padding:var(--ds-space-3); border-radius:var(--ds-radius-control); }
 .ds-feedback.error { color:var(--ds-error); background:var(--ds-error-surface); }
 .ds-feedback.success { color:var(--ds-success); background:var(--ds-success-surface); }
+.ds-callout { display:flex; flex-direction:column; gap:var(--ds-space-1); padding:var(--ds-space-3) var(--ds-space-4); border:1px solid var(--ds-border); border-radius:var(--ds-radius-control); background:var(--ds-selection); color:var(--ds-text); font-size:var(--ds-text-label); }
+.ds-callout.warning { border-color:var(--ds-warning); background:var(--ds-warning-surface); color:var(--ds-text); }
+.ds-callout.error { border-color:var(--ds-error); background:var(--ds-error-surface); color:var(--ds-text); }
+.ds-callout.success { border-color:var(--ds-success); background:var(--ds-success-surface); color:var(--ds-text); }
 .ds-reading { max-width:var(--ds-reading-max); font:var(--ds-text-reading)/var(--ds-leading-reading) var(--ds-font-reading); overflow-wrap:anywhere; }
 .ds-reading p { margin:0 0 1.2em; }
 @media (pointer:coarse) { .ds-button,.ds-input { min-height:max(var(--ds-control-height),var(--ds-control-touch-min)); } }

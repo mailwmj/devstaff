@@ -1,6 +1,6 @@
 ---
 name: site-brief
-version: 1.2.2
+version: 1.2.4
 description: 核心任务与首版范围收敛。摸清非技术用户的核心任务与边界，严禁提问设计与信息架构。
 ---
 # 需求收敛与发现

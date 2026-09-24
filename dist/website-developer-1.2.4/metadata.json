@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2.0",
   "id": "website-developer",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "type": "agent",
   "ownership": "general",
   "name": "website-developer",

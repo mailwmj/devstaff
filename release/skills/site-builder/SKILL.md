@@ -1,6 +1,6 @@
 ---
 name: site-builder
-version: 1.2.2
+version: 1.2.4
 description: 默认建站入口。把用户的一句话收敛成核心任务，协调需求、设计、实现和验证；改文案、颜色、间距和小 Bug 走快速路径。
 ---
 # 建站编排
